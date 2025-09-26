@@ -1,88 +1,95 @@
-# VistterStream Appliance
+# VistterStream
 
-VistterStream is the local streaming appliance that connects on-premises cameras to VistterStudio cloud timelines. Running on hardware like the Raspberry Pi in a Docker container, VistterStream discovers, manages, and processes local cameras, including PTZ (pan-tilt-zoom) presets. It ingests RTSP/RTMP feeds, applies overlays and instructions received from VistterStudio, and streams the final output to destinations such as YouTube Live, Facebook Live, or Twitch.
+A local streaming appliance that connects on-premises cameras to VistterStudio cloud timelines. VistterStream discovers, manages, and processes local cameras, including PTZ (pan-tilt-zoom) presets, and streams the final output to destinations such as YouTube Live, Facebook Live, or Twitch.
 
-## Features
+## Overview
 
-*   **Camera & PTZ Management:** Discover, manage, and control local RTSP/RTMP cameras, including PTZ presets.
-*   **Web Interface:** A local web UI for camera configuration, live previews, and system monitoring.
-*   **Streaming & Processing:** Uses FFmpeg to ingest, transcode, and apply overlays to camera feeds.
-*   **Multi-Output:** Stream to multiple services like YouTube Live, Facebook Live, and Twitch simultaneously.
-*   **Cloud Integration:** Seamlessly integrates with VistterStudio for timeline execution and overlay synchronization.
-*   **Dockerized:** Runs in a Docker container on Raspberry Pi or any other Docker-compatible device.
+VistterStream is designed to run on hardware like the Raspberry Pi in a Docker container, providing a web interface for camera management and live streaming capabilities. It ingests RTSP/RTMP feeds, applies overlays and instructions received from VistterStudio, and streams the final output to various platforms.
 
-## Getting Started
+## Key Features
 
-To get started with VistterStream, you'll need to have Docker and Docker Compose installed on your system.
+- **Camera Management**: Support for RTSP/RTMP cameras including Reolink (stationary) and Amcrest/Samba (PTZ)
+- **PTZ Presets**: Define and execute preset positions for PTZ cameras
+- **Live Previews**: Embedded video preview for each camera feed
+- **Health Monitoring**: Real-time camera connection status and system metrics
+- **Web Interface**: Local-only web UI for configuration and monitoring
+- **FFmpeg Processing**: Professional video processing with overlays and transcoding
+- **Multi-Output Streaming**: Support for multiple streaming destinations simultaneously
 
-1.  **Clone the repository:**
+## Target Users
 
-    ```bash
-    git clone https://github.com/nickdnj/VistterStream.git
-    cd VistterStream
-    ```
+- **Small businesses & venues**: Shops, restaurants, marinas, and tourist attractions
+- **Community organizations**: Visitor bureaus or chambers of commerce
+- **Property managers & real estate**: Broadcasting properties or scenic angles
+- **Event operators**: Local operators who need reliable camera-to-stream appliances
 
-2.  **Build and run the application:**
+## Architecture
 
-    ```bash
-    docker-compose up --build
-    ```
+- **Single-container modular architecture** with Docker
+- **Web UI**: React frontend with Tailwind CSS
+- **API Backend**: FastAPI (Python) for REST APIs
+- **Controller**: Manages camera configs, PTZ, and state
+- **Stream Engine**: FFmpeg wrapper for video processing
+- **Database**: SQLite for persistent local storage
 
-    This will build the Docker images and start the backend and frontend services.
+## Technical Stack
 
-3.  **Access the application:**
-
-    *   **Backend API:** `http://localhost:8000`
-    *   **Frontend Web UI:** `http://localhost:3000`
-
-## Technology Stack
-
-*   **Backend:** FastAPI (Python)
-*   **Frontend:** React
-*   **Database:** SQLite
-*   **Streaming Engine:** FFmpeg
-*   **Containerization:** Docker
+- **Frontend**: React + Tailwind CSS
+- **Backend**: FastAPI (Python)
+- **Database**: SQLite
+- **Streaming**: FFmpeg (multi-arch build)
+- **Containerization**: Docker with multi-arch support (x86_64 & ARM64)
+- **Authentication**: Local username/password with bcrypt
 
 ## Project Structure
 
 ```
-.
-├── backend/
-│   ├── controllers.py
-│   ├── database.py
-│   ├── main.py
-│   ├── models.py
-│   └── requirements.txt
-├── docker/
-│   ├── Dockerfile.backend
-│   └── Dockerfile.frontend
-├── docker-compose.yml
-├── docs/
-│   ├── PRD.md
-│   ├── SAD.md
-│   └── UXD.md
-├── frontend/
-│   ├── package.json
-│   └── src/
-├── stream-engine/
-│   └── main.py
-└── tests/
-    └── test_backend.py
+VistterStream/
+├── docs/                    # Documentation
+│   ├── PRD.md              # Product Requirements Document
+│   ├── SAD.md              # Software Architecture Document
+│   ├── UXD.md              # User Experience Design Document
+│   └── Local Test Cameras.md # Test camera configurations
+├── README.md               # This file
+└── [additional directories to be created]
 ```
 
-## API Endpoints
+## Test Cameras
 
-*   `/auth`: Authentication and user management.
-*   `/cameras`: CRUD operations for cameras.
-*   `/presets`: CRUD operations for PTZ presets.
-*   `/streams`: Start, stop, and monitor streams.
-*   `/status`: System health and metrics.
-*   `/overlays`: Synchronize overlays from VistterStudio.
+The project includes configuration for local test cameras:
 
-## Contributing
+### Reolink (Fixed position camera)
+- **Main Stream**: `rtsp://Wharfside:Wharfside2025!!@192.168.86.250:554/Preview_01_main`
+- **Snapshot**: `http://Wharfside:Wharfside2025!!@192.168.86.250:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0`
 
-Contributions are welcome! Please feel free to submit a pull request.
+### Sunba (PTZ camera with ONVIF support)
+- **Main Stream**: `rtsp://192.168.86.23:554/user=admin_password=sOKDKxsV_channel=0_stream=0&onvif=0.sdp?real_stream`
+- **Snapshot**: `http://192.168.86.23/webcapture.jpg?command=snap&channel=0&user=admin&password=sOKDKxsV`
+
+## Development Status
+
+This repository has been reset to a clean starting point. The project is currently in the initial planning phase with comprehensive specification documents in place.
+
+## Next Steps
+
+1. Set up basic project structure
+2. Implement core camera management functionality
+3. Develop web interface for configuration
+4. Integrate FFmpeg for video processing
+5. Add PTZ preset management
+6. Implement streaming capabilities
+
+## Documentation
+
+- [Product Requirements Document](docs/PRD.md)
+- [Software Architecture Document](docs/SAD.md)
+- [User Experience Design Document](docs/UXD.md)
+- [Local Test Cameras](docs/Local%20Test%20Cameras.md)
 
 ## License
 
-This project is licensed under the MIT License.
+[License information to be added]
+
+## Contributing
+
+[Contributing guidelines to be added]
