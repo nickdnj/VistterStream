@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+sqlalchemy
+aiofiles
+httpx
+opencv-python-headless
+Pillow
+pydantic
+pydantic-settings
+python-dotenv

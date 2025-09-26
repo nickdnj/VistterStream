@@ -1,0 +1,327 @@
+"""
+Camera service for managing cameras and testing connections
+"""
+
+from sqlalchemy.orm import Session
+from typing import List, Optional
+import httpx
+import cv2
+import asyncio
+import base64
+from datetime import datetime
+from urllib.parse import urlparse
+
+from models.database import Camera, Preset
+from models.schemas import (
+    CameraCreate, CameraUpdate, Camera as CameraSchema, 
+    CameraWithStatus, CameraTestResponse, PresetCreate, Preset
+)
+
+class CameraService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    async def get_all_cameras_with_status(self) -> List[CameraWithStatus]:
+        """Get all cameras with their current status"""
+        cameras = self.db.query(Camera).filter(Camera.is_active == True).all()
+        cameras_with_status = []
+        
+        for camera in cameras:
+            status = await self._check_camera_status(camera)
+            camera_with_status = CameraWithStatus(
+                id=camera.id,
+                name=camera.name,
+                type=camera.type,
+                protocol=camera.protocol,
+                address=camera.address,
+                username=camera.username,
+                port=camera.port,
+                stream_path=camera.stream_path,
+                snapshot_url=camera.snapshot_url,
+                is_active=camera.is_active,
+                created_at=camera.created_at,
+                last_seen=camera.last_seen,
+                status=status["status"],
+                last_error=status.get("error")
+            )
+            cameras_with_status.append(camera_with_status)
+        
+        return cameras_with_status
+
+    async def get_camera_with_status(self, camera_id: int) -> Optional[CameraWithStatus]:
+        """Get a specific camera with status"""
+        camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
+        if not camera:
+            return None
+        
+        status = await self._check_camera_status(camera)
+        return CameraWithStatus(
+            id=camera.id,
+            name=camera.name,
+            type=camera.type,
+            protocol=camera.protocol,
+            address=camera.address,
+            username=camera.username,
+            port=camera.port,
+            stream_path=camera.stream_path,
+            snapshot_url=camera.snapshot_url,
+            is_active=camera.is_active,
+            created_at=camera.created_at,
+            last_seen=camera.last_seen,
+            status=status["status"],
+            last_error=status.get("error")
+        )
+
+    async def create_camera(self, camera_data: CameraCreate) -> CameraSchema:
+        """Create a new camera"""
+        # Encrypt password if provided
+        password_enc = None
+        if camera_data.password:
+            # Simple base64 encoding for now - should use proper encryption in production
+            password_enc = base64.b64encode(camera_data.password.encode()).decode()
+        
+        camera = Camera(
+            name=camera_data.name,
+            type=camera_data.type,
+            protocol=camera_data.protocol,
+            address=camera_data.address,
+            username=camera_data.username,
+            password_enc=password_enc,
+            port=camera_data.port,
+            stream_path=camera_data.stream_path,
+            snapshot_url=camera_data.snapshot_url
+        )
+        
+        self.db.add(camera)
+        self.db.commit()
+        self.db.refresh(camera)
+        
+        return CameraSchema.from_orm(camera)
+
+    async def update_camera(self, camera_id: int, camera_update: CameraUpdate) -> Optional[CameraSchema]:
+        """Update a camera"""
+        camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
+        if not camera:
+            return None
+        
+        update_data = camera_update.dict(exclude_unset=True)
+        
+        # Handle password encryption
+        if "password" in update_data and update_data["password"]:
+            update_data["password_enc"] = base64.b64encode(update_data["password"].encode()).decode()
+            del update_data["password"]
+        
+        for field, value in update_data.items():
+            setattr(camera, field, value)
+        
+        self.db.commit()
+        self.db.refresh(camera)
+        
+        return CameraSchema.from_orm(camera)
+
+    async def delete_camera(self, camera_id: int) -> bool:
+        """Delete a camera"""
+        camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
+        if not camera:
+            return False
+        
+        camera.is_active = False
+        self.db.commit()
+        return True
+
+    async def test_camera_connection(self, camera_id: int) -> CameraTestResponse:
+        """Test camera connection"""
+        camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
+        if not camera:
+            return CameraTestResponse(
+                success=False,
+                message="Camera not found",
+                rtsp_accessible=False,
+                snapshot_accessible=False
+            )
+        
+        return await self._test_camera_connection_internal(camera)
+
+    async def test_camera_connection_direct(self, camera_data: CameraCreate) -> CameraTestResponse:
+        """Test camera connection without saving to database"""
+        # Create a temporary camera object for testing
+        camera = Camera(
+            name=camera_data.name,
+            type=camera_data.type,
+            protocol=camera_data.protocol,
+            address=camera_data.address,
+            username=camera_data.username,
+            password_enc=base64.b64encode(camera_data.password.encode()).decode() if camera_data.password else None,
+            port=camera_data.port,
+            stream_path=camera_data.stream_path,
+            snapshot_url=camera_data.snapshot_url
+        )
+        
+        return await self._test_camera_connection_internal(camera)
+
+    async def _test_camera_connection_internal(self, camera: Camera) -> CameraTestResponse:
+        """Internal method to test camera connection"""
+        rtsp_accessible = False
+        snapshot_accessible = False
+        error_details = []
+        
+        # Test RTSP connection
+        try:
+            rtsp_url = self._build_rtsp_url(camera)
+            rtsp_accessible = await self._test_rtsp_connection(rtsp_url)
+            if not rtsp_accessible:
+                error_details.append("RTSP stream not accessible")
+        except Exception as e:
+            error_details.append(f"RTSP test error: {str(e)}")
+        
+        # Test snapshot URL
+        if camera.snapshot_url:
+            try:
+                snapshot_accessible = await self._test_snapshot_url(camera.snapshot_url, camera.username, camera.password_enc)
+                if not snapshot_accessible:
+                    error_details.append("Snapshot URL not accessible")
+            except Exception as e:
+                error_details.append(f"Snapshot test error: {str(e)}")
+        
+        success = rtsp_accessible and (snapshot_accessible or not camera.snapshot_url)
+        
+        return CameraTestResponse(
+            success=success,
+            message="Camera test completed",
+            rtsp_accessible=rtsp_accessible,
+            snapshot_accessible=snapshot_accessible,
+            error_details="; ".join(error_details) if error_details else None
+        )
+
+    async def _test_rtsp_connection(self, rtsp_url: str) -> bool:
+        """Test RTSP connection using OpenCV"""
+        try:
+            # Use a timeout for the connection test
+            cap = cv2.VideoCapture(rtsp_url)
+            cap.set(cv2.CAP_PROP_TIMEOUT, 5000)  # 5 second timeout
+            
+            # Try to read a frame
+            ret, frame = cap.read()
+            cap.release()
+            
+            return ret and frame is not None
+        except Exception:
+            return False
+
+    async def _test_snapshot_url(self, snapshot_url: str, username: str, password_enc: str) -> bool:
+        """Test snapshot URL accessibility"""
+        try:
+            # Decode password if encrypted
+            password = None
+            if password_enc:
+                password = base64.b64decode(password_enc).decode()
+            
+            # Build URL with credentials if provided
+            if username and password:
+                parsed_url = urlparse(snapshot_url)
+                if parsed_url.scheme in ['http', 'https']:
+                    snapshot_url = f"{parsed_url.scheme}://{username}:{password}@{parsed_url.netloc}{parsed_url.path}?{parsed_url.query}"
+            
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(snapshot_url)
+                return response.status_code == 200
+        except Exception:
+            return False
+
+    def _build_rtsp_url(self, camera: Camera) -> str:
+        """Build RTSP URL from camera configuration"""
+        # Decode password if encrypted
+        password = None
+        if camera.password_enc:
+            password = base64.b64decode(camera.password_enc).decode()
+        
+        # Build URL
+        if camera.username and password:
+            return f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
+        else:
+            return f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
+
+    async def _check_camera_status(self, camera: Camera) -> dict:
+        """Check camera status (online/offline/error)"""
+        try:
+            rtsp_url = self._build_rtsp_url(camera)
+            is_online = await self._test_rtsp_connection(rtsp_url)
+            
+            if is_online:
+                # Update last_seen timestamp
+                camera.last_seen = datetime.utcnow()
+                self.db.commit()
+                return {"status": "online"}
+            else:
+                return {"status": "offline", "error": "RTSP connection failed"}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    async def get_camera_snapshot(self, camera_id: int) -> Optional[dict]:
+        """Get a snapshot from the camera"""
+        camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
+        if not camera or not camera.snapshot_url:
+            return None
+        
+        try:
+            # Decode password if encrypted
+            password = None
+            if camera.password_enc:
+                password = base64.b64decode(camera.password_enc).decode()
+            
+            # Build URL with credentials if provided
+            snapshot_url = camera.snapshot_url
+            if camera.username and password:
+                parsed_url = urlparse(snapshot_url)
+                if parsed_url.scheme in ['http', 'https']:
+                    snapshot_url = f"{parsed_url.scheme}://{camera.username}:{password}@{parsed_url.netloc}{parsed_url.path}?{parsed_url.query}"
+            
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(snapshot_url)
+                if response.status_code == 200:
+                    # Return base64 encoded image data
+                    image_data = base64.b64encode(response.content).decode()
+                    return {
+                        "image_data": image_data,
+                        "content_type": response.headers.get("content-type", "image/jpeg"),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+        except Exception as e:
+            print(f"Error getting snapshot: {e}")
+        
+        return None
+
+    async def create_preset(self, preset_data: PresetCreate) -> Preset:
+        """Create a PTZ preset"""
+        preset = Preset(
+            camera_id=preset_data.camera_id,
+            name=preset_data.name,
+            pan=preset_data.pan,
+            tilt=preset_data.tilt,
+            zoom=preset_data.zoom
+        )
+        
+        self.db.add(preset)
+        self.db.commit()
+        self.db.refresh(preset)
+        
+        return preset
+
+    async def get_camera_presets(self, camera_id: int) -> List[Preset]:
+        """Get all presets for a camera"""
+        presets = self.db.query(Preset).filter(Preset.camera_id == camera_id).all()
+        return presets
+
+    async def execute_preset(self, camera_id: int, preset_id: int) -> bool:
+        """Execute a PTZ preset"""
+        preset = self.db.query(Preset).filter(
+            Preset.id == preset_id,
+            Preset.camera_id == camera_id
+        ).first()
+        
+        if not preset:
+            return False
+        
+        # TODO: Implement actual PTZ control via ONVIF
+        # For now, just return success
+        return True
