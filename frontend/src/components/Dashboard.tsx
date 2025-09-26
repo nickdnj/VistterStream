@@ -217,7 +217,7 @@ const Dashboard: React.FC = () => {
 
                 <div className="mt-4 flex space-x-2">
                   <Link
-                    to={`/cameras/${camera.id}`}
+                    to="/cameras"
                     className="flex-1 text-center px-3 py-2 text-sm font-medium text-primary-600 hover:text-primary-500 transition-colors"
                   >
                     View Details

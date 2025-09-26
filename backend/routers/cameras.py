@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 import httpx
-import cv2
 import asyncio
 from datetime import datetime
 

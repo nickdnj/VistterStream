@@ -6,7 +6,7 @@ passlib[bcrypt]
 sqlalchemy
 aiofiles
 httpx
-opencv-python-headless
+requests
 Pillow
 pydantic
 pydantic-settings

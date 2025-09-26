@@ -5,9 +5,11 @@ Camera service for managing cameras and testing connections
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import httpx
-import cv2
 import asyncio
 import base64
+import subprocess
+import requests
+from requests.auth import HTTPDigestAuth
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -194,18 +196,41 @@ class CameraService:
         )
 
     async def _test_rtsp_connection(self, rtsp_url: str) -> bool:
-        """Test RTSP connection using OpenCV"""
+        """Test RTSP connection using FFmpeg"""
+        print(f"DEBUG: Testing RTSP URL with FFmpeg: {rtsp_url}")
         try:
-            # Use a timeout for the connection test
-            cap = cv2.VideoCapture(rtsp_url)
-            cap.set(cv2.CAP_PROP_TIMEOUT, 5000)  # 5 second timeout
+            # Use FFmpeg to test the stream with a 5-second timeout
+            cmd = [
+                'ffmpeg',
+                '-timeout', '5000000',  # 5 seconds in microseconds
+                '-i', rtsp_url,
+                '-t', '1',  # Try for 1 second
+                '-f', 'null',
+                '-'
+            ]
             
-            # Try to read a frame
-            ret, frame = cap.read()
-            cap.release()
+            # Run FFmpeg with timeout
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
             
-            return ret and frame is not None
-        except Exception:
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+                result = process.returncode == 0
+                print(f"DEBUG: FFmpeg test result - return code: {process.returncode}")
+                if stderr:
+                    stderr_str = stderr.decode()
+                    print(f"DEBUG: FFmpeg stderr: {stderr_str[:200]}...")
+                return result
+            except asyncio.TimeoutError:
+                print("DEBUG: FFmpeg test timed out")
+                process.kill()
+                return False
+                
+        except Exception as e:
+            print(f"DEBUG: FFmpeg test exception: {str(e)}")
             return False
 
     async def _test_snapshot_url(self, snapshot_url: str, username: str, password_enc: str) -> bool:
@@ -235,11 +260,18 @@ class CameraService:
         if camera.password_enc:
             password = base64.b64decode(camera.password_enc).decode()
         
+        print(f"DEBUG: Building RTSP URL for {camera.name}")
+        print(f"DEBUG: Username: {camera.username}, Password available: {password is not None}")
+        print(f"DEBUG: Address: {camera.address}, Port: {camera.port}, Path: {camera.stream_path}")
+        
         # Build URL
         if camera.username and password:
-            return f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
+            url = f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
         else:
-            return f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
+            url = f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
+        
+        print(f"DEBUG: Final RTSP URL: {url}")
+        return url
 
     async def _check_camera_status(self, camera: Camera) -> dict:
         """Check camera status (online/offline/error)"""
@@ -276,16 +308,49 @@ class CameraService:
                 if parsed_url.scheme in ['http', 'https']:
                     snapshot_url = f"{parsed_url.scheme}://{camera.username}:{password}@{parsed_url.netloc}{parsed_url.path}?{parsed_url.query}"
             
+            # Try with requests and Digest auth for Reolink cameras
+            if camera.username and password and "reolink" in camera.name.lower():
+                print(f"DEBUG: Using Digest auth for Reolink camera")
+                try:
+                    # Use requests with Digest auth for Reolink
+                    auth = HTTPDigestAuth(camera.username, password)
+                    response = requests.get(snapshot_url, auth=auth, timeout=10)
+                    
+                    if response.status_code == 200:
+                        content_type = response.headers.get("content-type", "")
+                        print(f"DEBUG: Reolink snapshot content-type: {content_type}")
+                        
+                        if content_type.startswith("image/"):
+                            image_data = base64.b64encode(response.content).decode()
+                            return {
+                                "image_data": image_data,
+                                "content_type": content_type,
+                                "timestamp": datetime.utcnow().isoformat()
+                            }
+                except Exception as e:
+                    print(f"DEBUG: Digest auth failed: {e}")
+            
+            # Fallback to httpx for other cameras or if Digest auth fails
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(snapshot_url)
                 if response.status_code == 200:
-                    # Return base64 encoded image data
-                    image_data = base64.b64encode(response.content).decode()
-                    return {
-                        "image_data": image_data,
-                        "content_type": response.headers.get("content-type", "image/jpeg"),
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
+                    content_type = response.headers.get("content-type", "")
+                    print(f"DEBUG: Snapshot response content-type: {content_type}")
+                    
+                    # Check if response is actually an image
+                    if content_type.startswith("image/"):
+                        # Return base64 encoded image data
+                        image_data = base64.b64encode(response.content).decode()
+                        return {
+                            "image_data": image_data,
+                            "content_type": content_type,
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                    else:
+                        # Response is not an image, likely an error
+                        error_content = response.content.decode('utf-8', errors='ignore')[:200]
+                        print(f"DEBUG: Snapshot returned non-image content: {error_content}")
+                        return None
         except Exception as e:
             print(f"Error getting snapshot: {e}")
         
