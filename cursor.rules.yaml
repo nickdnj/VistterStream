@@ -1,0 +1,163 @@
+# VistterStream Development Rules
+# This file defines the development guidelines and rules for the VistterStream project
+
+# Core Development Rules
+rules:
+  - name: "Consult TODO List"
+    description: "Always consult the project's TODO.md file before starting new development tasks"
+    action: "Read TODO.md to understand current milestone and specific tasks before beginning work"
+    
+  - name: "Update Progress"
+    description: "Check off or update items in the TODO list as progress is made"
+    action: "Mark completed tasks with [x] and update status in TODO.md after completing work"
+    
+  - name: "Sequential Milestones"
+    description: "Do not skip ahead - each milestone should be testable and verified before moving to the next"
+    action: "Complete all tasks in current milestone and verify functionality before starting next milestone"
+    
+  - name: "Documentation Sync"
+    description: "Keep in sync with docs/ directory (PRD, SAD, UXD, local-test-cameras.md)"
+    action: "Reference specification documents when implementing features and update docs if requirements change"
+    
+  - name: "Test Camera Integration"
+    description: "Use the test cameras documented in docs/Local Test Cameras.md for development and testing"
+    action: "Always test with the documented Reolink and Sunba cameras before considering features complete"
+    
+  - name: "Dual Platform Testing"
+    description: "Ensure compatibility with both Mac (development) and Raspberry Pi (production) environments"
+    action: "Test all functionality on both platforms before marking milestones complete"
+    
+  - name: "FFmpeg Integration"
+    description: "Use FFmpeg for all video processing, streaming, and overlay operations"
+    action: "Implement video functionality through FFmpeg wrapper rather than custom solutions"
+    
+  - name: "API-First Design"
+    description: "Design all functionality with VistterStudio cloud integration in mind"
+    action: "Create REST APIs for all major operations to enable cloud orchestration"
+    
+  - name: "Error Handling"
+    description: "Implement comprehensive error handling and recovery mechanisms"
+    action: "Add proper error handling, logging, and recovery for all camera and streaming operations"
+    
+  - name: "Security Considerations"
+    description: "Implement security best practices for local appliance deployment"
+    action: "Use secure authentication, encrypt sensitive data, and follow security guidelines"
+
+# Development Workflow
+workflow:
+  - name: "Start Development Session"
+    steps:
+      - "Read TODO.md to understand current milestone"
+      - "Check git status and pull latest changes"
+      - "Review any open issues or PRs"
+      - "Plan specific tasks for the session"
+      
+  - name: "During Development"
+    steps:
+      - "Follow the current milestone tasks in order"
+      - "Write tests for new functionality"
+      - "Update documentation as needed"
+      - "Test on both Mac and Raspberry Pi when applicable"
+      
+  - name: "End Development Session"
+    steps:
+      - "Update TODO.md with completed tasks"
+      - "Commit changes with descriptive messages"
+      - "Push changes to repository"
+      - "Update any relevant documentation"
+
+# Code Quality Standards
+code_quality:
+  - name: "Python Standards"
+    description: "Follow PEP 8 and use type hints"
+    action: "Use black for formatting, flake8 for linting, and mypy for type checking"
+    
+  - name: "TypeScript Standards"
+    description: "Use TypeScript for frontend code with strict typing"
+    action: "Enable strict mode and use proper interfaces for all data structures"
+    
+  - name: "Error Handling"
+    description: "Implement proper error handling throughout the application"
+    action: "Use try-catch blocks, proper logging, and graceful degradation"
+    
+  - name: "Logging"
+    description: "Use structured logging for debugging and monitoring"
+    action: "Implement consistent logging levels and formats across all components"
+
+# Testing Requirements
+testing:
+  - name: "Unit Tests"
+    description: "Write unit tests for all new functionality"
+    action: "Create test files in tests/ directory and maintain >80% coverage"
+    
+  - name: "Integration Tests"
+    description: "Test camera and streaming functionality with real hardware"
+    action: "Use test cameras documented in Local Test Cameras.md for integration testing"
+    
+  - name: "Manual Testing"
+    description: "Perform manual testing on both Mac and Raspberry Pi"
+    action: "Test all user-facing functionality manually before marking complete"
+
+# Documentation Requirements
+documentation:
+  - name: "API Documentation"
+    description: "Document all API endpoints with examples"
+    action: "Use FastAPI automatic documentation and add custom examples"
+    
+  - name: "Code Documentation"
+    description: "Add docstrings and comments to all functions and classes"
+    action: "Use Google-style docstrings for Python and JSDoc for TypeScript"
+    
+  - name: "User Documentation"
+    description: "Keep README.md and user guides up to date"
+    action: "Update documentation with each major feature addition"
+
+# Project-Specific Guidelines
+project_specific:
+  - name: "Camera Integration"
+    description: "Prioritize Reolink and Sunba camera support as documented"
+    action: "Use the specific RTSP URLs and snapshot endpoints from Local Test Cameras.md"
+    
+  - name: "Streaming Pipeline"
+    description: "Focus on YouTube Live integration as primary streaming destination"
+    action: "Implement YouTube Live API integration and stream key management"
+    
+  - name: "PTZ Support"
+    description: "Implement ONVIF PTZ control for Sunba cameras"
+    action: "Use ONVIF protocol for PTZ operations and preset management"
+    
+  - name: "Local Storage"
+    description: "Use SQLite for local data persistence"
+    action: "Implement SQLite database for camera configs, presets, and user data"
+    
+  - name: "Docker Deployment"
+    description: "Package application in Docker containers for easy deployment"
+    action: "Create multi-arch Docker images supporting both x86_64 and ARM64"
+
+# Emergency Procedures
+emergency:
+  - name: "Camera Connection Issues"
+    description: "If cameras become unreachable, implement fallback mechanisms"
+    action: "Add placeholder streams or error displays when cameras are offline"
+    
+  - name: "Streaming Failures"
+    description: "If streaming fails, implement automatic retry and recovery"
+    action: "Add exponential backoff retry logic and stream health monitoring"
+    
+  - name: "Database Corruption"
+    description: "If database becomes corrupted, implement recovery procedures"
+    action: "Add database backup/restore functionality and validation checks"
+
+# Success Criteria
+success_criteria:
+  - name: "Milestone Completion"
+    description: "Each milestone is complete when all tasks are done and tested"
+    action: "Verify all acceptance criteria are met before moving to next milestone"
+    
+  - name: "Feature Completeness"
+    description: "Features are complete when they work on both Mac and Raspberry Pi"
+    action: "Test all functionality on both platforms before marking complete"
+    
+  - name: "Documentation Completeness"
+    description: "Documentation is complete when it matches the current implementation"
+    action: "Update all documentation when making code changes"
