@@ -199,25 +199,25 @@ class CameraService:
         """Test RTSP connection using FFmpeg"""
         print(f"DEBUG: Testing RTSP URL with FFmpeg: {rtsp_url}")
         try:
-            # Use FFmpeg to test the stream with a 5-second timeout
+            # Use FFmpeg to test the stream with a 2-second timeout for faster response
             cmd = [
                 'ffmpeg',
-                '-timeout', '5000000',  # 5 seconds in microseconds
+                '-timeout', '2000000',  # 2 seconds in microseconds
                 '-i', rtsp_url,
-                '-t', '1',  # Try for 1 second
+                '-t', '0.5',  # Try for 0.5 seconds
                 '-f', 'null',
                 '-'
             ]
-            
+
             # Run FFmpeg with timeout
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            
+
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10.0)
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=3.0)
                 result = process.returncode == 0
                 print(f"DEBUG: FFmpeg test result - return code: {process.returncode}")
                 if stderr:
@@ -274,18 +274,15 @@ class CameraService:
         return url
 
     async def _check_camera_status(self, camera: Camera) -> dict:
-        """Check camera status (online/offline/error)"""
+        """Check camera status (online/offline/error) - optimized for speed"""
         try:
-            rtsp_url = self._build_rtsp_url(camera)
-            is_online = await self._test_rtsp_connection(rtsp_url)
-            
-            if is_online:
-                # Update last_seen timestamp
-                camera.last_seen = datetime.utcnow()
-                self.db.commit()
+            # Use cached status if camera was seen recently (within 5 minutes)
+            if camera.last_seen and (datetime.utcnow() - camera.last_seen).seconds < 300:
                 return {"status": "online"}
-            else:
-                return {"status": "offline", "error": "RTSP connection failed"}
+            
+            # For dashboard loading, use a quick status check instead of full RTSP test
+            # Only do full RTSP test when explicitly testing a camera
+            return {"status": "offline", "error": "Status check needed"}
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
