@@ -102,20 +102,37 @@ The project includes configuration for local test cameras:
 - **Security**: Bcrypt password hashing, JWT tokens, CORS configuration
 - **UI/UX**: Professional dark theme, responsive design, beautiful animations
 
-## Next Steps - Milestone 2: Local Streaming Pipeline
+## 🎯 Current Focus: Streaming Pipeline + Timeline Orchestration
 
-1. Implement FFmpeg integration for video processing
-2. Add YouTube Live streaming capabilities
-3. Create stream management interface
-4. Implement overlay system for VistterStudio integration
-5. Add stream recording and monitoring
+### **Milestone 2: Streaming Engine** (In Progress)
+- FFmpeg process management with hardware acceleration (Pi 5 + Mac)
+- Multi-destination streaming (YouTube, Facebook, Twitch, custom RTMP)
+- Automatic camera failover and test pattern fallback
+- Real-time overlay compositing (text, images, lower thirds)
+- Stream health monitoring and auto-recovery
+
+### **Milestone 3: Multi-Track Timeline System** (Next)
+- Timeline orchestrator with video + overlay tracks
+- Sequential cue execution with precise timing
+- Timeline builder UI with drag-drop interface
+- Segment import/export for reusable content
+- "GO LIVE" button with pre-flight checks
+
+**See [StreamingPipeline-TechnicalSpec.md](docs/StreamingPipeline-TechnicalSpec.md) for complete technical details.**
 
 ## Documentation
 
-- [Product Requirements Document](docs/PRD.md)
-- [Software Architecture Document](docs/SAD.md)
-- [User Experience Design Document](docs/UXD.md)
-- [Local Test Cameras](docs/Local%20Test%20Cameras.md)
+### **Core Specifications**
+- **[Product Requirements Document (PRD)](docs/PRD.md)** - Product vision, use cases, requirements
+- **[Software Architecture Document (SAD)](docs/SAD.md)** - System architecture and component design
+- **[User Experience Design (UXD)](docs/UXD.md)** - UI/UX specifications and workflows
+- **[Streaming Pipeline Technical Spec](docs/StreamingPipeline-TechnicalSpec.md)** ⭐ **PRIMARY SPEC** - Detailed streaming & timeline implementation
+- **[VistterStudio Integration](docs/VistterStudioIntegration.md)** - Future cloud control integration
+
+### **Development Resources**
+- **[TODO List](TODO.md)** - Current development roadmap and task tracking
+- **[Local Test Cameras](docs/Local%20Test%20Cameras.md)** - Test camera configurations
+- **[Changelog](CHANGELOG.md)** - Version history and updates
 
 ## License
 

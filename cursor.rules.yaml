@@ -1,163 +1,344 @@
-# VistterStream Development Rules
-# This file defines the development guidelines and rules for the VistterStream project
+# VistterStream Development Rules - FUCKING AWESOME PROCESS 🔥
 
-# Core Development Rules
-rules:
-  - name: "Consult TODO List"
-    description: "Always consult the project's TODO.md file before starting new development tasks"
-    action: "Read TODO.md to understand current milestone and specific tasks before beginning work"
-    
-  - name: "Update Progress"
-    description: "Check off or update items in the TODO list as progress is made"
-    action: "Mark completed tasks with [x] and update status in TODO.md after completing work"
-    
-  - name: "Sequential Milestones"
-    description: "Do not skip ahead - each milestone should be testable and verified before moving to the next"
-    action: "Complete all tasks in current milestone and verify functionality before starting next milestone"
-    
-  - name: "Documentation Sync"
-    description: "Keep in sync with docs/ directory (PRD, SAD, UXD, local-test-cameras.md)"
-    action: "Reference specification documents when implementing features and update docs if requirements change"
-    
-  - name: "Test Camera Integration"
-    description: "Use the test cameras documented in docs/Local Test Cameras.md for development and testing"
-    action: "Always test with the documented Reolink and Sunba cameras before considering features complete"
-    
-  - name: "Dual Platform Testing"
-    description: "Ensure compatibility with both Mac (development) and Raspberry Pi (production) environments"
-    action: "Test all functionality on both platforms before marking milestones complete"
-    
-  - name: "FFmpeg Integration"
-    description: "Use FFmpeg for all video processing, streaming, and overlay operations"
-    action: "Implement video functionality through FFmpeg wrapper rather than custom solutions"
-    
-  - name: "API-First Design"
-    description: "Design all functionality with VistterStudio cloud integration in mind"
-    action: "Create REST APIs for all major operations to enable cloud orchestration"
-    
-  - name: "Error Handling"
-    description: "Implement comprehensive error handling and recovery mechanisms"
-    action: "Add proper error handling, logging, and recovery for all camera and streaming operations"
-    
-  - name: "Security Considerations"
-    description: "Implement security best practices for local appliance deployment"
-    action: "Use secure authentication, encrypt sensitive data, and follow security guidelines"
+# 🚀 THE 7-STEP FUCKING AWESOME WORKFLOW 🚀
+# Follow this process for EVERY task - no exceptions!
 
-# Development Workflow
 workflow:
-  - name: "Start Development Session"
-    steps:
-      - "Read TODO.md to understand current milestone"
-      - "Check git status and pull latest changes"
-      - "Review any open issues or PRs"
-      - "Plan specific tasks for the session"
-      
-  - name: "During Development"
-    steps:
-      - "Follow the current milestone tasks in order"
-      - "Write tests for new functionality"
-      - "Update documentation as needed"
-      - "Test on both Mac and Raspberry Pi when applicable"
-      
-  - name: "End Development Session"
-    steps:
-      - "Update TODO.md with completed tasks"
-      - "Commit changes with descriptive messages"
-      - "Push changes to repository"
-      - "Update any relevant documentation"
+  name: "The FUCKING AWESOME Development Process"
+  mandatory: true
+  
+  step_1_evaluate_todo:
+    name: "📋 Evaluate TODO"
+    actions:
+      - "Read TODO.md and identify the specific task"
+      - "Understand priority, dependencies, and acceptance criteria"
+      - "Estimate complexity and time required"
+    outputs:
+      - "Clear task scope"
+      - "List of dependencies"
+  
+  step_2_review_specs:
+    name: "📖 Review Specs"
+    actions:
+      - "Read StreamingPipeline-TechnicalSpec.md (PRIMARY SPEC ⭐)"
+      - "Cross-reference PRD.md, SAD.md, UXD.md as needed"
+      - "Review database schema if touching data models"
+      - "Understand failure recovery patterns"
+    outputs:
+      - "Complete technical understanding"
+      - "Design patterns and constraints identified"
+  
+  step_3_plan_solution:
+    name: "🎯 Plan Solution"
+    actions:
+      - "Break down into sub-components"
+      - "List all files to create/modify"
+      - "Define data structures and interfaces"
+      - "Map error handling and edge cases"
+      - "Plan testing strategy"
+    outputs:
+      - "Implementation plan"
+      - "Data models defined"
+      - "Test cases identified"
+  
+  step_4_implement:
+    name: "💻 Implement Solution"
+    actions:
+      - "Follow implementation plan"
+      - "Write code with error handling and logging"
+      - "Add comprehensive docstrings/comments"
+      - "Use type hints and strict typing"
+      - "Follow code quality standards"
+    outputs:
+      - "Working code"
+      - "Proper error handling"
+      - "Clear documentation"
+  
+  step_5_validate:
+    name: "✅ Validate Solution"
+    actions:
+      - "Write and run unit tests (>80% coverage)"
+      - "Run integration tests with real hardware"
+      - "Test on Mac AND Pi 5"
+      - "Verify error handling"
+      - "Check acceptance criteria"
+      - "Fix all linter issues"
+    outputs:
+      - "All tests passing"
+      - "Manual verification complete"
+      - "Acceptance criteria met"
+  
+  step_6_git_commit:
+    name: "💾 Git Commit"
+    format: "[COMPONENT] Brief description\n\nDetailed explanation"
+    actions:
+      - "Stage related changes only"
+      - "Write clear commit message (see format below)"
+      - "Review diff before committing"
+      - "Commit and push to origin"
+    outputs:
+      - "Clean, atomic commit"
+      - "Changes pushed to remote"
+  
+  step_7_mark_complete:
+    name: "✔️ Mark TODO Complete"
+    actions:
+      - "Update TODO.md: [ ] → [x]"
+      - "Add implementation notes if needed"
+      - "Update CHANGELOG.md for significant features"
+      - "Commit TODO/CHANGELOG updates"
+      - "Celebrate! 🎉"
+    outputs:
+      - "TODO.md updated"
+      - "Progress tracked"
 
-# Code Quality Standards
-code_quality:
-  - name: "Python Standards"
-    description: "Follow PEP 8 and use type hints"
-    action: "Use black for formatting, flake8 for linting, and mypy for type checking"
-    
-  - name: "TypeScript Standards"
-    description: "Use TypeScript for frontend code with strict typing"
-    action: "Enable strict mode and use proper interfaces for all data structures"
-    
-  - name: "Error Handling"
-    description: "Implement proper error handling throughout the application"
-    action: "Use try-catch blocks, proper logging, and graceful degradation"
-    
-  - name: "Logging"
-    description: "Use structured logging for debugging and monitoring"
-    action: "Implement consistent logging levels and formats across all components"
+# 🎯 Core Development Principles
 
-# Testing Requirements
+principles:
+  reliability_first:
+    rule: "Auto-recovery, fallbacks, degraded mode over failure"
+    reference: "StreamingPipeline-TechnicalSpec.md §'Failure Recovery System'"
+  
+  multi_track_timeline:
+    rule: "Sequential per track, Parallel across tracks"
+    reference: "StreamingPipeline-TechnicalSpec.md §'Multi-Track Timeline System'"
+  
+  hardware_acceleration:
+    rule: "Use Pi 5 (h264_v4l2m2m) and Mac (h264_videotoolbox)"
+    reference: "StreamingPipeline-TechnicalSpec.md §'Hardware Acceleration'"
+  
+  simple_mvp:
+    rule: "Text/image overlays now, animations later"
+    reference: "StreamingPipeline-TechnicalSpec.md §'Overlay System (MVP)'"
+  
+  multi_destination_isolation:
+    rule: "One stream fails, others continue"
+    reference: "Per-destination retry logic required"
+  
+  go_live_philosophy:
+    rule: "Non-technical operators must succeed easily"
+    reference: "StreamingPipeline-TechnicalSpec.md §'Operator Interface'"
+
+# 📚 Documentation Priority
+
+docs:
+  primary:
+    - file: "StreamingPipeline-TechnicalSpec.md"
+      when: "ANY implementation task"
+      status: "⭐ PRIMARY SPEC"
+  
+  secondary:
+    - file: "PRD.md"
+      when: "Product requirements and use cases"
+    - file: "SAD.md"
+      when: "Architecture and component design"
+    - file: "UXD.md"
+      when: "UI/UX implementation"
+  
+  reference:
+    - file: "TODO.md"
+      when: "Track priorities and progress"
+    - file: "Local Test Cameras.md"
+      when: "Camera configurations"
+
+# 💻 Code Standards
+
+python:
+  style:
+    - "Follow PEP 8"
+    - "Use type hints everywhere"
+    - "Use async/await for I/O"
+    - "Imports: stdlib → third-party → local"
+  
+  error_handling:
+    - "Specific exception types in try-except"
+    - "Structured logging (JSON format)"
+    - "Exponential backoff retry"
+    - "User-friendly error messages"
+  
+  ffmpeg:
+    - "Use asyncio.create_subprocess_exec"
+    - "Parse stderr for progress"
+    - "Graceful shutdown: SIGTERM → SIGKILL"
+    - "Monitor with heartbeat checks"
+
+typescript:
+  style:
+    - "Strict mode enabled"
+    - "Interfaces for all data"
+    - "React hooks (useState, useEffect)"
+    - "Tailwind utility-first"
+  
+  ui_patterns:
+    - "Loading skeletons (not just spinners)"
+    - "Error boundaries"
+    - "Optimistic UI with rollback"
+    - "Toasts for actions, banners for critical"
+
+# 🧪 Testing
+
 testing:
-  - name: "Unit Tests"
-    description: "Write unit tests for all new functionality"
-    action: "Create test files in tests/ directory and maintain >80% coverage"
-    
-  - name: "Integration Tests"
-    description: "Test camera and streaming functionality with real hardware"
-    action: "Use test cameras documented in Local Test Cameras.md for integration testing"
-    
-  - name: "Manual Testing"
-    description: "Perform manual testing on both Mac and Raspberry Pi"
-    action: "Test all user-facing functionality manually before marking complete"
+  unit:
+    - "Mock external dependencies"
+    - "Target >80% coverage"
+    - "pytest (Python), Jest (TypeScript)"
+  
+  integration:
+    - "Test with real cameras (Reolink, Sunba)"
+    - "Actual FFmpeg encoding"
+    - "Database operations"
+    - "API endpoints end-to-end"
+  
+  platforms:
+    - "macOS (development)"
+    - "Raspberry Pi 5 (production)"
+    - "Verify hardware acceleration"
+    - "Check performance metrics"
+  
+  failure_scenarios:
+    - "Camera disconnection"
+    - "Network interruption"
+    - "High CPU load"
+    - "Rapid timeline execution"
 
-# Documentation Requirements
-documentation:
-  - name: "API Documentation"
-    description: "Document all API endpoints with examples"
-    action: "Use FastAPI automatic documentation and add custom examples"
-    
-  - name: "Code Documentation"
-    description: "Add docstrings and comments to all functions and classes"
-    action: "Use Google-style docstrings for Python and JSDoc for TypeScript"
-    
-  - name: "User Documentation"
-    description: "Keep README.md and user guides up to date"
-    action: "Update documentation with each major feature addition"
+# ✅ Definition of DONE
 
-# Project-Specific Guidelines
-project_specific:
-  - name: "Camera Integration"
-    description: "Prioritize Reolink and Sunba camera support as documented"
-    action: "Use the specific RTSP URLs and snapshot endpoints from Local Test Cameras.md"
-    
-  - name: "Streaming Pipeline"
-    description: "Focus on YouTube Live integration as primary streaming destination"
-    action: "Implement YouTube Live API integration and stream key management"
-    
-  - name: "PTZ Support"
-    description: "Implement ONVIF PTZ control for Sunba cameras"
-    action: "Use ONVIF protocol for PTZ operations and preset management"
-    
-  - name: "Local Storage"
-    description: "Use SQLite for local data persistence"
-    action: "Implement SQLite database for camera configs, presets, and user data"
-    
-  - name: "Docker Deployment"
-    description: "Package application in Docker containers for easy deployment"
-    action: "Create multi-arch Docker images supporting both x86_64 and ARM64"
+done:
+  code:
+    - "Follows 7-step workflow"
+    - "Implements spec requirements"
+    - "Comprehensive error handling"
+    - "Logging and telemetry"
+    - "Passes all linters"
+    - "Type hints/strict types"
+  
+  testing:
+    - "Unit tests passing (>80%)"
+    - "Integration tests pass"
+    - "Tested on Mac AND Pi 5"
+    - "Failure scenarios verified"
+    - "Manual testing complete"
+  
+  documentation:
+    - "Code has docstrings"
+    - "API endpoints documented"
+    - "README updated if needed"
+    - "TODO.md marked complete"
+    - "CHANGELOG updated if significant"
+  
+  git:
+    - "Clean, atomic commits"
+    - "Descriptive messages"
+    - "No unrelated changes"
+    - "Pushed to remote"
 
-# Emergency Procedures
-emergency:
-  - name: "Camera Connection Issues"
-    description: "If cameras become unreachable, implement fallback mechanisms"
-    action: "Add placeholder streams or error displays when cameras are offline"
-    
-  - name: "Streaming Failures"
-    description: "If streaming fails, implement automatic retry and recovery"
-    action: "Add exponential backoff retry logic and stream health monitoring"
-    
-  - name: "Database Corruption"
-    description: "If database becomes corrupted, implement recovery procedures"
-    action: "Add database backup/restore functionality and validation checks"
+# 🚨 Anti-Patterns (DON'T DO THIS)
 
-# Success Criteria
-success_criteria:
-  - name: "Milestone Completion"
-    description: "Each milestone is complete when all tasks are done and tested"
-    action: "Verify all acceptance criteria are met before moving to next milestone"
+anti_patterns:
+  - name: "Skipping steps"
+    violation: "Implementing before planning"
+    consequence: "Rework required"
+  
+  - name: "Incomplete testing"
+    violation: "Not testing on Pi 5"
+    consequence: "Works on Mac, fails in production"
+  
+  - name: "Poor error handling"
+    violation: "Not implementing recovery"
+    consequence: "Crashes instead of graceful recovery"
+  
+  - name: "Ignoring specs"
+    violation: "DIY approach vs following spec"
+    consequence: "Architecture fragmentation"
+  
+  - name: "Vague commits"
+    violation: "Messages like 'fix bug'"
+    consequence: "Useless git history"
+  
+  - name: "TODO drift"
+    violation: "Not updating TODO.md"
+    consequence: "No progress visibility"
+
+# 💾 Commit Message Format
+
+commits:
+  format: |
+    [COMPONENT] Brief (50 chars max)
     
-  - name: "Feature Completeness"
-    description: "Features are complete when they work on both Mac and Raspberry Pi"
-    action: "Test all functionality on both platforms before marking complete"
+    Detailed explanation of what and why.
+    Breaking changes and important notes.
     
-  - name: "Documentation Completeness"
-    description: "Documentation is complete when it matches the current implementation"
-    action: "Update all documentation when making code changes"
+    See: docs/StreamingPipeline-TechnicalSpec.md §Section
+  
+  components:
+    - "[Stream Engine]"
+    - "[Timeline]"
+    - "[Camera]"
+    - "[Overlay]"
+    - "[UI]"
+    - "[API]"
+    - "[Database]"
+    - "[Tests]"
+    - "[Docs]"
+  
+  good_examples:
+    - "[Stream Engine] Add FFmpeg manager with Pi 5 HW accel"
+    - "[Timeline] Implement multi-track parallel execution"
+    - "[Camera] Add auto-failover to backup on disconnect"
+    - "[UI] Add GO LIVE button with pre-flight checks"
+  
+  bad_examples:
+    - "fix bug"
+    - "update code"
+    - "wip"
+
+# 🎯 Current Focus (Updated 2025-09-30)
+
+focus:
+  milestone_2: "Streaming Pipeline (FFmpeg, multi-dest, failover, overlays)"
+  milestone_3: "Timeline Engine (multi-track, orchestration, GO LIVE UI)"
+
+# 🏆 Definition of FUCKING AWESOME
+
+awesome:
+  reliability:
+    - "Stream runs 8hrs, camera fails 2x, backup auto-recovers"
+    - "Internet drops 30s, auto-reconnects"
+    - "No manual intervention for common failures"
+  
+  simplicity:
+    - "Non-techie creates timeline in 5min"
+    - "GO LIVE works first try, every try"
+    - "Errors show exact remediation steps"
+  
+  power:
+    - "Multi-camera + overlays perfectly synced"
+    - "Unattended timeline runs for hours"
+    - "All metrics visible, controls accessible"
+
+# 🎯 Mission
+
+mission: |
+  Build a streaming appliance so reliable it runs 24/7 unattended,
+  so simple a non-techie can use it, and so powerful it handles
+  complex productions flawlessly.
+  
+  Every line of code, every commit, every feature should move us
+  toward FUCKING AWESOME. No shortcuts. No half-measures.
+  Excellence is the baseline.
+  
+  The 7-step process isn't bureaucracy - it's the path to excellence.
+  Follow it, trust it, and you'll build something legendary.
+
+# 🔥 REMEMBER
+
+mantra:
+  - "📋 1. Evaluate TODO"
+  - "📖 2. Review Specs"
+  - "🎯 3. Plan Solution"
+  - "💻 4. Implement"
+  - "✅ 5. Validate"
+  - "💾 6. Git Commit"
+  - "✔️ 7. Mark Complete"
+  - ""
+  - "🚀 NOW GO BUILD SOMETHING FUCKING AWESOME! 🚀"
