@@ -9,15 +9,17 @@ from typing import Optional
 
 from models.database import get_db
 from models.timeline import Timeline
+from models.destination import StreamingDestination
 from services.timeline_executor import get_timeline_executor
 from services.ffmpeg_manager import EncodingProfile
+from datetime import datetime
 
 router = APIRouter(prefix="/api/timeline-execution", tags=["timeline-execution"])
 
 
 class StartTimelineRequest(BaseModel):
     timeline_id: int
-    output_urls: list[str]  # List of RTMP URLs to stream to
+    destination_ids: list[int]  # List of destination IDs to stream to
     encoding_profile: Optional[dict] = None  # Optional custom encoding
 
 
@@ -29,12 +31,28 @@ class TimelineStatusResponse(BaseModel):
 
 @router.post("/start")
 async def start_timeline(request: StartTimelineRequest, db: Session = Depends(get_db)):
-    """Start executing a timeline"""
+    """Start executing a timeline with configured destinations"""
     
     # Verify timeline exists
     timeline = db.query(Timeline).filter(Timeline.id == request.timeline_id).first()
     if not timeline:
         raise HTTPException(status_code=404, detail="Timeline not found")
+    
+    # Get destinations and build output URLs
+    destinations = db.query(StreamingDestination).filter(
+        StreamingDestination.id.in_(request.destination_ids)
+    ).all()
+    
+    if not destinations:
+        raise HTTPException(status_code=404, detail="No valid destinations found")
+    
+    output_urls = [dest.get_full_rtmp_url() for dest in destinations]
+    destination_names = [dest.name for dest in destinations]
+    
+    # Mark destinations as used
+    for dest in destinations:
+        dest.last_used = datetime.utcnow()
+    db.commit()
     
     # Get executor
     executor = get_timeline_executor()
@@ -42,7 +60,7 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     # Start timeline
     success = await executor.start_timeline(
         timeline_id=request.timeline_id,
-        output_urls=request.output_urls,
+        output_urls=output_urls,
         encoding_profile=None  # TODO: Support custom encoding profiles
     )
     
@@ -52,7 +70,9 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     return {
         "message": "Timeline started successfully",
         "timeline_id": request.timeline_id,
-        "timeline_name": timeline.name
+        "timeline_name": timeline.name,
+        "destinations": destination_names,
+        "output_count": len(output_urls)
     }
 
 

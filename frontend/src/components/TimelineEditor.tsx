@@ -41,13 +41,22 @@ interface Timeline {
   tracks: Track[];
 }
 
+interface Destination {
+  id: number;
+  name: string;
+  platform: string;
+  rtmp_url: string;
+  is_active: boolean;
+}
+
 const TimelineEditor: React.FC = () => {
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [selectedTimeline, setSelectedTimeline] = useState<Timeline | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showNewTimelineModal, setShowNewTimelineModal] = useState(false);
-  const [streamKey, setStreamKey] = useState('');
 
   // New timeline form
   const [newTimeline, setNewTimeline] = useState<Timeline>({
@@ -68,6 +77,7 @@ const TimelineEditor: React.FC = () => {
   useEffect(() => {
     loadTimelines();
     loadCameras();
+    loadDestinations();
   }, []);
 
   const loadTimelines = async () => {
@@ -85,6 +95,15 @@ const TimelineEditor: React.FC = () => {
       setCameras(response.data);
     } catch (error) {
       console.error('Failed to load cameras:', error);
+    }
+  };
+
+  const loadDestinations = async () => {
+    try {
+      const response = await axios.get('/api/destinations/');
+      setDestinations(response.data.filter((d: Destination) => d.is_active));
+    } catch (error) {
+      console.error('Failed to load destinations:', error);
     }
   };
 
@@ -166,19 +185,18 @@ const TimelineEditor: React.FC = () => {
   };
 
   const startTimeline = async () => {
-    if (!selectedTimeline || !selectedTimeline.id || !streamKey) {
-      alert('Please select a timeline and enter a stream key');
+    if (!selectedTimeline || !selectedTimeline.id || selectedDestinations.length === 0) {
+      alert('Please select a timeline and at least one destination');
       return;
     }
 
     try {
-      const outputUrl = `rtmp://a.rtmp.youtube.com/live2/${streamKey}`;
-      await axios.post('/api/timeline-execution/start', {
+      const response = await axios.post('/api/timeline-execution/start', {
         timeline_id: selectedTimeline.id,
-        output_urls: [outputUrl]
+        destination_ids: selectedDestinations
       });
       setIsRunning(true);
-      alert('Timeline started!');
+      alert(`Timeline started!\nStreaming to: ${response.data.destinations.join(', ')}`);
     } catch (error) {
       console.error('Failed to start timeline:', error);
       alert('Failed to start timeline');
@@ -290,13 +308,28 @@ const TimelineEditor: React.FC = () => {
                   </button>
                   
                   <div className="flex gap-2 items-center">
-                    <input
-                      type="text"
-                      placeholder="YouTube Stream Key"
-                      value={streamKey}
-                      onChange={(e) => setStreamKey(e.target.value)}
-                      className="bg-gray-700 text-white px-3 py-2 rounded w-64"
-                    />
+                    <select
+                      multiple
+                      value={selectedDestinations.map(String)}
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
+                        setSelectedDestinations(selected);
+                      }}
+                      className="bg-gray-700 text-white px-3 py-2 rounded w-64 h-24"
+                    >
+                      {destinations.map((dest) => (
+                        <option key={dest.id} value={dest.id}>
+                          {dest.platform === 'youtube' && '📺'}
+                          {dest.platform === 'facebook' && '👥'}
+                          {dest.platform === 'twitch' && '🎮'}
+                          {dest.platform === 'custom' && '🔧'}
+                          {' '}{dest.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="text-gray-400 text-sm">
+                      Hold Cmd/Ctrl<br />to select multiple
+                    </div>
                     {!isRunning ? (
                       <button
                         onClick={startTimeline}
