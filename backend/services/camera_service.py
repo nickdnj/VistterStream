@@ -3,8 +3,9 @@ Camera service for managing cameras and testing connections
 """
 
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import httpx
+from httpx import BasicAuth, DigestAuth
 import asyncio
 import base64
 import subprocess
@@ -296,14 +297,69 @@ class CameraService:
         """Check camera status (online/offline/error) - optimized for speed"""
         try:
             # Use cached status if camera was seen recently (within 5 minutes)
-            if camera.last_seen and (datetime.utcnow() - camera.last_seen).seconds < 300:
+            if camera.last_seen and (datetime.utcnow() - camera.last_seen).total_seconds() < 300:
                 return {"status": "online"}
-            
-            # For dashboard loading, use a quick status check instead of full RTSP test
-            # Only do full RTSP test when explicitly testing a camera
-            return {"status": "offline", "error": "Status check needed"}
+
+            probe_success, probe_error = await self._quick_probe_camera(camera)
+
+            if probe_success:
+                camera.last_seen = datetime.utcnow()
+                self.db.commit()
+                return {"status": "online"}
+
+            error_message = probe_error or "Quick status probe failed"
+            return {"status": "offline", "error": error_message}
         except Exception as e:
             return {"status": "error", "error": str(e)}
+
+    async def _quick_probe_camera(self, camera: Camera) -> Tuple[bool, Optional[str]]:
+        """Perform a lightweight probe to determine if the camera is reachable."""
+        if not camera.snapshot_url:
+            return False, "No snapshot URL configured for quick probe"
+
+        password = None
+        if camera.password_enc:
+            try:
+                password = base64.b64decode(camera.password_enc).decode()
+            except Exception as exc:
+                return False, f"Failed to decode camera credentials: {exc}"
+
+        auth = None
+        if camera.username and password:
+            if "reolink" in camera.name.lower():
+                auth = DigestAuth(camera.username, password)
+            else:
+                auth = BasicAuth(camera.username, password)
+
+        try:
+            async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
+                try:
+                    response = await client.head(camera.snapshot_url, auth=auth)
+                except httpx.RequestError as exc:
+                    return False, f"Snapshot probe failed: {exc}"
+
+                if response.status_code < 400:
+                    return True, None
+
+                if response.status_code == 405:
+                    # Some cameras reject HEAD; fall back to a small GET request
+                    headers = {"Range": "bytes=0-0"}
+                    try:
+                        get_response = await client.get(camera.snapshot_url, headers=headers, auth=auth)
+                    except httpx.RequestError as exc:
+                        return False, f"Snapshot GET probe failed: {exc}"
+
+                    if get_response.status_code < 400:
+                        return True, None
+
+                    return False, f"Snapshot GET probe returned status {get_response.status_code}"
+
+                if response.status_code in (401, 403):
+                    return False, "Snapshot probe unauthorized"
+
+                return False, f"Snapshot probe returned status {response.status_code}"
+        except Exception as exc:
+            return False, str(exc)
 
     async def get_camera_snapshot(self, camera_id: int) -> Optional[dict]:
         """Get a snapshot from the camera"""
