@@ -148,10 +148,11 @@ class TimelineExecutor:
                 logger.info(f"Timeline {timeline.name} - Loop {loop_count}")
                 
                 # Execute each cue sequentially
-                for cue in cues:
+                for idx, cue in enumerate(cues, 1):
                     if self._shutdown_event.is_set():
                         break
-                        
+                    
+                    logger.info(f"📋 Executing cue {idx}/{len(cues)} (ID: {cue.id})")
                     await self._execute_cue(
                         timeline_id,
                         cue,
@@ -160,6 +161,7 @@ class TimelineExecutor:
                         encoding_profile,
                         db
                     )
+                    logger.info(f"✅ Cue {idx}/{len(cues)} completed\n")
                     
                 # Check if we should loop
                 if not timeline.loop:
@@ -244,12 +246,15 @@ class TimelineExecutor:
                 # Wait for cue duration
                 logger.info(f"⏱️  Waiting {cue.duration}s for cue to complete...")
                 await asyncio.sleep(cue.duration)
+                logger.info(f"✅ Cue {cue.id} ({camera.name}) completed successfully")
                 
             else:
                 logger.warning(f"Unsupported action type: {cue.action_type}")
                 
         except Exception as e:
-            logger.error(f"Error executing cue {cue.id}: {e}")
+            logger.error(f"❌ Error executing cue {cue.id}: {e}")
+            traceback.print_exc()
+            raise  # Re-raise the exception to stop timeline execution
             
     def _build_rtsp_url(self, camera: Camera) -> str:
         """Build RTSP URL for a camera"""
