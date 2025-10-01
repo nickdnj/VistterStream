@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 # Import routers
-from routers import cameras, auth, streams, presets, status, timelines, timeline_execution, emergency
+from routers import cameras, auth, streams, presets, status, timelines, timeline_execution, emergency, destinations
 
 # Import health monitor
 from services.camera_health_monitor import start_health_monitor, stop_health_monitor
@@ -41,6 +41,7 @@ app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(streams.router, prefix="/api/streams", tags=["streams"])
 app.include_router(presets.router, prefix="/api/presets", tags=["presets"])
 app.include_router(status.router, prefix="/api/status", tags=["status"])
+app.include_router(destinations.router)  # Streaming destinations (YouTube, Facebook, etc.)
 app.include_router(timelines.router)  # Timeline CRUD
 app.include_router(timeline_execution.router)  # Timeline execution (start/stop/status)
 app.include_router(emergency.router)  # Emergency controls (kill all streams)

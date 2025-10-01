@@ -95,6 +95,7 @@ class Stream(Base):
 
 # Import timeline models to register them with SQLAlchemy
 from .timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecution  # noqa: F401
+from .destination import StreamingDestination  # noqa: F401
 
 # Create tables
 def create_tables():
