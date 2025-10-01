@@ -179,7 +179,7 @@ class CameraService:
         # Test snapshot URL
         if camera.snapshot_url:
             try:
-                snapshot_accessible = await self._test_snapshot_url(camera.snapshot_url, camera.username, camera.password_enc)
+                snapshot_accessible = await self._test_snapshot_url(camera.snapshot_url, camera.username, camera.password_enc, camera.name)
                 if not snapshot_accessible:
                     error_details.append("Snapshot URL not accessible")
             except Exception as e:
@@ -199,12 +199,13 @@ class CameraService:
         """Test RTSP connection using FFmpeg"""
         print(f"DEBUG: Testing RTSP URL with FFmpeg: {rtsp_url}")
         try:
-            # Use FFmpeg to test the stream with a 2-second timeout for faster response
+            # Use FFmpeg to test the stream with a 10-second timeout (cameras need time to respond)
             cmd = [
                 'ffmpeg',
-                '-timeout', '2000000',  # 2 seconds in microseconds
+                '-timeout', '10000000',  # 10 seconds in microseconds
+                '-rtsp_transport', 'tcp',  # Use TCP for more reliable connection
                 '-i', rtsp_url,
-                '-t', '0.5',  # Try for 0.5 seconds
+                '-t', '1',  # Try for 1 second of video
                 '-f', 'null',
                 '-'
             ]
@@ -217,15 +218,15 @@ class CameraService:
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=3.0)
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15.0)
                 result = process.returncode == 0
                 print(f"DEBUG: FFmpeg test result - return code: {process.returncode}")
                 if stderr:
                     stderr_str = stderr.decode()
-                    print(f"DEBUG: FFmpeg stderr: {stderr_str[:200]}...")
+                    print(f"DEBUG: FFmpeg stderr: {stderr_str[:500]}...")
                 return result
             except asyncio.TimeoutError:
-                print("DEBUG: FFmpeg test timed out")
+                print("DEBUG: FFmpeg test timed out after 15 seconds")
                 process.kill()
                 return False
                 
@@ -233,7 +234,7 @@ class CameraService:
             print(f"DEBUG: FFmpeg test exception: {str(e)}")
             return False
 
-    async def _test_snapshot_url(self, snapshot_url: str, username: str, password_enc: str) -> bool:
+    async def _test_snapshot_url(self, snapshot_url: str, username: str, password_enc: str, camera_name: str = "") -> bool:
         """Test snapshot URL accessibility"""
         try:
             # Decode password if encrypted
@@ -241,7 +242,18 @@ class CameraService:
             if password_enc:
                 password = base64.b64decode(password_enc).decode()
             
-            # Build URL with credentials if provided
+            # Try with Digest auth for Reolink cameras (they use HTTP Digest)
+            if username and password and "reolink" in camera_name.lower():
+                print(f"DEBUG: Testing Reolink snapshot with Digest auth")
+                try:
+                    auth = HTTPDigestAuth(username, password)
+                    response = requests.get(snapshot_url, auth=auth, timeout=10)
+                    return response.status_code == 200
+                except Exception as e:
+                    print(f"DEBUG: Digest auth test failed: {e}")
+                    return False
+            
+            # Build URL with credentials if provided (for other cameras)
             if username and password:
                 parsed_url = urlparse(snapshot_url)
                 if parsed_url.scheme in ['http', 'https']:
@@ -250,7 +262,8 @@ class CameraService:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(snapshot_url)
                 return response.status_code == 200
-        except Exception:
+        except Exception as e:
+            print(f"DEBUG: Snapshot test exception: {e}")
             return False
 
     def _build_rtsp_url(self, camera: Camera) -> str:
