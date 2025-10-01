@@ -20,10 +20,45 @@ const CameraManagement: React.FC = () => {
   const [showStreamModal, setShowStreamModal] = useState(false);
   const [streamingCamera, setStreamingCamera] = useState<CameraWithStatus | null>(null);
   const [snapshots, setSnapshots] = useState<{[key: number]: string}>({});
+  const [liveSnapshot, setLiveSnapshot] = useState<string>('');
 
   useEffect(() => {
     loadCameras();
   }, []);
+
+  // Auto-refresh snapshot for live stream view
+  useEffect(() => {
+    if (!showStreamModal || !streamingCamera) {
+      setLiveSnapshot('');
+      return;
+    }
+
+    const refreshSnapshot = async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/api/cameras/${streamingCamera.id}/snapshot`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.image_data) {
+            setLiveSnapshot(`data:${data.content_type};base64,${data.image_data}`);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to refresh snapshot:', error);
+      }
+    };
+
+    // Initial load
+    refreshSnapshot();
+    
+    // Refresh every 500ms for smooth "live" feel
+    const interval = setInterval(refreshSnapshot, 500);
+    
+    return () => clearInterval(interval);
+  }, [showStreamModal, streamingCamera]);
 
   const loadCameras = async () => {
     try {
@@ -263,16 +298,12 @@ const CameraManagement: React.FC = () => {
                     <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
                         <button
-                          onClick={() => handleTestCamera(camera.id)}
-                          disabled={testingCamera === camera.id}
-                          className="text-primary-600 hover:text-primary-500 disabled:opacity-50"
-                          title="Test Connection"
+                          onClick={() => handleViewStream(camera)}
+                          disabled={camera.status !== 'online'}
+                          className="text-primary-600 hover:text-primary-500 disabled:opacity-50 disabled:text-gray-600"
+                          title={camera.status === 'online' ? 'View Live Stream' : 'Camera offline'}
                         >
-                          {testingCamera === camera.id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                          ) : (
-                            <PlayIcon className="h-4 w-4" />
-                          )}
+                          <PlayIcon className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => setEditingCamera(camera)}
@@ -335,32 +366,41 @@ const CameraManagement: React.FC = () => {
                   </button>
                 </div>
                 
-                <div className="bg-black rounded-lg p-4">
+                <div className="bg-black rounded-lg">
                   {streamingCamera.status === 'online' ? (
-                    <div className="text-center">
-                      <div className="bg-dark-800 rounded-lg p-8 mb-4">
-                        <CameraIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                        <h4 className="text-white text-lg mb-2">RTSP Stream Available</h4>
-                        <p className="text-gray-400 mb-4">
-                          Use VLC or another RTSP player to view the live stream:
-                        </p>
-                        <div className="bg-dark-700 rounded p-3 text-sm font-mono text-primary-400 break-all">
-                          rtsp://{streamingCamera.username}:***@{streamingCamera.address}:{streamingCamera.port}{streamingCamera.stream_path}
-                        </div>
-                        <p className="text-gray-500 text-xs mt-2">
-                          * Password hidden for security
-                        </p>
-                      </div>
-                      {snapshots[streamingCamera.id] && (
-                        <div>
-                          <h5 className="text-white text-sm mb-2">Latest Snapshot:</h5>
+                    <div>
+                      {liveSnapshot ? (
+                        <div className="relative">
                           <img
-                            src={snapshots[streamingCamera.id]}
-                            alt={`${streamingCamera.name} snapshot`}
-                            className="max-w-full h-auto rounded border mx-auto"
+                            src={liveSnapshot}
+                            alt={`${streamingCamera.name} live stream`}
+                            className="w-full h-auto rounded"
                           />
+                          <div className="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded flex items-center">
+                            <span className="animate-pulse mr-1">●</span> LIVE
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center h-96">
+                          <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                            <p className="text-gray-400">Loading stream...</p>
+                          </div>
                         </div>
                       )}
+                      <div className="bg-dark-800 p-4 mt-2 rounded">
+                        <details>
+                          <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-300">
+                            RTSP Stream URL (for external players)
+                          </summary>
+                          <div className="mt-2 bg-dark-700 rounded p-3 text-xs font-mono text-primary-400 break-all">
+                            rtsp://{streamingCamera.username}:***@{streamingCamera.address}:{streamingCamera.port}{streamingCamera.stream_path}
+                          </div>
+                          <p className="text-gray-500 text-xs mt-1">
+                            Copy this URL to VLC or another RTSP player for full quality stream
+                          </p>
+                        </details>
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center py-8">
