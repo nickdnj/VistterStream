@@ -90,6 +90,7 @@ class StreamProcess:
     started_at: Optional[datetime] = None
     last_error: Optional[str] = None
     command: List[str] = field(default_factory=list)
+    should_auto_restart: bool = True  # Set to False when manually stopped
 
 
 class FFmpegProcessManager:
@@ -214,6 +215,9 @@ class FFmpegProcessManager:
             return
         
         logger.info(f"Stopping stream {stream_id}...")
+        
+        # Disable auto-restart before stopping
+        stream_process.should_auto_restart = False
         
         # Cancel monitoring task
         if stream_id in self._monitoring_tasks:
@@ -429,11 +433,15 @@ class FFmpegProcessManager:
                     stream_process.status = StreamStatus.ERROR
                     stream_process.last_error = f"Process exited with code {returncode}"
                     
-                    # Attempt restart
-                    try:
-                        await self.restart_stream(stream_id)
-                    except Exception as e:
-                        logger.error(f"Failed to restart stream {stream_id}: {e}")
+                    # Only attempt restart if auto-restart is enabled
+                    if stream_process.should_auto_restart:
+                        logger.info(f"Auto-restart enabled for stream {stream_id}, attempting restart...")
+                        try:
+                            await self.restart_stream(stream_id)
+                        except Exception as e:
+                            logger.error(f"Failed to restart stream {stream_id}: {e}")
+                    else:
+                        logger.info(f"Auto-restart disabled for stream {stream_id}, not restarting")
                     
                     break
                 
