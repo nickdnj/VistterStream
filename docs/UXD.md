@@ -125,3 +125,101 @@
 * Create component library starter in Figma with tokens for palette, typography, spacing, and elevation.
 * Document animation principles (durations, easing) for overlay previews and timeline transitions.
 * Establish accessibility acceptance checklist integrated into design review template.
+
+---
+
+## 12. PTZ Preset System - UI Implementation (October 2025)
+
+### 12.1 Preset Management Screen (Implemented)
+**Layout:** Card-based layout grouped by camera with collapsible preset lists
+
+**Components:**
+- **Header Bar**:
+  - Title: "PTZ Presets" + subtitle
+  - "📸 Capture Preset" button (disabled if no camera selected)
+  
+- **Camera Selector**: Dropdown showing only PTZ cameras, auto-selects first
+
+- **Preset Cards (per camera)**:
+  - Camera header with preset count badge
+  - Preset list items showing:
+    - Preset name (large, white)
+    - Pan/Tilt/Zoom values (small, gray)
+    - Created timestamp
+    - "🎯 Go To" button (blue, tests preset)
+    - "🗑️ Delete" button (red, with confirmation)
+  - Empty state with helpful message when no presets exist
+
+- **Capture Modal**:
+  - Shows selected camera (read-only)
+  - Preset name input field
+  - Helpful tip: "Position camera first, then capture"
+  - Cancel / Capture buttons
+
+**Interaction Flow:**
+1. Select PTZ camera from dropdown
+2. Position camera using its native web interface
+3. Click "Capture Preset" → Modal opens
+4. Enter name → Click Capture
+5. Success → Preset appears in list
+6. Click "Go To" → Camera moves to verify
+
+### 12.2 Stream Dialog Enhancements (Implemented)
+**Conditional Preset Selector:**
+- Only appears when PTZ camera selected
+- Dropdown shows all presets for selected camera
+- Default option: "No preset (current position)"
+- Preset options prefixed with 🎯 emoji
+- Help text below:
+  - If no presets: Link to /presets page
+  - If presets available: "Camera will move to this preset before streaming starts"
+
+**Visual Indicators:**
+- PTZ cameras in dropdown show: "🎯 Camera Name (PTZ)"
+- Preset-enabled streams display preset name in stream list
+- Edit modal pre-fills preset when editing stream
+
+### 12.3 Timeline Editor Enhancements (Implemented)
+**Enhanced Camera Palette:**
+- **PTZ cameras** show expandable card with:
+  - Header: "🎯 Sunba PTZ (2 presets)"
+  - Click header → Add cue at current position
+  - Presets section (expandable):
+    - Each preset as clickable button
+    - Shows: "🎯 Preset Name"
+    - Shows pan/tilt/zoom values
+    - Click → Add cue with camera + preset
+  - Visual hierarchy: Camera bg-gray-700, Presets bg-gray-800
+
+- **Regular cameras** show simple card:
+  - Camera name + type badge
+  - Click → Add cue
+
+**Cue Display:**
+- Format: "Camera Name 🎯 Preset Name (duration)"
+- Preset name in blue-400 color for visual distinction
+- Only shows preset if one was selected
+- Duration editor inline
+
+**Workflow:**
+1. Select camera or preset from palette
+2. Cue added to timeline with visual feedback
+3. Edit duration inline
+4. Save → Tracks and cues persist to database
+5. Start → Camera moves through presets automatically
+
+### 12.4 Design Patterns Used
+✅ **Conditional UI**: Preset controls only show for PTZ cameras (avoids clutter)
+✅ **Visual Hierarchy**: Emojis (🎯) indicate PTZ capabilities throughout UI
+✅ **Contextual Help**: Links to preset management when no presets available
+✅ **Consistent Styling**: Dark theme, rounded cards, hover states
+✅ **Inline Editing**: Duration changes without modal dialogs
+✅ **Smart Defaults**: "No preset" option for flexibility
+✅ **Modal Workflows**: Capture preset uses focused modal for clear task completion
+
+### 12.5 Accessibility Considerations
+- Descriptive button labels ("Go To", not just icons)
+- Keyboard navigation support (tab through presets)
+- Hover titles/tooltips on action buttons
+- Confirmation dialogs for destructive actions (delete preset)
+- Visual and text feedback for async operations (loading states)

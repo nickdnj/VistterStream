@@ -85,6 +85,12 @@ The project includes configuration for local test cameras:
 - **⚡ Live Monitoring**: Real-time camera status, snapshots, and health checks
 - **📹 Live Stream Viewer**: Auto-refreshing camera preview with RTSP URL display
 - **🔄 Background Health Monitor**: Keeps cameras persistently online
+- **🎯 PTZ Preset System** ⭐ **NEW!**: Save, recall, and automate camera positions
+  - ONVIF control for Sunba PTZ cameras (port 8899)
+  - Capture current position as named preset
+  - Test presets with "Go To" button
+  - Use presets in streams and timelines
+  - Pan/tilt/zoom position tracking
 
 #### **Streaming Destinations** ⭐ **NEW!**
 - **📡 Destination-First Architecture**: Configure YouTube, Facebook, Twitch, Custom RTMP once, use everywhere
@@ -94,6 +100,11 @@ The project includes configuration for local test cameras:
 
 #### **Stream Management**
 - **▶️ Single-Camera Streams**: Direct camera-to-destination streaming with full control
+- **🎯 PTZ Preset Streams** ⭐ **NEW!**: Streams automatically move PTZ cameras to preset positions
+  - Select camera + preset in stream configuration
+  - Camera moves to preset before stream starts
+  - 3-second settling time for mechanical movement
+  - Edit streams to change presets on-the-fly
 - **🎛️ Encoding Profiles**: Resolution, bitrate, framerate configuration (1080p/720p/480p)
 - **🔥 Hardware Acceleration**: Automatic detection and usage of hardware encoders
 - **⏯️ Start/Stop Control**: Reliable stream control with orphaned process cleanup
@@ -102,29 +113,42 @@ The project includes configuration for local test cameras:
 #### **Composite Streams & Timelines** ⭐ **NEW!**
 - **🎬 Multi-Camera Composite Streams**: Switch between cameras on a schedule (e.g., 1 min each, looping)
 - **📅 Timeline Editor**: Visual interface to create timelines with camera cues
+- **🎯 PTZ Preset Timelines** ⭐ **BREAKTHROUGH!**: Automated multi-angle shows from single PTZ camera!
+  - Select camera + preset for each timeline cue
+  - Camera automatically repositions between presets during playback
+  - Create professional multi-angle shows: "Wide Shot → Close Up → Medium Shot → Loop"
+  - Visual preset selector in timeline editor
+  - Same camera, multiple presets = infinite creative possibilities!
 - **🎯 Multi-Track System**: Video track with sequential cue execution
 - **▶️ Timeline Execution**: Start/stop timeline playback with live camera switching
 - **🔄 Looping Support**: Infinite loop mode for continuous operation
 - **📡 Multi-Destination**: Stream timelines to multiple platforms simultaneously
+- **🔄 Auto-Restart**: Smart start button automatically restarts running timelines
 
 ### **Technical Architecture:**
 - **Backend**: FastAPI with SQLAlchemy ORM, Pydantic schemas, JWT authentication
 - **Frontend**: React 18 with TypeScript, Tailwind CSS, React Router, Axios
-- **Database**: SQLite with models for cameras, destinations, streams, timelines, tracks, cues
+- **Database**: SQLite with models for cameras, destinations, streams, timelines, tracks, cues, **presets**
+- **PTZ Control**: ONVIF integration for pan/tilt/zoom camera automation (onvif-zeep library)
 - **Streaming**: FFmpeg process manager with hardware acceleration, auto-restart, metrics
 - **Real-time**: Live status monitoring, health checks, auto-refreshing UI
 - **API Design**: RESTful endpoints with enriched responses, proper error handling
 - **Security**: Bcrypt password hashing, JWT tokens, encrypted credentials
-- **UI/UX**: Professional dark theme, responsive design, beautiful animations
+- **UI/UX**: Professional dark theme, responsive design, beautiful animations, conditional preset UI
 
-## 🎯 Current Focus: Timeline Enhancements & VistterStudio Integration
+## 🎯 Current Focus: Overlay System & Advanced Features
+
+### **Just Completed:** ✅
+- **🎯 Complete PTZ Preset System**: ONVIF control, preset management, timeline integration
+- **📝 Timeline Save Fix**: Tracks and cues now properly persist to database
+- **🔄 Auto-Restart Timelines**: Smart start button handles running timelines gracefully
 
 ### **Next Up:**
 - **🎥 Overlay System**: Text overlays, image overlays, lower thirds, fade transitions
 - **📆 Timeline Scheduling**: Future execution, recurring schedules
 - **☁️ VistterStudio Integration**: Import/export timelines, cloud control
 - **📊 Advanced Metrics**: Real-time bitrate, FPS, dropped frames
-- **🔄 Multi-Destination Streaming**: Simultaneous streaming to 3+ platforms (currently 1-2)
+- **🔄 Multi-Destination Streaming**: Simultaneous streaming to 3+ platforms (architecture ready, needs testing)
 
 ## Documentation
 

@@ -50,7 +50,7 @@ VistterStream is delivered as a containerized appliance that runs on ARM64 (Rasp
   - **Streams:** Camera-to-destination mappings with encoding profiles, referencing both cameras and destinations
   - **Timelines:** Multi-track timeline definitions with camera cues and overlay instructions
   - **TimelineTracks & TimelineCues:** Granular timeline execution steps
-  - **Presets:** PTZ camera position presets
+  - **Presets:** PTZ camera position presets with pan/tilt/zoom coordinates, linked to cameras and referenced by streams/timelines
   - **Audit trails:** User actions and system events
 * **Asset Cache (Filesystem):** Overlay images/videos, fallback slates, OCL scene caches, with version manifest for validation.
 * **Overlay Composition Scripts:** Parsed/validated JSON persisted with schema version and compilation checksum for deterministic playback.
@@ -78,6 +78,44 @@ VistterStream implements a **destination-first architecture** where streaming ta
 - Update destination → updates all dependent streams/timelines
 - Track `last_used` timestamp per destination
 - Platform-specific validation and presets
+
+### 4.2 PTZ Preset System Architecture
+VistterStream implements **ONVIF-based PTZ camera control** allowing operators to save camera positions as presets and reference them in streams and timelines for automated multi-angle content:
+
+```
+┌──────────────────────┐
+│   PTZ Presets        │  ← Save positions once
+│   (Zoomed In, Wide)  │
+└─────────┬────────────┘
+          │
+     ┌────┴─────┐
+     ↓          ↓
+┌─────────┐  ┌──────────┐
+│ Streams │  │ Timelines│  ← Reference presets
+│         │  │  Cues    │
+└─────────┘  └──────────┘
+     ↓          ↓
+┌──────────────────────┐
+│  ONVIF PTZ Service   │  ← Move camera (port 8899)
+│  (move_to_preset)    │
+└──────────────────────┘
+```
+
+**Implementation Details:**
+- **ONVIF Port Detection**: Sunba cameras use port 8899 (not standard 80)
+- **Preset Storage**: Database stores pan/tilt/zoom coordinates per preset
+- **Execution Sequence**: 
+  1. Move camera to preset via ONVIF
+  2. Wait 3 seconds for mechanical settling
+  3. Start FFmpeg stream from new position
+- **Graceful Degradation**: Stream continues even if PTZ move fails
+- **Lazy Import**: ONVIF library loaded on-demand to avoid startup dependencies
+
+**Use Cases Enabled:**
+- Single PTZ camera → Multiple preset angles = Professional multi-camera show
+- Timeline cues: "Camera 1 Preset 1 (Wide Shot)" → "Camera 1 Preset 2 (Close Up)" → Loop
+- Preset reuse across multiple streams and timelines
+- Live preset testing via "Go To" button in UI
 
 ## 5. Interface Contracts
 * **REST API:** CRUD endpoints for cameras, presets, streams, overlays, system settings. JSON schema versioned and documented via OpenAPI.

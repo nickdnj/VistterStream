@@ -165,3 +165,75 @@ This PRD focuses on the first shippable version of **VistterStream** while captu
 * **DL-001:** Outbound-only command channel chosen to satisfy firewall constraints—revisit once reverse proxy option explored.
 * **DL-002:** JSON-based OCL schema selected for human readability and Studio compatibility—evaluate binary formats after MVP.
 * **DL-003:** Local web UI prioritized over native clients—reconsider after multi-appliance fleet management roadmap defined.
+* **DL-004:** ⭐ **PTZ Preset System Implemented (Oct 2025)** - ONVIF port 8899 for Sunba cameras, preset-first architecture enabling single camera multi-angle shows, timeline cue integration complete.
+
+---
+
+## 11. PTZ Preset System Implementation (October 2025)
+
+### 11.1 Overview
+The PTZ Preset System is now **fully implemented** and operational, enabling sophisticated automated camera control for single-camera multi-angle productions.
+
+### 11.2 Technical Implementation
+**ONVIF Integration:**
+- Library: `onvif-zeep` with lazy loading for graceful degradation
+- Port Discovery: Sunba cameras use **port 8899** (non-standard, discovered via testing)
+- Connection Pooling: Cached ONVIF sessions per camera
+- Commands: `move_to_preset()`, `get_current_position()`, `set_preset()`
+
+**Database Schema:**
+```sql
+presets table:
+  - id, camera_id (FK), name
+  - pan, tilt, zoom (float values from ONVIF)
+  - created_at
+
+streams table (updated):
+  - preset_id (FK, nullable) -- Optional preset for stream
+
+timeline_cues table (existing):
+  - action_params JSON includes preset_id
+```
+
+**Execution Flow:**
+1. User saves preset → Captures current camera position via ONVIF
+2. User creates stream/timeline with preset → Stored in database
+3. Stream/timeline starts → PTZ service moves camera to preset
+4. System waits 3 seconds for mechanical movement
+5. FFmpeg begins streaming from new position
+
+### 11.3 User Workflows
+**Workflow 1: Single-Camera Multi-Angle Stream**
+- Camera: Sunba PTZ
+- Presets: "Zoomed In", "Wide Shot"
+- Stream 1: Sunba PTZ + "Zoomed In" preset → YouTube
+- Stream 2: Sunba PTZ + "Wide Shot" preset → Facebook
+- Result: Different views from same camera to different platforms
+
+**Workflow 2: Automated Multi-Angle Timeline** ⭐ **BREAKTHROUGH**
+- Timeline: "Multi-Angle Show"
+- Cue 1: Sunba PTZ + "Wide Shot" (60s)
+- Cue 2: Sunba PTZ + "Zoomed In" (30s)  
+- Cue 3: Sunba PTZ + "Medium Shot" (45s)
+- Loop: Enabled
+- Result: Camera automatically repositions, creating professional multi-angle content from single PTZ camera
+
+### 11.4 Key Achievements
+✅ **Camera 1 Preset 1 → Camera 1 Preset 2** - Original user requirement fully satisfied
+✅ ONVIF port auto-detection (8899 for Sunba, fallback to configured port)
+✅ Preset Management UI with capture, test, delete operations
+✅ Stream dialog conditional preset selector (only for PTZ cameras)
+✅ Timeline editor expandable preset palette
+✅ Database migration for preset support in streams
+✅ Critical bug fix: Timeline save now persists tracks and cues
+
+### 11.5 Known Limitations & Future Work
+- **Manual Positioning**: Operator must position camera via camera's web UI before capturing preset (no joystick control in VistterStream yet)
+- **Single ONVIF Profile**: Uses first media profile only (most cameras have one primary profile)
+- **Hardcoded Port Fallback**: Port 8899 hardcoded for Sunba, should be configurable per camera
+- **No Preset Import/Export**: VistterStudio integration pending for cloud preset library
+
+### 11.6 Dependencies Added
+- **onvif-zeep**: ONVIF/SOAP library for PTZ camera control
+- **zeep**: SOAP client (dependency of onvif-zeep)
+- **lxml**: XML parsing for ONVIF responses
