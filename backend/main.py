@@ -12,7 +12,8 @@ import os
 from pathlib import Path
 
 # Import routers
-from routers import cameras, auth, streams, presets, status, timelines, timeline_execution, emergency, destinations
+from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations
+from routers import presets as presets_router
 
 # Import health monitor
 from services.camera_health_monitor import start_health_monitor, stop_health_monitor
@@ -39,7 +40,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(streams.router, prefix="/api/streams", tags=["streams"])
-app.include_router(presets.router, prefix="/api/presets", tags=["presets"])
+app.include_router(presets_router.router)  # PTZ Presets
 app.include_router(status.router, prefix="/api/status", tags=["status"])
 app.include_router(destinations.router)  # Streaming destinations (YouTube, Facebook, etc.)
 app.include_router(timelines.router)  # Timeline CRUD

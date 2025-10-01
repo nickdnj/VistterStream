@@ -20,9 +20,9 @@ if __name__ == "__main__":
     
     # Start the server
     uvicorn.run(
-        "main:app",
+        app,  # Pass app directly instead of string when reload is disabled
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,  # Disabled reload to avoid import issues
         log_level="info"
     )

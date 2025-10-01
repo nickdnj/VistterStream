@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 
 from models.database import SessionLocal
 from models.timeline import Timeline, TimelineCue, TimelineExecution
-from models.database import Camera
+from models.database import Camera, Preset
 from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile
+from services.ptz_service import get_ptz_service
 from models.schemas import StreamStatus
+import base64
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Enable debug logging
@@ -199,6 +201,8 @@ class TimelineExecutor:
         try:
             if cue.action_type == "show_camera":
                 camera_id = cue.action_params.get("camera_id")
+                preset_id = cue.action_params.get("preset_id")  # Optional
+                
                 if not camera_id:
                     logger.error(f"Cue {cue.id} has no camera_id")
                     return
@@ -208,10 +212,50 @@ class TimelineExecutor:
                 if not camera:
                     logger.error(f"Camera {camera_id} not found")
                     return
+                
+                # If preset specified, move camera to preset BEFORE streaming
+                if preset_id:
+                    preset = db.query(Preset).filter(Preset.id == preset_id).first()
+                    if preset:
+                        logger.info(f"🎯 Moving camera {camera.name} to preset '{preset.name}'")
+                        
+                        # Get camera credentials
+                        password = None
+                        if camera.password_enc:
+                            try:
+                                password = base64.b64decode(camera.password_enc).decode()
+                            except Exception as e:
+                                logger.error(f"Failed to decode camera password: {e}")
+                        
+                        if password:
+                            ptz_service = get_ptz_service()
+                            try:
+                                success = await ptz_service.move_to_preset(
+                                    address=camera.address,
+                                    port=camera.port,
+                                    username=camera.username,
+                                    password=password,
+                                    preset_token=str(preset_id)
+                                )
+                                
+                                if success:
+                                    logger.info(f"✅ Camera moved to preset '{preset.name}'")
+                                    # Wait a moment for camera to settle
+                                    await asyncio.sleep(2)
+                                else:
+                                    logger.warning(f"⚠️  Failed to move camera to preset, continuing anyway")
+                            except Exception as e:
+                                logger.error(f"❌ Error moving camera to preset: {e}")
+                                # Continue anyway - don't fail the whole timeline
+                        else:
+                            logger.warning(f"⚠️  No camera credentials available for PTZ control")
+                    else:
+                        logger.warning(f"⚠️  Preset {preset_id} not found, ignoring")
                     
                 # Build RTSP URL
                 rtsp_url = self._build_rtsp_url(camera)
-                logger.info(f"🎬 Switching to camera {camera.name} for {cue.duration}s")
+                preset_info = f" at preset '{preset.name}'" if preset_id and preset else ""
+                logger.info(f"🎬 Switching to camera {camera.name}{preset_info} for {cue.duration}s")
                 logger.debug(f"RTSP URL: {rtsp_url}")
                 logger.debug(f"Output URLs: {output_urls}")
                 

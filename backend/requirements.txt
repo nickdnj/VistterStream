@@ -11,3 +11,4 @@ Pillow
 pydantic
 pydantic-settings
 python-dotenv
+onvif-zeep  # ONVIF PTZ camera control
