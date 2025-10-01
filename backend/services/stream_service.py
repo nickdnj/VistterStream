@@ -114,6 +114,48 @@ class StreamService:
             self.db.commit()
             return False
         
+        # If stream has a preset, move camera to preset BEFORE streaming
+        if stream.preset_id:
+            from models.database import Preset
+            from services.ptz_service import get_ptz_service
+            import asyncio
+            
+            preset = self.db.query(Preset).filter(Preset.id == stream.preset_id).first()
+            if preset:
+                print(f"🎯 Moving camera {camera.name} to preset '{preset.name}' before streaming")
+                
+                # Get camera password
+                password = None
+                if camera.password_enc:
+                    password = base64.b64decode(camera.password_enc).decode()
+                
+                if password:
+                    # ONVIF port detection (Sunba cameras use 8899)
+                    onvif_port = 8899 if camera.port == 554 else camera.port
+                    ptz_service = get_ptz_service()
+                    
+                    try:
+                        success = await ptz_service.move_to_preset(
+                            address=camera.address,
+                            port=onvif_port,
+                            username=camera.username,
+                            password=password,
+                            preset_token=str(stream.preset_id)
+                        )
+                        
+                        if success:
+                            print(f"✅ Camera moved to preset '{preset.name}', waiting 3 seconds for camera to settle...")
+                            await asyncio.sleep(3)  # Wait for camera to settle
+                        else:
+                            print(f"⚠️  Failed to move camera to preset, streaming anyway")
+                    except Exception as e:
+                        print(f"❌ Error moving camera to preset: {e}")
+                        # Continue anyway - don't fail the stream
+                else:
+                    print(f"⚠️  No camera credentials available for PTZ control")
+            else:
+                print(f"⚠️  Preset {stream.preset_id} not found")
+        
         # Update stream status
         stream.status = StreamStatus.STARTING.value
         stream.started_at = datetime.utcnow()
