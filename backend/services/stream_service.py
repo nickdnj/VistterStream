@@ -191,11 +191,28 @@ class StreamService:
         stream = self.db.query(Stream).filter(Stream.id == stream_id).first()
         if not stream:
             return None
-        
+
+        now = datetime.utcnow()
+        if stream.started_at:
+            end_time = stream.stopped_at or now
+            uptime_seconds = max(int((end_time - stream.started_at).total_seconds()), 0)
+        else:
+            uptime_seconds = 0
+
         return {
-            "stream_id": stream.id,
+            "id": stream.id,
+            "name": stream.name,
+            "camera_id": stream.camera_id,
+            "destination": stream.destination,
             "status": stream.status,
+            "is_active": stream.is_active,
+            "created_at": stream.created_at,
             "started_at": stream.started_at,
             "stopped_at": stream.stopped_at,
-            "error_message": stream.error_message
+            "last_error": stream.last_error,
+            "resolution": stream.resolution,
+            "bitrate": stream.bitrate,
+            "framerate": stream.framerate,
+            "is_live": stream.status == StreamStatus.RUNNING.value,
+            "uptime_seconds": uptime_seconds
         }
