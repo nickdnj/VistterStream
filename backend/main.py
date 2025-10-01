@@ -14,6 +14,9 @@ from pathlib import Path
 # Import routers
 from routers import cameras, auth, streams, presets, status
 
+# Import health monitor
+from services.camera_health_monitor import start_health_monitor, stop_health_monitor
+
 # Create FastAPI app
 app = FastAPI(
     title="VistterStream API",
@@ -60,6 +63,23 @@ async def health_check():
         "service": "VistterStream API",
         "version": "1.0.0"
     }
+
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background services on startup"""
+    print("🚀 Starting VistterStream Backend...")
+    print("📷 Starting camera health monitor...")
+    await start_health_monitor()
+    print("✅ All services started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up background services on shutdown"""
+    print("🛑 Shutting down VistterStream Backend...")
+    print("📷 Stopping camera health monitor...")
+    await stop_health_monitor()
+    print("✅ All services stopped")
 
 if __name__ == "__main__":
     uvicorn.run(
