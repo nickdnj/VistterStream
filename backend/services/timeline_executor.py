@@ -228,11 +228,13 @@ class TimelineExecutor:
                                 logger.error(f"Failed to decode camera password: {e}")
                         
                         if password:
+                            # ONVIF typically runs on port 80, not the RTSP port
+                            onvif_port = 80 if camera.port == 554 else camera.port
                             ptz_service = get_ptz_service()
                             try:
                                 success = await ptz_service.move_to_preset(
                                     address=camera.address,
-                                    port=camera.port,
+                                    port=onvif_port,
                                     username=camera.username,
                                     password=password,
                                     preset_token=str(preset_id)
