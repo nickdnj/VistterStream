@@ -7,6 +7,10 @@ Starts a timeline with camera switching to YouTube
 import sys
 import os
 import asyncio
+
+# Set the database path to the backend directory
+os.environ['DATABASE_URL'] = 'sqlite:///backend/vistterstream.db'
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
 from models.database import SessionLocal

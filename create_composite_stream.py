@@ -6,6 +6,10 @@ Camera 1 for 1 minute → Camera 2 for 1 minute → Repeat
 
 import sys
 import os
+
+# Set the database path to the backend directory
+os.environ['DATABASE_URL'] = 'sqlite:///backend/vistterstream.db'
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'backend'))
 
 from models.database import SessionLocal, Camera, create_tables
@@ -21,15 +25,17 @@ def create_composite_stream():
     db = SessionLocal()
     
     try:
-        # Get available cameras
-        cameras = db.query(Camera).all()
-        if len(cameras) < 2:
-            print(f"❌ Need at least 2 cameras, found {len(cameras)}")
+        # Get available cameras - pick one of each type
+        reolink = db.query(Camera).filter(Camera.name.like('%Reolink%')).first()
+        sunba = db.query(Camera).filter(Camera.name.like('%Sunba%')).first()
+        
+        if not reolink or not sunba:
+            print(f"❌ Need both Reolink and Sunba cameras")
             print("Please add cameras first!")
             return
             
-        camera1 = cameras[0]
-        camera2 = cameras[1]
+        camera1 = reolink
+        camera2 = sunba
         
         print(f"📷 Creating composite stream:")
         print(f"  Camera 1: {camera1.name} (ID: {camera1.id})")
