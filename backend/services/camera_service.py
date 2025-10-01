@@ -187,6 +187,12 @@ class CameraService:
         
         success = rtsp_accessible and (snapshot_accessible or not camera.snapshot_url)
         
+        # Update last_seen timestamp if test successful and camera has an ID (saved in DB)
+        if success and hasattr(camera, 'id') and camera.id:
+            camera.last_seen = datetime.utcnow()
+            self.db.commit()
+            print(f"DEBUG: Updated last_seen for camera {camera.id} ({camera.name})")
+        
         return CameraTestResponse(
             success=success,
             message="Camera test completed",

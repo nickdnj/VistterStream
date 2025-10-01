@@ -186,25 +186,19 @@ const CameraManagement: React.FC = () => {
             <table className="min-w-full divide-y divide-dark-700">
               <thead className="bg-dark-700">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Preview
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Camera
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Address
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Last Seen
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  <th className="px-3 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -212,63 +206,61 @@ const CameraManagement: React.FC = () => {
               <tbody className="bg-dark-800 divide-y divide-dark-700">
                 {cameras.map((camera) => (
                   <tr key={camera.id} className="hover:bg-dark-700">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       <div className="flex items-center justify-center">
                         {snapshots[camera.id] ? (
                           <img
                             src={snapshots[camera.id]}
                             alt={`${camera.name} snapshot`}
-                            className="h-16 w-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                            className="h-14 w-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
                             onClick={() => handleViewStream(camera)}
                             title="Click to view live stream"
                           />
                         ) : camera.status === 'online' ? (
-                          <div className="h-16 w-20 bg-dark-600 rounded border flex items-center justify-center cursor-pointer hover:bg-dark-500"
+                          <div className="h-14 w-20 bg-dark-600 rounded border flex items-center justify-center cursor-pointer hover:bg-dark-500"
                                onClick={() => handleViewStream(camera)}
                                title="Click to view live stream">
-                            <CameraIcon className="h-8 w-8 text-gray-400" />
+                            <CameraIcon className="h-7 w-7 text-gray-400" />
                           </div>
                         ) : (
-                          <div className="h-16 w-20 bg-dark-700 rounded border flex items-center justify-center">
-                            <XCircleIcon className="h-8 w-8 text-red-400" />
+                          <div className="h-14 w-20 bg-dark-700 rounded border flex items-center justify-center">
+                            <XCircleIcon className="h-7 w-7 text-red-400" />
                           </div>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <CameraIcon className="h-5 w-5 text-gray-400 mr-3" />
-                        <div>
+                    <td className="px-3 py-3">
+                      <div className="flex items-start">
+                        <CameraIcon className="h-5 w-5 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
                           <button
                             onClick={() => handleViewStream(camera)}
-                            className="text-sm font-medium text-white hover:text-primary-400 transition-colors cursor-pointer"
+                            className="text-sm font-medium text-white hover:text-primary-400 transition-colors cursor-pointer block truncate"
                             disabled={camera.status !== 'online'}
                             title={camera.status === 'online' ? 'Click to view live stream' : 'Camera offline'}
                           >
                             {camera.name}
                           </button>
-                          <div className="text-sm text-gray-400">{camera.protocol.toUpperCase()}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-400">{camera.protocol.toUpperCase()}</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-900 text-primary-300">
+                              {camera.type === 'ptz' ? 'PTZ' : 'STATIONARY'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-900 text-primary-300">
-                        {camera.type.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                      {camera.address}:{camera.port}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {getStatusIcon(camera.status)}
-                        <span className="ml-2 text-sm text-gray-300 capitalize">{camera.status}</span>
+                    <td className="px-3 py-3 text-sm text-gray-300">
+                      <div className="truncate max-w-[180px]" title={`${camera.address}:${camera.port}`}>
+                        {camera.address}:{camera.port}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                      {camera.last_seen ? new Date(camera.last_seen).toLocaleString() : 'Never'}
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="flex items-center justify-center" title={camera.last_seen ? `Last seen: ${new Date(camera.last_seen).toLocaleString()}` : 'Never seen'}>
+                        {getStatusIcon(camera.status)}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={() => handleTestCamera(camera.id)}
