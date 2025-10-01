@@ -7,6 +7,16 @@ interface Camera {
   type: string;
 }
 
+interface Preset {
+  id: number;
+  camera_id: number;
+  name: string;
+  pan: number;
+  tilt: number;
+  zoom: number;
+  created_at: string;
+}
+
 interface Cue {
   id?: number;
   cue_order: number;
@@ -15,6 +25,7 @@ interface Cue {
   action_type: string;
   action_params: {
     camera_id?: number;
+    preset_id?: number;
     transition?: string;
   };
   transition_type: string;
@@ -53,6 +64,7 @@ const TimelineEditor: React.FC = () => {
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [selectedTimeline, setSelectedTimeline] = useState<Timeline | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [presets, setPresets] = useState<Preset[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -77,6 +89,7 @@ const TimelineEditor: React.FC = () => {
   useEffect(() => {
     loadTimelines();
     loadCameras();
+    loadPresets();
     loadDestinations();
   }, []);
 
@@ -95,6 +108,15 @@ const TimelineEditor: React.FC = () => {
       setCameras(response.data);
     } catch (error) {
       console.error('Failed to load cameras:', error);
+    }
+  };
+
+  const loadPresets = async () => {
+    try {
+      const response = await axios.get('/api/presets/');
+      setPresets(response.data);
+    } catch (error) {
+      console.error('Failed to load presets:', error);
     }
   };
 
@@ -132,7 +154,7 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
-  const addCueToTimeline = (camera: Camera) => {
+  const addCueToTimeline = (camera: Camera, preset?: Preset) => {
     if (!selectedTimeline) return;
 
     const videoTrack = selectedTimeline.tracks.find(t => t.track_type === 'video');
@@ -148,6 +170,7 @@ const TimelineEditor: React.FC = () => {
       action_type: 'show_camera',
       action_params: {
         camera_id: camera.id,
+        preset_id: preset?.id,
         transition: 'cut'
       },
       transition_type: 'cut',
@@ -156,6 +179,18 @@ const TimelineEditor: React.FC = () => {
 
     videoTrack.cues.push(newCue);
     setSelectedTimeline({ ...selectedTimeline });
+  };
+
+  const getPresetsForCamera = (cameraId: number): Preset[] => {
+    return presets.filter(p => p.camera_id === cameraId);
+  };
+
+  const getCameraById = (cameraId: number): Camera | undefined => {
+    return cameras.find(c => c.id === cameraId);
+  };
+
+  const getPresetById = (presetId: number): Preset | undefined => {
+    return presets.find(p => p.id === presetId);
   };
 
   const removeCue = (trackIndex: number, cueIndex: number) => {
@@ -227,6 +262,11 @@ const TimelineEditor: React.FC = () => {
     return camera ? camera.name : `Camera ${cameraId}`;
   };
 
+  const getPresetName = (presetId: number) => {
+    const preset = presets.find(p => p.id === presetId);
+    return preset ? preset.name : `Preset ${presetId}`;
+  };
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -272,16 +312,58 @@ const TimelineEditor: React.FC = () => {
           <div className="bg-gray-800 rounded-lg p-4 mt-4">
             <h2 className="text-xl font-semibold text-white mb-4">📷 Cameras</h2>
             <div className="space-y-2">
-              {cameras.map((camera) => (
-                <div
-                  key={camera.id}
-                  onClick={() => addCueToTimeline(camera)}
-                  className="bg-gray-700 hover:bg-gray-600 p-3 rounded cursor-pointer transition-colors"
-                >
-                  <div className="text-white font-medium">{camera.name}</div>
-                  <div className="text-xs text-gray-400 capitalize">{camera.type}</div>
-                </div>
-              ))}
+              {cameras.map((camera) => {
+                const cameraPresets = getPresetsForCamera(camera.id);
+                const isPTZ = camera.type === 'ptz';
+                
+                return (
+                  <div key={camera.id} className="bg-gray-700 rounded overflow-hidden">
+                    {/* Camera Header */}
+                    <div
+                      onClick={() => addCueToTimeline(camera)}
+                      className="hover:bg-gray-600 p-3 cursor-pointer transition-colors"
+                    >
+                      <div className="text-white font-medium flex items-center justify-between">
+                        <span>
+                          {isPTZ && '🎯 '}
+                          {camera.name}
+                          {isPTZ && ` (${cameraPresets.length} presets)`}
+                        </span>
+                        <span className="text-xs bg-gray-600 px-2 py-1 rounded capitalize">
+                          {camera.type}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        Click to add at current position
+                      </div>
+                    </div>
+                    
+                    {/* Presets (for PTZ cameras) */}
+                    {isPTZ && cameraPresets.length > 0 && (
+                      <div className="bg-gray-800 border-t border-gray-600 p-2">
+                        <div className="text-xs text-gray-400 mb-2 px-2">Presets:</div>
+                        <div className="space-y-1">
+                          {cameraPresets.map((preset) => (
+                            <div
+                              key={preset.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addCueToTimeline(camera, preset);
+                              }}
+                              className="bg-gray-700 hover:bg-blue-600 p-2 rounded cursor-pointer transition-colors text-sm"
+                            >
+                              <div className="text-white">🎯 {preset.name}</div>
+                              <div className="text-xs text-gray-400">
+                                Pan: {preset.pan.toFixed(1)}, Tilt: {preset.tilt.toFixed(1)}, Zoom: {preset.zoom.toFixed(1)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {cameras.length === 0 && (
               <p className="text-gray-500 text-sm">No cameras available</p>
@@ -376,8 +458,16 @@ const TimelineEditor: React.FC = () => {
                                 {formatTime(cue.start_time)}
                               </span>
                               <span className="text-white font-medium">
-                                {cue.action_type === 'show_camera' &&
-                                  getCameraName(cue.action_params.camera_id!)}
+                                {cue.action_type === 'show_camera' && (
+                                  <>
+                                    {getCameraName(cue.action_params.camera_id!)}
+                                    {cue.action_params.preset_id && (
+                                      <span className="text-blue-400 ml-2">
+                                        🎯 {getPresetName(cue.action_params.preset_id)}
+                                      </span>
+                                    )}
+                                  </>
+                                )}
                               </span>
                               <span className="text-gray-400 text-sm">
                                 ({cue.duration}s)
