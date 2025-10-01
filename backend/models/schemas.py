@@ -118,10 +118,6 @@ class Stream(StreamBase):
     stopped_at: Optional[datetime] = None
     last_error: Optional[str] = None
     
-    # Include destination details in response
-    destination: Optional[dict] = None  # Will be populated from relationship
-    camera: Optional[dict] = None  # Will be populated from relationship
-    
     class Config:
         from_attributes = True
         use_enum_values = True  # Serialize enums as their values

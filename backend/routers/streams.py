@@ -4,20 +4,60 @@ Streaming API endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Any
 from datetime import datetime
 
-from models.database import get_db, Stream
+from models.database import get_db, Stream, Camera
+from models.destination import StreamingDestination
 from models.schemas import StreamCreate, StreamUpdate, Stream as StreamSchema, StreamStatus
 from services.stream_service import StreamService
 
 router = APIRouter()
 
-@router.get("/", response_model=List[StreamSchema])
+def enrich_stream(stream_db: Stream, db: Session) -> dict:
+    """Enrich stream with destination and camera details"""
+    stream_dict = {
+        "id": stream_db.id,
+        "name": stream_db.name,
+        "camera_id": stream_db.camera_id,
+        "destination_id": stream_db.destination_id,
+        "resolution": stream_db.resolution,
+        "bitrate": stream_db.bitrate,
+        "framerate": stream_db.framerate,
+        "status": stream_db.status,
+        "is_active": stream_db.is_active,
+        "created_at": stream_db.created_at,
+        "started_at": stream_db.started_at,
+        "stopped_at": stream_db.stopped_at,
+        "last_error": stream_db.last_error,
+    }
+    
+    # Add destination details
+    destination = db.query(StreamingDestination).filter(
+        StreamingDestination.id == stream_db.destination_id
+    ).first()
+    if destination:
+        stream_dict["destination"] = {
+            "id": destination.id,
+            "name": destination.name,
+            "platform": destination.platform
+        }
+    
+    # Add camera details
+    camera = db.query(Camera).filter(Camera.id == stream_db.camera_id).first()
+    if camera:
+        stream_dict["camera"] = {
+            "id": camera.id,
+            "name": camera.name
+        }
+    
+    return stream_dict
+
+@router.get("/")
 async def get_streams(db: Session = Depends(get_db)):
     """Get all streams"""
-    stream_service = StreamService(db)
-    return await stream_service.get_all_streams()
+    streams = db.query(Stream).all()
+    return [enrich_stream(stream, db) for stream in streams]
 
 @router.get("/{stream_id}", response_model=StreamSchema)
 async def get_stream(stream_id: int, db: Session = Depends(get_db)):
@@ -28,14 +68,27 @@ async def get_stream(stream_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Stream not found")
     return stream
 
-@router.post("/", response_model=StreamSchema)
-async def create_stream(stream: StreamCreate, db: Session = Depends(get_db)):
+@router.post("/")
+async def create_stream(stream_data: StreamCreate, db: Session = Depends(get_db)):
     """Create a new stream"""
     try:
-        stream_service = StreamService(db)
-        result = await stream_service.create_stream(stream)
-        print(f"DEBUG: Stream created successfully: {result}")
-        return result
+        # Create the stream
+        stream_db = Stream(
+            name=stream_data.name,
+            camera_id=stream_data.camera_id,
+            destination_id=stream_data.destination_id,
+            resolution=stream_data.resolution,
+            bitrate=stream_data.bitrate,
+            framerate=stream_data.framerate,
+            status="stopped"
+        )
+        
+        db.add(stream_db)
+        db.commit()
+        db.refresh(stream_db)
+        
+        # Return enriched stream data
+        return enrich_stream(stream_db, db)
     except Exception as e:
         print(f"DEBUG: Error creating stream: {e}")
         import traceback
