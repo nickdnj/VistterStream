@@ -3,14 +3,6 @@
 ## 🎯 **CURRENT MISSION: Streaming Pipeline + Timeline Orchestration**
 *Build the core appliance capabilities standalone, THEN integrate VistterStudio control*
 
-### 📊 **Phase 1 Progress: 25% Complete**
-- ✅ FFmpeg Process Manager (100%)
-- ✅ Camera Management UI (100%)
-- ⏳ Multi-Destination Streaming (0%)
-- ⏳ Input Source Management (0%)
-- ⏳ Stream Health & Telemetry (0%)
-- ⏳ Overlay System (0%)
-
 ---
 
 ## 📚 **Key Documentation References**
@@ -36,14 +28,11 @@
 ### **1.1 FFmpeg Streaming Engine** ⚡
 *See spec §"Streaming Pipeline Architecture"*
 
-- [x] **FFmpeg Process Manager** ✅ **(COMPLETED 2025-10-01)**
+- [ ] **FFmpeg Process Manager**
   - Spawn/manage FFmpeg processes with proper lifecycle control
   - Process monitoring with health checks and auto-restart
   - Graceful shutdown and resource cleanup
   - Output parsing for errors, warnings, and stats (bitrate, fps, dropped frames)
-  - Hardware acceleration detection (Pi 5 h264_v4l2m2m, Mac h264_videotoolbox)
-  - Exponential backoff retry with 10 max retries
-  - 16 unit tests passing with comprehensive coverage
 
 - [ ] **Multi-Destination Streaming**
   - Simultaneous streaming to 3+ destinations (YouTube, Facebook, Twitch, custom RTMP)
@@ -92,15 +81,6 @@
   - Update stream destinations on-the-fly
   - Stream recording control (optional DVR)
 
-- [x] **Camera Management UI** ✅ **(COMPLETED 2025-10-01)**
-  - Compact table layout without horizontal scrollbar
-  - Live camera thumbnails with auto-refresh
-  - Online/offline status detection with 5-min cache
-  - HTTP Digest auth for Reolink cameras
-  - Live stream viewer with 500ms snapshot refresh
-  - Click thumbnail or play button to view live stream
-  - "LIVE" indicator with pulsing animation
-  
 - [ ] **Frontend Stream Dashboard**
   - Live stream status indicators with metrics graphs
   - Multi-stream preview (snapshots or live thumbnails)

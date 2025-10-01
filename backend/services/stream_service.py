@@ -14,7 +14,14 @@ from services.ffmpeg_manager import FFmpegProcessManager
 class StreamService:
     def __init__(self, db: Session):
         self.db = db
-        self.ffmpeg_manager = FFmpegProcessManager()
+        self._ffmpeg_manager = None
+    
+    @property
+    def ffmpeg_manager(self):
+        """Lazy-load FFmpeg manager"""
+        if self._ffmpeg_manager is None:
+            self._ffmpeg_manager = FFmpegProcessManager()
+        return self._ffmpeg_manager
 
     async def get_all_streams(self) -> List[StreamSchema]:
         """Get all streams"""

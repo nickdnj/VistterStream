@@ -95,8 +95,8 @@ class StreamBase(BaseModel):
     destination: StreamDestination
     stream_key: str = Field(..., min_length=1)
     rtmp_url: str = Field(..., min_length=1)
-    resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
-    bitrate: str = Field(default="4500k", pattern=r"^\d+k$")
+    resolution: str = Field(default="1920x1080")
+    bitrate: str = Field(default="4500k")
     framerate: int = Field(default=30, ge=15, le=60)
 
 class StreamCreate(StreamBase):
@@ -107,8 +107,8 @@ class StreamUpdate(BaseModel):
     destination: Optional[StreamDestination] = None
     stream_key: Optional[str] = Field(None, min_length=1)
     rtmp_url: Optional[str] = Field(None, min_length=1)
-    resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
-    bitrate: Optional[str] = Field(None, pattern=r"^\d+k$")
+    resolution: Optional[str] = None
+    bitrate: Optional[str] = None
     framerate: Optional[int] = Field(None, ge=15, le=60)
     is_active: Optional[bool] = None
 
@@ -124,6 +124,7 @@ class Stream(StreamBase):
     
     class Config:
         from_attributes = True
+        use_enum_values = True  # Serialize enums as their values
 
 # Authentication schemas
 class UserBase(BaseModel):
