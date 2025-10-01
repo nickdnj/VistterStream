@@ -16,11 +16,11 @@ class StreamService:
         self.db = db
         self._ffmpeg_manager = None
     
-    @property
-    def ffmpeg_manager(self):
-        """Lazy-load FFmpeg manager"""
+    async def get_ffmpeg_manager(self):
+        """Lazy-load and initialize FFmpeg manager"""
         if self._ffmpeg_manager is None:
             self._ffmpeg_manager = FFmpegProcessManager()
+            await self._ffmpeg_manager.initialize()
         return self._ffmpeg_manager
 
     async def get_all_streams(self) -> List[StreamSchema]:
@@ -121,9 +121,12 @@ class StreamService:
             # Parse resolution
             width, height = stream.resolution.split('x')
             
+            # Get FFmpeg manager
+            ffmpeg_manager = await self.get_ffmpeg_manager()
+            
             # Build encoding profile
             encoding_profile = {
-                'codec': self.ffmpeg_manager.hw_capabilities.encoder,
+                'codec': ffmpeg_manager.hw_capabilities.encoder,
                 'resolution': (int(width), int(height)),
                 'framerate': stream.framerate,
                 'bitrate': stream.bitrate,
@@ -136,7 +139,7 @@ class StreamService:
             
             # Start the stream
             print(f"DEBUG: Starting stream {stream.id} from {rtsp_url} to {rtmp_output}")
-            await self.ffmpeg_manager.start_stream(
+            await ffmpeg_manager.start_stream(
                 stream_id=stream.id,
                 input_url=rtsp_url,
                 output_url=rtmp_output,
@@ -164,8 +167,9 @@ class StreamService:
             return False
         
         try:
-            # Stop FFmpeg process
-            await self.ffmpeg_manager.stop_stream(stream_id)
+            # Get FFmpeg manager and stop process
+            ffmpeg_manager = await self.get_ffmpeg_manager()
+            await ffmpeg_manager.stop_stream(stream_id)
             
             # Update stream status
             stream.status = StreamStatus.STOPPED.value
