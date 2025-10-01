@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon } from '@heroicons/react/24/outline';
 
 interface Camera {
   id: number;
@@ -70,6 +71,11 @@ const TimelineEditor: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [showNewTimelineModal, setShowNewTimelineModal] = useState(false);
 
+  // Sidebar collapse states
+  const [camerasExpanded, setCamerasExpanded] = useState(true);
+  const [assetsExpanded, setAssetsExpanded] = useState(false);
+  const [expandedCameras, setExpandedCameras] = useState<Set<number>>(new Set());
+
   // New timeline form
   const [newTimeline, setNewTimeline] = useState<Timeline>({
     name: '',
@@ -97,6 +103,9 @@ const TimelineEditor: React.FC = () => {
     try {
       const response = await axios.get('/api/timelines/');
       setTimelines(response.data);
+      if (response.data.length > 0 && !selectedTimeline) {
+        setSelectedTimeline(response.data[0]);
+      }
     } catch (error) {
       console.error('Failed to load timelines:', error);
     }
@@ -130,9 +139,15 @@ const TimelineEditor: React.FC = () => {
   };
 
   const createTimeline = async () => {
+    if (!newTimeline.name.trim()) {
+      alert('Please enter a timeline name');
+      return;
+    }
+
     try {
       const response = await axios.post('/api/timelines/', newTimeline);
       setTimelines([...timelines, response.data]);
+      setSelectedTimeline(response.data);
       setShowNewTimelineModal(false);
       setNewTimeline({
         name: '',
@@ -185,21 +200,19 @@ const TimelineEditor: React.FC = () => {
     return presets.filter(p => p.camera_id === cameraId);
   };
 
-  const getCameraById = (cameraId: number): Camera | undefined => {
-    return cameras.find(c => c.id === cameraId);
-  };
-
-  const getPresetById = (presetId: number): Preset | undefined => {
-    return presets.find(p => p.id === presetId);
-  };
-
   const removeCue = (trackIndex: number, cueIndex: number) => {
     if (!selectedTimeline) return;
     
     selectedTimeline.tracks[trackIndex].cues.splice(cueIndex, 1);
     
-    // Reorder cues
+    // Recalculate start times
     selectedTimeline.tracks[trackIndex].cues.forEach((cue, idx) => {
+      if (idx === 0) {
+        cue.start_time = 0;
+      } else {
+        const prevCue = selectedTimeline.tracks[trackIndex].cues[idx - 1];
+        cue.start_time = prevCue.start_time + prevCue.duration;
+      }
       cue.cue_order = idx + 1;
     });
     
@@ -278,241 +291,368 @@ const TimelineEditor: React.FC = () => {
     return preset ? preset.name : `Preset ${presetId}`;
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, camera: Camera, preset?: Preset) => {
+    e.dataTransfer.setData('camera', JSON.stringify(camera));
+    if (preset) {
+      e.dataTransfer.setData('preset', JSON.stringify(preset));
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const cameraData = e.dataTransfer.getData('camera');
+    const presetData = e.dataTransfer.getData('preset');
+    
+    if (cameraData) {
+      const camera = JSON.parse(cameraData);
+      const preset = presetData ? JSON.parse(presetData) : undefined;
+      addCueToTimeline(camera, preset);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-2">🎬 Timeline Editor</h1>
-        <p className="text-gray-400">Create and manage composite streams with camera switching</p>
+    <div className="h-screen flex flex-col bg-dark-900">
+      {/* Top Bar */}
+      <div className="flex items-center justify-between px-6 py-4 bg-dark-800 border-b border-dark-700">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-white">🎬 Timeline Editor</h1>
+          {selectedTimeline && (
+            <span className="text-gray-400">→ {selectedTimeline.name}</span>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowNewTimelineModal(true)}
+            className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md flex items-center gap-2"
+          >
+            <PlusIcon className="h-4 w-4" />
+            New Timeline
+          </button>
+          
+          {selectedTimeline && (
+            <>
+              <button
+                onClick={saveTimeline}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+              >
+                💾 Save
+              </button>
+              
+              <div className="flex items-center gap-2">
+                <select
+                  multiple
+                  value={selectedDestinations.map(String)}
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
+                    setSelectedDestinations(selected);
+                  }}
+                  className="bg-dark-700 text-white px-3 py-2 rounded h-20 w-48"
+                >
+                  {destinations.map((dest) => (
+                    <option key={dest.id} value={dest.id}>
+                      {dest.platform === 'youtube' && '📺'}
+                      {dest.platform === 'facebook' && '👥'}
+                      {dest.platform === 'twitch' && '🎮'}
+                      {dest.platform === 'custom' && '🔧'}
+                      {' '}{dest.name}
+                    </option>
+                  ))}
+                </select>
+                
+                {!isRunning ? (
+                  <button
+                    onClick={startTimeline}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold"
+                  >
+                    ▶️ Start
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopTimeline}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold"
+                  >
+                    ⏹️ Stop
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar: Timelines List */}
-        <div className="lg:col-span-1">
-          <div className="bg-gray-800 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-white">Timelines</h2>
+      {/* Main Content Area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar - VistterStudio Style */}
+        <div className="w-80 bg-dark-800 border-r border-dark-700 flex flex-col overflow-hidden">
+          {/* Studio Label */}
+          <div className="px-4 py-3 bg-dark-900 border-b border-dark-700">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Studio</h2>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Cameras Section */}
+            <div className="border-b border-dark-700">
               <button
-                onClick={() => setShowNewTimelineModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                onClick={() => setCamerasExpanded(!camerasExpanded)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-dark-700 transition-colors"
               >
-                + New
-              </button>
-            </div>
-            
-            <div className="space-y-2">
-              {timelines.map((timeline) => (
-                <div
-                  key={timeline.id}
-                  onClick={() => setSelectedTimeline(timeline)}
-                  className={`p-3 rounded cursor-pointer transition-colors ${
-                    selectedTimeline?.id === timeline.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
-                >
-                  <div className="font-medium">{timeline.name}</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {formatTime(timeline.duration)} • {timeline.loop ? 'Loop' : 'Once'}
-                  </div>
+                <div className="flex items-center gap-2">
+                  {camerasExpanded ? (
+                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+                  )}
+                  <span className="text-white font-medium">📷 Cameras</span>
                 </div>
-              ))}
+                <span className="text-xs text-gray-500">{cameras.length} cameras</span>
+              </button>
+
+              {camerasExpanded && (
+                <div className="bg-dark-900 px-2 py-2">
+                  {cameras.map((camera) => {
+                    const cameraPresets = getPresetsForCamera(camera.id);
+                    const isPTZ = camera.type === 'ptz';
+                    const cameraExpanded = expandedCameras.has(camera.id);
+
+                    return (
+                      <div key={camera.id} className="mb-1">
+                        <div
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, camera)}
+                          className="flex items-center justify-between px-3 py-2 bg-dark-800 hover:bg-dark-700 rounded cursor-move transition-colors group"
+                        >
+                          <div className="flex items-center gap-2 flex-1">
+                            {isPTZ && cameraPresets.length > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newExpanded = new Set(expandedCameras);
+                                  if (cameraExpanded) {
+                                    newExpanded.delete(camera.id);
+                                  } else {
+                                    newExpanded.add(camera.id);
+                                  }
+                                  setExpandedCameras(newExpanded);
+                                }}
+                                className="hover:bg-dark-600 rounded p-0.5"
+                              >
+                                {cameraExpanded ? (
+                                  <ChevronDownIcon className="h-3 w-3 text-gray-400" />
+                                ) : (
+                                  <ChevronRightIcon className="h-3 w-3 text-gray-400" />
+                                )}
+                              </button>
+                            )}
+                            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white text-xs">
+                              📹
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-white text-sm font-medium">{camera.name}</div>
+                              <div className="text-xs text-gray-500 capitalize">{camera.type}</div>
+                            </div>
+                          </div>
+                          {isPTZ && cameraPresets.length > 0 && (
+                            <span className="text-xs text-gray-500">{cameraPresets.length} presets</span>
+                          )}
+                        </div>
+
+                        {/* Presets under camera */}
+                        {isPTZ && cameraExpanded && cameraPresets.length > 0 && (
+                          <div className="ml-6 mt-1 space-y-1">
+                            {cameraPresets.map((preset) => (
+                              <div
+                                key={preset.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, camera, preset)}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-dark-700 hover:bg-blue-600 rounded cursor-move transition-colors text-sm"
+                              >
+                                <span className="text-gray-400">🎯</span>
+                                <span className="text-white">{preset.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Assets Section (Placeholder) */}
+            <div className="border-b border-dark-700">
+              <button
+                onClick={() => setAssetsExpanded(!assetsExpanded)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-dark-700 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  {assetsExpanded ? (
+                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+                  )}
+                  <span className="text-white font-medium">🖼️ Assets</span>
+                </div>
+                <span className="text-xs text-gray-500">Coming soon</span>
+              </button>
+
+              {assetsExpanded && (
+                <div className="bg-dark-900 px-4 py-3">
+                  <p className="text-sm text-gray-500">Overlay assets and media files</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Camera Palette */}
-          <div className="bg-gray-800 rounded-lg p-4 mt-4">
-            <h2 className="text-xl font-semibold text-white mb-4">📷 Cameras</h2>
-            <div className="space-y-2">
-              {cameras.map((camera) => {
-                const cameraPresets = getPresetsForCamera(camera.id);
-                const isPTZ = camera.type === 'ptz';
-                
-                return (
-                  <div key={camera.id} className="bg-gray-700 rounded overflow-hidden">
-                    {/* Camera Header */}
-                    <div
-                      onClick={() => addCueToTimeline(camera)}
-                      className="hover:bg-gray-600 p-3 cursor-pointer transition-colors"
-                    >
-                      <div className="text-white font-medium flex items-center justify-between">
-                        <span>
-                          {isPTZ && '🎯 '}
-                          {camera.name}
-                          {isPTZ && ` (${cameraPresets.length} presets)`}
-                        </span>
-                        <span className="text-xs bg-gray-600 px-2 py-1 rounded capitalize">
-                          {camera.type}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        Click to add at current position
-                      </div>
-                    </div>
-                    
-                    {/* Presets (for PTZ cameras) */}
-                    {isPTZ && cameraPresets.length > 0 && (
-                      <div className="bg-gray-800 border-t border-gray-600 p-2">
-                        <div className="text-xs text-gray-400 mb-2 px-2">Presets:</div>
-                        <div className="space-y-1">
-                          {cameraPresets.map((preset) => (
-                            <div
-                              key={preset.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                addCueToTimeline(camera, preset);
-                              }}
-                              className="bg-gray-700 hover:bg-blue-600 p-2 rounded cursor-pointer transition-colors text-sm"
-                            >
-                              <div className="text-white">🎯 {preset.name}</div>
-                              <div className="text-xs text-gray-400">
-                                Pan: {preset.pan.toFixed(1)}, Tilt: {preset.tilt.toFixed(1)}, Zoom: {preset.zoom.toFixed(1)}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+          {/* Timeline List at Bottom */}
+          <div className="border-t border-dark-700 bg-dark-900 max-h-64 overflow-y-auto">
+            <div className="px-4 py-2 border-b border-dark-700">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase">Timelines</h3>
             </div>
-            {cameras.length === 0 && (
-              <p className="text-gray-500 text-sm">No cameras available</p>
-            )}
+            {timelines.map((timeline) => (
+              <div
+                key={timeline.id}
+                onClick={() => setSelectedTimeline(timeline)}
+                className={`px-4 py-2 cursor-pointer transition-colors ${
+                  selectedTimeline?.id === timeline.id
+                    ? 'bg-primary-600 text-white'
+                    : 'hover:bg-dark-700 text-gray-300'
+                }`}
+              >
+                <div className="text-sm font-medium">{timeline.name}</div>
+                <div className="text-xs text-gray-500">{timeline.tracks[0]?.cues.length || 0} cues</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Main Editor Area */}
-        <div className="lg:col-span-3">
+        {/* Main Timeline Area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
           {selectedTimeline ? (
-            <div className="bg-gray-800 rounded-lg p-6">
+            <>
               {/* Timeline Header */}
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white mb-2">{selectedTimeline.name}</h2>
-                <p className="text-gray-400">{selectedTimeline.description}</p>
-                
-                {/* Timeline Controls */}
-                <div className="mt-4 flex gap-4 items-center flex-wrap">
-                  <button
-                    onClick={saveTimeline}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
-                  >
-                    💾 Save Timeline
-                  </button>
-                  
-                  <div className="flex gap-2 items-center">
-                    <select
-                      multiple
-                      value={selectedDestinations.map(String)}
-                      onChange={(e) => {
-                        const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-                        setSelectedDestinations(selected);
-                      }}
-                      className="bg-gray-700 text-white px-3 py-2 rounded w-64 h-24"
-                    >
-                      {destinations.map((dest) => (
-                        <option key={dest.id} value={dest.id}>
-                          {dest.platform === 'youtube' && '📺'}
-                          {dest.platform === 'facebook' && '👥'}
-                          {dest.platform === 'twitch' && '🎮'}
-                          {dest.platform === 'custom' && '🔧'}
-                          {' '}{dest.name}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="text-gray-400 text-sm">
-                      Hold Cmd/Ctrl<br />to select multiple
-                    </div>
-                    {!isRunning ? (
-                      <button
-                        onClick={startTimeline}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                      >
-                        ▶️ Start
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopTimeline}
-                        className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-                      >
-                        ⏹️ Stop
-                      </button>
-                    )}
+              <div className="px-6 py-4 bg-dark-800 border-b border-dark-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{selectedTimeline.name}</h2>
+                    <p className="text-sm text-gray-400">{selectedTimeline.description || 'No description'}</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="text-gray-400">
+                      <span className="font-semibold">{selectedTimeline.resolution}</span> • {selectedTimeline.fps}fps
+                    </span>
+                    <label className="flex items-center gap-2 text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={selectedTimeline.loop}
+                        onChange={(e) => {
+                          selectedTimeline.loop = e.target.checked;
+                          setSelectedTimeline({ ...selectedTimeline });
+                        }}
+                        className="rounded bg-dark-700 border-dark-600 text-primary-600 focus:ring-primary-500"
+                      />
+                      Loop
+                    </label>
                   </div>
                 </div>
               </div>
 
               {/* Timeline Tracks */}
-              {selectedTimeline.tracks.map((track, trackIdx) => (
-                <div key={trackIdx} className="mb-6">
-                  <div className="flex items-center mb-3">
-                    <h3 className="text-lg font-semibold text-white capitalize">
-                      {track.track_type} Track
-                    </h3>
-                  </div>
-
-                  {/* Cues */}
-                  <div className="space-y-2">
-                    {track.cues.length === 0 ? (
-                      <div className="bg-gray-700 p-6 rounded text-center text-gray-400">
-                        Click a camera to add it to the timeline
+              <div 
+                className="flex-1 overflow-auto p-6 bg-dark-900"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+              >
+                {selectedTimeline.tracks.map((track, trackIdx) => (
+                  <div key={trackIdx} className="mb-6">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-32 flex items-center gap-2">
+                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                        <span className="text-white font-medium text-sm uppercase">{track.track_type}</span>
                       </div>
-                    ) : (
-                      track.cues.map((cue, cueIdx) => (
-                        <div
-                          key={cueIdx}
-                          className="bg-gray-700 p-4 rounded flex justify-between items-center"
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3">
-                              <span className="text-gray-400 font-mono">
-                                {formatTime(cue.start_time)}
-                              </span>
-                              <span className="text-white font-medium">
-                                {cue.action_type === 'show_camera' && (
-                                  <>
-                                    {getCameraName(cue.action_params.camera_id!)}
-                                    {cue.action_params.preset_id && (
-                                      <span className="text-blue-400 ml-2">
-                                        🎯 {getPresetName(cue.action_params.preset_id)}
-                                      </span>
-                                    )}
-                                  </>
+                      <div className="text-xs text-gray-500">{track.cues.length} elements</div>
+                    </div>
+
+                    {/* Cues in horizontal timeline */}
+                    <div className="flex flex-wrap gap-2 min-h-[100px] bg-dark-800 rounded-lg p-4 border-2 border-dashed border-dark-700">
+                      {track.cues.length === 0 ? (
+                        <div className="w-full text-center py-8 text-gray-500">
+                          <p className="text-sm">Drag cameras or presets here to add cues</p>
+                          <p className="text-xs mt-1">Or click cameras in the sidebar</p>
+                        </div>
+                      ) : (
+                        track.cues.map((cue, cueIdx) => (
+                          <div
+                            key={cueIdx}
+                            className="bg-blue-600 rounded-lg p-3 text-white shadow-lg hover:bg-blue-700 transition-colors group relative"
+                            style={{ minWidth: `${Math.max(150, cue.duration * 2)}px` }}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1">
+                                <div className="font-semibold text-sm mb-1">
+                                  {getCameraName(cue.action_params.camera_id!)}
+                                </div>
+                                {cue.action_params.preset_id && (
+                                  <div className="text-xs text-blue-200 mb-1">
+                                    🎯 {getPresetName(cue.action_params.preset_id)}
+                                  </div>
                                 )}
-                              </span>
-                              <span className="text-gray-400 text-sm">
-                                ({cue.duration}s)
-                              </span>
+                                <div className="text-xs text-blue-200">
+                                  {cue.duration}s
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => removeCue(trackIdx, cueIdx)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 rounded p-1"
+                              >
+                                <TrashIcon className="h-3 w-3" />
+                              </button>
+                            </div>
+
+                            {/* Duration Editor */}
+                            <div className="mt-2">
+                              <input
+                                type="number"
+                                value={cue.duration}
+                                onChange={(e) => {
+                                  cue.duration = parseFloat(e.target.value);
+                                  setSelectedTimeline({ ...selectedTimeline });
+                                }}
+                                className="w-20 px-2 py-1 bg-blue-700 border border-blue-500 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                                min="1"
+                                step="1"
+                              />
+                              <span className="text-xs text-blue-200 ml-1">seconds</span>
                             </div>
                           </div>
-                          
-                          <div className="flex gap-2">
-                            <input
-                              type="number"
-                              value={cue.duration}
-                              onChange={(e) => {
-                                cue.duration = parseFloat(e.target.value);
-                                setSelectedTimeline({ ...selectedTimeline });
-                              }}
-                              className="bg-gray-600 text-white px-2 py-1 rounded w-20"
-                            />
-                            <button
-                              onClick={() => removeCue(trackIdx, cueIdx)}
-                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           ) : (
-            <div className="bg-gray-800 rounded-lg p-12 text-center">
-              <p className="text-gray-400 text-lg">Select a timeline to edit</p>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-6xl mb-4">🎬</div>
+                <h3 className="text-xl font-semibold text-white mb-2">No Timeline Selected</h3>
+                <p className="text-gray-400 mb-4">Select a timeline from the list or create a new one</p>
+                <button
+                  onClick={() => setShowNewTimelineModal(true)}
+                  className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium"
+                >
+                  <PlusIcon className="h-5 w-5 inline mr-2" />
+                  Create New Timeline
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -521,54 +661,90 @@ const TimelineEditor: React.FC = () => {
       {/* New Timeline Modal */}
       {showNewTimelineModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-2xl font-bold text-white mb-4">Create New Timeline</h2>
+          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-md border border-dark-700">
+            <h2 className="text-xl font-bold text-white mb-4">Create New Timeline</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-gray-300 mb-2">Name</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Timeline Name *
+                </label>
                 <input
                   type="text"
                   value={newTimeline.name}
                   onChange={(e) => setNewTimeline({ ...newTimeline, name: e.target.value })}
-                  className="w-full bg-gray-700 text-white px-3 py-2 rounded"
-                  placeholder="My Awesome Timeline"
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Multi-Angle Show"
+                  autoFocus
                 />
               </div>
-              
+
               <div>
-                <label className="block text-gray-300 mb-2">Description</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Description
+                </label>
                 <textarea
                   value={newTimeline.description}
                   onChange={(e) => setNewTimeline({ ...newTimeline, description: e.target.value })}
-                  className="w-full bg-gray-700 text-white px-3 py-2 rounded h-20"
-                  placeholder="What's this timeline for?"
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Automated camera switching..."
+                  rows={3}
                 />
               </div>
-              
-              <div className="flex items-center gap-3">
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Resolution
+                  </label>
+                  <select
+                    value={newTimeline.resolution}
+                    onChange={(e) => setNewTimeline({ ...newTimeline, resolution: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="1920x1080">1080p</option>
+                    <option value="1280x720">720p</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Frame Rate
+                  </label>
+                  <select
+                    value={newTimeline.fps}
+                    onChange={(e) => setNewTimeline({ ...newTimeline, fps: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="30">30 fps</option>
+                    <option value="60">60 fps</option>
+                  </select>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-gray-300">
                 <input
                   type="checkbox"
                   checked={newTimeline.loop}
                   onChange={(e) => setNewTimeline({ ...newTimeline, loop: e.target.checked })}
-                  className="w-4 h-4"
+                  className="rounded bg-dark-700 border-dark-600 text-primary-600 focus:ring-primary-500"
                 />
-                <label className="text-gray-300">Loop forever</label>
-              </div>
+                Loop timeline infinitely
+              </label>
             </div>
-            
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={createTimeline}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-              >
-                Create
-              </button>
+
+            <div className="flex items-center justify-end space-x-3 mt-6">
               <button
                 onClick={() => setShowNewTimelineModal(false)}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+                className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md"
               >
                 Cancel
+              </button>
+              <button
+                onClick={createTimeline}
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md"
+              >
+                Create Timeline
               </button>
             </div>
           </div>
@@ -579,4 +755,3 @@ const TimelineEditor: React.FC = () => {
 };
 
 export default TimelineEditor;
-
