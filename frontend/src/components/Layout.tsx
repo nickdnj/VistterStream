@@ -14,6 +14,7 @@ import {
   UserIcon,
   ArrowRightOnRectangleIcon,
   ExclamationTriangleIcon,
+  RectangleGroupIcon,
 } from '@heroicons/react/24/outline';
 
 interface LayoutProps {
@@ -49,7 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: 'Streams', href: '/streams', icon: PlayIcon },
     { name: 'Timelines', href: '/timelines', icon: FilmIcon },
     { name: 'Destinations', href: '/destinations', icon: GlobeAltIcon },
-    { name: 'Presets', href: '/presets', icon: Cog6ToothIcon },
+    { name: 'Presets', href: '/presets', icon: RectangleGroupIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];
 
