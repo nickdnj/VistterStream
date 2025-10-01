@@ -164,6 +164,9 @@ class StreamService:
 
     async def stop_stream(self, stream_id: int) -> bool:
         """Stop a stream"""
+        import subprocess
+        import signal
+        
         stream = self.db.query(Stream).filter(Stream.id == stream_id).first()
         if not stream:
             return False
@@ -171,17 +174,58 @@ class StreamService:
         try:
             # Get FFmpeg manager and stop process
             ffmpeg_manager = await self.get_ffmpeg_manager()
-            await ffmpeg_manager.stop_stream(stream_id)
+            
+            try:
+                await ffmpeg_manager.stop_stream(stream_id)
+                print(f"DEBUG: Stopped stream {stream_id} via FFmpeg manager")
+            except KeyError:
+                # Stream not tracked by FFmpeg manager (likely server was restarted)
+                # Kill orphaned FFmpeg processes manually
+                print(f"DEBUG: Stream {stream_id} not in FFmpeg manager, searching for orphaned processes...")
+                
+                # Build the output URL to search for
+                rtmp_output = f"{stream.rtmp_url}/{stream.stream_key}"
+                
+                # Find FFmpeg processes with this output URL
+                try:
+                    result = subprocess.run(
+                        ['pgrep', '-f', f'ffmpeg.*{rtmp_output}'],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if result.returncode == 0 and result.stdout.strip():
+                        pids = result.stdout.strip().split('\n')
+                        print(f"DEBUG: Found {len(pids)} orphaned FFmpeg process(es) for stream {stream_id}: {pids}")
+                        
+                        # Kill each process
+                        for pid in pids:
+                            try:
+                                import os
+                                os.kill(int(pid), signal.SIGTERM)
+                                print(f"DEBUG: Killed orphaned FFmpeg process {pid}")
+                            except ProcessLookupError:
+                                print(f"DEBUG: Process {pid} already terminated")
+                            except Exception as e:
+                                print(f"DEBUG: Failed to kill process {pid}: {e}")
+                    else:
+                        print(f"DEBUG: No orphaned FFmpeg processes found for stream {stream_id}")
+                        
+                except Exception as e:
+                    print(f"DEBUG: Failed to search for orphaned processes: {e}")
             
             # Update stream status
             stream.status = StreamStatus.STOPPED.value
             stream.stopped_at = datetime.utcnow()
             self.db.commit()
             
+            print(f"DEBUG: Stream {stream_id} stopped successfully")
             return True
             
         except Exception as e:
             print(f"DEBUG: Failed to stop stream {stream_id}: {e}")
+            import traceback
+            traceback.print_exc()
             stream.last_error = str(e)
             self.db.commit()
             return False
