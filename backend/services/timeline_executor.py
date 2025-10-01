@@ -5,6 +5,7 @@ Based on docs/StreamingPipeline-TechnicalSpec.md Timeline Orchestrator
 
 import asyncio
 import logging
+import traceback
 from datetime import datetime
 from typing import Optional, Dict
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile
 from models.schemas import StreamStatus
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # Enable debug logging
 
 
 class TimelineExecutor:
@@ -207,25 +209,40 @@ class TimelineExecutor:
                     
                 # Build RTSP URL
                 rtsp_url = self._build_rtsp_url(camera)
-                logger.info(f"Switching to camera {camera.name} ({rtsp_url}) for {cue.duration}s")
+                logger.info(f"🎬 Switching to camera {camera.name} for {cue.duration}s")
+                logger.debug(f"RTSP URL: {rtsp_url}")
+                logger.debug(f"Output URLs: {output_urls}")
                 
                 # Stop existing stream if running
                 try:
+                    logger.debug(f"Stopping existing stream {timeline_id} if running...")
                     await ffmpeg_manager.stop_stream(timeline_id)
                 except KeyError:
+                    logger.debug(f"No existing stream to stop")
                     pass  # Not running yet
+                except Exception as e:
+                    logger.error(f"Error stopping stream: {e}")
+                    traceback.print_exc()
                     
                 # Start new stream with this camera
-                await ffmpeg_manager.start_stream(
-                    stream_id=timeline_id,
-                    input_url=rtsp_url,
-                    output_urls=output_urls,
-                    profile=encoding_profile or EncodingProfile.reliability_profile(
-                        ffmpeg_manager.hw_capabilities
+                logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}")
+                try:
+                    await ffmpeg_manager.start_stream(
+                        stream_id=timeline_id,
+                        input_url=rtsp_url,
+                        output_urls=output_urls,
+                        profile=encoding_profile or EncodingProfile.reliability_profile(
+                            ffmpeg_manager.hw_capabilities
+                        )
                     )
-                )
+                    logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
+                except Exception as e:
+                    logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
+                    traceback.print_exc()
+                    raise
                 
                 # Wait for cue duration
+                logger.info(f"⏱️  Waiting {cue.duration}s for cue to complete...")
                 await asyncio.sleep(cue.duration)
                 
             else:
