@@ -25,7 +25,7 @@
 ## 🚀 **PHASE 1: STREAMING PIPELINE** (Weeks 1-2)
 *Reference: [StreamingPipeline-TechnicalSpec.md](docs/StreamingPipeline-TechnicalSpec.md)*
 
-### 📊 **Phase 1 Progress: 60% Complete** ✅ **STREAMING TO YOUTUBE LIVE!**
+### 📊 **Phase 1 Progress: 70% Complete** ✅ **STREAMING TO YOUTUBE LIVE!**
 
 ### **1.1 FFmpeg Streaming Engine** ⚡
 *See spec §"Streaming Pipeline Architecture"*
@@ -98,12 +98,13 @@
   - ✅ Stream list showing camera, destination, quality, status
   - ✅ Quick actions (start/stop buttons)
   - ✅ Visual status indicators (running, stopped, starting, error)
+  - ✅ **Add Stream form UI** (YouTube, Facebook, Twitch, Custom RTMP)
   - ⏳ Metrics graphs (bitrate, FPS - coming soon)
-  - ⏳ Add Stream form UI (using script for now)
 
 - [x] **Camera Management UI** ✅ **(COMPLETED 2025-10-01)**
   - ✅ Live camera thumbnails with auto-refresh
-  - ✅ Camera auto-refresh every 4 minutes (prevents offline status)
+  - ✅ **Camera Health Monitor** - Background service tests cameras every 3 min
+  - ✅ Lightweight status probes (HEAD/GET requests, not full RTSP)
   - ✅ Live stream viewer (500ms snapshot refresh)
   - ✅ Click thumbnail or play button to view live feed
   - ✅ HTTP Digest auth for Reolink cameras
