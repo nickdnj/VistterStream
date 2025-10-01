@@ -28,11 +28,14 @@
 ### **1.1 FFmpeg Streaming Engine** ⚡
 *See spec §"Streaming Pipeline Architecture"*
 
-- [ ] **FFmpeg Process Manager**
+- [x] **FFmpeg Process Manager** ✅ **(COMPLETED 2025-10-01)**
   - Spawn/manage FFmpeg processes with proper lifecycle control
   - Process monitoring with health checks and auto-restart
   - Graceful shutdown and resource cleanup
   - Output parsing for errors, warnings, and stats (bitrate, fps, dropped frames)
+  - Hardware acceleration detection (Pi 5 h264_v4l2m2m, Mac h264_videotoolbox)
+  - Exponential backoff retry with 10 max retries
+  - 16 unit tests passing with comprehensive coverage
 
 - [ ] **Multi-Destination Streaming**
   - Simultaneous streaming to 3+ destinations (YouTube, Facebook, Twitch, custom RTMP)
