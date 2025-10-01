@@ -4,7 +4,7 @@ Streaming Destinations API - Configure YouTube, Facebook, Twitch, etc.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -42,7 +42,7 @@ class DestinationResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    last_used: datetime = None
+    last_used: Optional[datetime] = None
     
     class Config:
         from_attributes = True
