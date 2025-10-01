@@ -33,13 +33,13 @@ class StreamService:
         stream = Stream(
             name=stream_data.name,
             camera_id=stream_data.camera_id,
-            destination=stream_data.destination,
+            destination=stream_data.destination.value,  # Convert enum to string
             stream_key=stream_data.stream_key,
             rtmp_url=stream_data.rtmp_url,
             resolution=stream_data.resolution,
             bitrate=stream_data.bitrate,
             framerate=stream_data.framerate,
-            status=StreamStatus.STOPPED
+            status=StreamStatus.STOPPED.value  # Convert enum to string
         )
         
         self.db.add(stream)
@@ -94,12 +94,12 @@ class StreamService:
         camera = self.db.query(Camera).filter(Camera.id == stream.camera_id).first()
         if not camera:
             stream.last_error = "Camera not found"
-            stream.status = StreamStatus.ERROR
+            stream.status = StreamStatus.ERROR.value
             self.db.commit()
             return False
         
         # Update stream status
-        stream.status = StreamStatus.STARTING
+        stream.status = StreamStatus.STARTING.value
         stream.started_at = datetime.utcnow()
         stream.last_error = None
         self.db.commit()
@@ -137,7 +137,7 @@ class StreamService:
             )
             
             # Update stream status
-            stream.status = StreamStatus.RUNNING
+            stream.status = StreamStatus.RUNNING.value
             self.db.commit()
             
             print(f"DEBUG: Stream {stream.id} started successfully")
@@ -145,7 +145,7 @@ class StreamService:
             
         except Exception as e:
             print(f"DEBUG: Failed to start stream {stream.id}: {e}")
-            stream.status = StreamStatus.ERROR
+            stream.status = StreamStatus.ERROR.value
             stream.last_error = str(e)
             self.db.commit()
             return False
@@ -161,7 +161,7 @@ class StreamService:
             await self.ffmpeg_manager.stop_stream(stream_id)
             
             # Update stream status
-            stream.status = StreamStatus.STOPPED
+            stream.status = StreamStatus.STOPPED.value
             stream.stopped_at = datetime.utcnow()
             self.db.commit()
             
