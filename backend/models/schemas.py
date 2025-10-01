@@ -91,25 +91,36 @@ class Preset(PresetBase):
 
 # Stream schemas
 class StreamBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
     destination: StreamDestination
     stream_key: str = Field(..., min_length=1)
     rtmp_url: str = Field(..., min_length=1)
+    resolution: str = Field(default="1920x1080", pattern=r"^\d+x\d+$")
+    bitrate: str = Field(default="4500k", pattern=r"^\d+k$")
+    framerate: int = Field(default=30, ge=15, le=60)
 
 class StreamCreate(StreamBase):
     camera_id: int
 
 class StreamUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
     destination: Optional[StreamDestination] = None
     stream_key: Optional[str] = Field(None, min_length=1)
     rtmp_url: Optional[str] = Field(None, min_length=1)
+    resolution: Optional[str] = Field(None, pattern=r"^\d+x\d+$")
+    bitrate: Optional[str] = Field(None, pattern=r"^\d+k$")
+    framerate: Optional[int] = Field(None, ge=15, le=60)
+    is_active: Optional[bool] = None
 
 class Stream(StreamBase):
     id: int
     camera_id: int
     status: StreamStatus
+    is_active: bool
+    created_at: datetime
     started_at: Optional[datetime] = None
     stopped_at: Optional[datetime] = None
-    error_message: Optional[str] = None
+    last_error: Optional[str] = None
     
     class Config:
         from_attributes = True

@@ -69,14 +69,26 @@ class Stream(Base):
     __tablename__ = "streams"
     
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # "YouTube Main Stream", etc.
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=False)
-    destination = Column(String, nullable=False)  # "youtube", "facebook", "twitch"
+    destination = Column(String, nullable=False)  # "youtube", "facebook", "twitch", "custom"
     stream_key = Column(String, nullable=False)
     rtmp_url = Column(String, nullable=False)
+    
+    # Encoding profile
+    resolution = Column(String, default="1920x1080")  # "1920x1080", "1280x720", etc.
+    bitrate = Column(String, default="4500k")  # Target bitrate
+    framerate = Column(Integer, default=30)  # FPS
+    
+    # Stream status
     status = Column(String, default="stopped")  # "stopped", "starting", "running", "error"
+    is_active = Column(Boolean, default=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime)
     stopped_at = Column(DateTime)
-    error_message = Column(String)
+    last_error = Column(String)
     
     # Relationships
     camera = relationship("Camera", back_populates="streams")
