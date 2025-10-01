@@ -23,9 +23,29 @@ def migrate():
         db.execute(text("DROP TABLE IF EXISTS streams"))
         db.commit()
         
-        # Recreate with new schema (SQLAlchemy will handle this)
-        from models.database import Base
-        Base.metadata.create_all(bind=engine, tables=[Base.metadata.tables['streams']])
+        # Recreate with new schema explicitly
+        print("  - Creating new streams table with destination_id...")
+        create_table_sql = """
+        CREATE TABLE streams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR NOT NULL,
+            camera_id INTEGER NOT NULL,
+            destination_id INTEGER NOT NULL,
+            resolution VARCHAR DEFAULT '1920x1080',
+            bitrate VARCHAR DEFAULT '4500k',
+            framerate INTEGER DEFAULT 30,
+            status VARCHAR DEFAULT 'stopped',
+            is_active BOOLEAN DEFAULT 1,
+            created_at DATETIME,
+            started_at DATETIME,
+            stopped_at DATETIME,
+            last_error VARCHAR,
+            FOREIGN KEY (camera_id) REFERENCES cameras(id),
+            FOREIGN KEY (destination_id) REFERENCES streaming_destinations(id)
+        )
+        """
+        db.execute(text(create_table_sql))
+        db.commit()
         
         print("✅ Migration complete!")
         print("\nStreams table now uses destination_id to reference streaming_destinations")
