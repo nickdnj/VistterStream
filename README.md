@@ -68,57 +68,63 @@ The project includes configuration for local test cameras:
 
 ## Development Status
 
-**Milestone 1 COMPLETED** ✅ - Foundation & Local Camera Integration
+**Milestone 1 COMPLETED** ✅ - Foundation & Local Camera Integration  
+**Milestone 2 MOSTLY COMPLETE** ✅ - Streaming Engine & Destination Architecture  
+**Milestone 3 IN PROGRESS** 🚧 - Multi-Track Timeline System
 
-### What's Working:
+### ✅ **What's Working:**
+
+#### **Core Infrastructure**
 - **🚀 FastAPI Backend**: Complete REST API with authentication, camera management, and database models
 - **🎨 React Frontend**: Beautiful dark-themed UI with Tailwind CSS, responsive design
-- **📷 Camera Integration**: Full support for Reolink and Sunba cameras with RTSP testing
-- **⚡ Real-time Monitoring**: Live camera status, system metrics, and health monitoring
-- **💾 Database**: SQLite with complete schema for cameras, presets, streams, and users
-- **🔐 Authentication**: Secure login system (minor frontend flow issue pending)
+- **💾 Database**: SQLite with comprehensive schema for cameras, destinations, streams, timelines
+- **🔐 Authentication**: Secure login system with JWT tokens
 
-### Screenshots:
-- Beautiful login interface with dark theme
-- Professional dashboard with system metrics
-- Camera management with real-time status
-- Responsive design that works on all devices
+#### **Camera Management**
+- **📷 Camera Integration**: Full support for Reolink and Sunba cameras with RTSP/ONVIF
+- **⚡ Live Monitoring**: Real-time camera status, snapshots, and health checks
+- **📹 Live Stream Viewer**: Auto-refreshing camera preview with RTSP URL display
+- **🔄 Background Health Monitor**: Keeps cameras persistently online
 
-### Current Features:
-- Camera discovery and configuration
-- RTSP connection testing
-- Snapshot capture and preview
-- Real-time status monitoring
-- PTZ preset management (ready)
-- User authentication system
+#### **Streaming Destinations** ⭐ **NEW!**
+- **📡 Destination-First Architecture**: Configure YouTube, Facebook, Twitch, Custom RTMP once, use everywhere
+- **🎯 Reusable Configs**: Stream keys stored centrally, referenced by streams and timelines
+- **📊 Usage Tracking**: Automatic `last_used` timestamp tracking per destination
+- **🎨 Platform Presets**: Built-in RTMP URL templates for major platforms
 
-### Technical Architecture:
+#### **Stream Management**
+- **▶️ Single-Camera Streams**: Direct camera-to-destination streaming with full control
+- **🎛️ Encoding Profiles**: Resolution, bitrate, framerate configuration (1080p/720p/480p)
+- **🔥 Hardware Acceleration**: Automatic detection and usage of hardware encoders
+- **⏯️ Start/Stop Control**: Reliable stream control with orphaned process cleanup
+- **🚨 Emergency Stop**: "Kill All Streams" button to terminate rogue processes
+
+#### **Composite Streams & Timelines** ⭐ **NEW!**
+- **🎬 Multi-Camera Composite Streams**: Switch between cameras on a schedule (e.g., 1 min each, looping)
+- **📅 Timeline Editor**: Visual interface to create timelines with camera cues
+- **🎯 Multi-Track System**: Video track with sequential cue execution
+- **▶️ Timeline Execution**: Start/stop timeline playback with live camera switching
+- **🔄 Looping Support**: Infinite loop mode for continuous operation
+- **📡 Multi-Destination**: Stream timelines to multiple platforms simultaneously
+
+### **Technical Architecture:**
 - **Backend**: FastAPI with SQLAlchemy ORM, Pydantic schemas, JWT authentication
 - **Frontend**: React 18 with TypeScript, Tailwind CSS, React Router, Axios
-- **Database**: SQLite with comprehensive schema for cameras, users, presets, streams
-- **Camera Support**: OpenCV for RTSP testing, HTTP requests for snapshots
-- **Real-time Features**: Live status monitoring, health checks, system metrics
-- **API Design**: RESTful endpoints with proper error handling and validation
-- **Security**: Bcrypt password hashing, JWT tokens, CORS configuration
+- **Database**: SQLite with models for cameras, destinations, streams, timelines, tracks, cues
+- **Streaming**: FFmpeg process manager with hardware acceleration, auto-restart, metrics
+- **Real-time**: Live status monitoring, health checks, auto-refreshing UI
+- **API Design**: RESTful endpoints with enriched responses, proper error handling
+- **Security**: Bcrypt password hashing, JWT tokens, encrypted credentials
 - **UI/UX**: Professional dark theme, responsive design, beautiful animations
 
-## 🎯 Current Focus: Streaming Pipeline + Timeline Orchestration
+## 🎯 Current Focus: Timeline Enhancements & VistterStudio Integration
 
-### **Milestone 2: Streaming Engine** (In Progress)
-- FFmpeg process management with hardware acceleration (Pi 5 + Mac)
-- Multi-destination streaming (YouTube, Facebook, Twitch, custom RTMP)
-- Automatic camera failover and test pattern fallback
-- Real-time overlay compositing (text, images, lower thirds)
-- Stream health monitoring and auto-recovery
-
-### **Milestone 3: Multi-Track Timeline System** (Next)
-- Timeline orchestrator with video + overlay tracks
-- Sequential cue execution with precise timing
-- Timeline builder UI with drag-drop interface
-- Segment import/export for reusable content
-- "GO LIVE" button with pre-flight checks
-
-**See [StreamingPipeline-TechnicalSpec.md](docs/StreamingPipeline-TechnicalSpec.md) for complete technical details.**
+### **Next Up:**
+- **🎥 Overlay System**: Text overlays, image overlays, lower thirds, fade transitions
+- **📆 Timeline Scheduling**: Future execution, recurring schedules
+- **☁️ VistterStudio Integration**: Import/export timelines, cloud control
+- **📊 Advanced Metrics**: Real-time bitrate, FPS, dropped frames
+- **🔄 Multi-Destination Streaming**: Simultaneous streaming to 3+ platforms (currently 1-2)
 
 ## Documentation
 

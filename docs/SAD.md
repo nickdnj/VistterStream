@@ -44,11 +44,40 @@ VistterStream is delivered as a containerized appliance that runs on ARM64 (Rasp
 | **Metrics & Messaging Layer** | Collects Prometheus-style metrics, event bus for local alerts, optional webhook dispatcher. | Metrics endpoint, webhook clients. |
 
 ## 4. Data Models & Storage
-* **Configuration Database (SQLite):** Cameras, presets, stream profiles, credentials (encrypted), appliance settings, audit trails, imported segment metadata (version, source, last validation timestamp).
+* **Configuration Database (SQLite):** 
+  - **Cameras:** RTSP/ONVIF camera configurations, credentials (encrypted), status tracking
+  - **StreamingDestinations:** Reusable destination configs (YouTube, Facebook, Twitch, Custom RTMP) with platform-specific settings and stream keys
+  - **Streams:** Camera-to-destination mappings with encoding profiles, referencing both cameras and destinations
+  - **Timelines:** Multi-track timeline definitions with camera cues and overlay instructions
+  - **TimelineTracks & TimelineCues:** Granular timeline execution steps
+  - **Presets:** PTZ camera position presets
+  - **Audit trails:** User actions and system events
 * **Asset Cache (Filesystem):** Overlay images/videos, fallback slates, OCL scene caches, with version manifest for validation.
 * **Overlay Composition Scripts:** Parsed/validated JSON persisted with schema version and compilation checksum for deterministic playback.
 * **Telemetry Store (Time-Series):** Lightweight ring buffer (e.g., SQLite table or embedded TSDB) retaining 24–48 hours of metrics and events.
 * **Secrets Management:** Credentials encrypted with appliance-specific key stored in secure enclave or OS keyring.
+
+### 4.1 Streaming Destination Architecture
+VistterStream implements a **destination-first architecture** where streaming targets (YouTube Live, Facebook Live, Twitch, Custom RTMP) are configured once and reused across both single-camera streams and multi-camera timelines:
+
+```
+┌─────────────────────────┐
+│  StreamingDestinations  │  ← Configure once
+│  (YouTube, FB, Twitch)  │
+└────────┬────────────────┘
+         │
+    ┌────┴────┐
+    ↓         ↓
+┌─────────┐  ┌──────────┐
+│ Streams │  │ Timelines│  ← Reference destinations
+└─────────┘  └──────────┘
+```
+
+**Benefits:**
+- Stream keys configured once, reused everywhere
+- Update destination → updates all dependent streams/timelines
+- Track `last_used` timestamp per destination
+- Platform-specific validation and presets
 
 ## 5. Interface Contracts
 * **REST API:** CRUD endpoints for cameras, presets, streams, overlays, system settings. JSON schema versioned and documented via OpenAPI.
