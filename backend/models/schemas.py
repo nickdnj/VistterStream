@@ -103,6 +103,8 @@ class StreamCreate(StreamBase):
 
 class StreamUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
+    camera_id: Optional[int] = None
+    preset_id: Optional[int] = None
     destination_id: Optional[int] = None
     resolution: Optional[str] = None
     bitrate: Optional[str] = None

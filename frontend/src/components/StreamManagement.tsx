@@ -14,6 +14,7 @@ interface Stream {
   id: number;
   name: string;
   camera_id: number;
+  preset_id?: number;
   destination_id: number;
   destination?: {
     id: number;
@@ -23,6 +24,14 @@ interface Stream {
   camera?: {
     id: number;
     name: string;
+    type: string;
+  };
+  preset?: {
+    id: number;
+    name: string;
+    pan: number;
+    tilt: number;
+    zoom: number;
   };
   resolution: string;
   bitrate: string;
@@ -273,6 +282,67 @@ const StreamManagement: React.FC = () => {
     });
   };
 
+  const handleEditStream = (stream: Stream) => {
+    setEditingStream(stream);
+    setFormData({
+      name: stream.name,
+      camera_id: stream.camera_id.toString(),
+      preset_id: stream.preset_id?.toString() || '',
+      destination_id: stream.destination_id.toString(),
+      resolution: stream.resolution,
+      bitrate: stream.bitrate,
+      framerate: stream.framerate
+    });
+  };
+
+  const handleUpdateStream = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStream) return;
+    
+    setSaving(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:8000/api/streams/${editingStream.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...formData,
+          camera_id: parseInt(formData.camera_id),
+          destination_id: parseInt(formData.destination_id),
+          preset_id: formData.preset_id ? parseInt(formData.preset_id) : undefined,
+          framerate: parseInt(String(formData.framerate))
+        })
+      });
+      
+      if (response.ok) {
+        // Reset form and close modal
+        setFormData({
+          name: '',
+          camera_id: '',
+          preset_id: '',
+          destination_id: '',
+          resolution: '1920x1080',
+          bitrate: '4500k',
+          framerate: 30
+        });
+        setEditingStream(null);
+        loadData(); // Refresh streams
+      } else {
+        const error = await response.json();
+        alert(`Failed to update stream: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Failed to update stream:', error);
+      alert('Failed to update stream. Check console for details.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -391,7 +461,7 @@ const StreamManagement: React.FC = () => {
                         </button>
                       )}
                       <button
-                        onClick={() => setEditingStream(stream)}
+                        onClick={() => handleEditStream(stream)}
                         className="text-yellow-600 hover:text-yellow-500"
                         title="Edit"
                         disabled={stream.status === 'running'}
@@ -597,6 +667,190 @@ const StreamManagement: React.FC = () => {
             </form>
           </div>
       </div>
+      )}
+
+      {/* Edit Stream Modal */}
+      {editingStream && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-dark-900 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-white mb-4">Edit Stream</h2>
+            
+            <form onSubmit={handleUpdateStream} className="space-y-4">
+              {/* Stream Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Stream Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="My Live Stream"
+                />
+              </div>
+
+              {/* Camera */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Camera *
+                </label>
+                <select
+                  required
+                  value={formData.camera_id}
+                  onChange={(e) => handleCameraChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select a camera</option>
+                  {cameras.map((camera) => (
+                    <option key={camera.id} value={camera.id}>
+                      {camera.type === 'ptz' && '🎯 '}
+                      {camera.name}
+                      {camera.type === 'ptz' && ' (PTZ)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* PTZ Preset (conditional) */}
+              {isPTZCamera(getSelectedCamera()) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    PTZ Preset (Optional)
+                  </label>
+                  <select
+                    value={formData.preset_id}
+                    onChange={(e) => setFormData({ ...formData, preset_id: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">No preset (current position)</option>
+                    {getPresetsForCamera(parseInt(formData.camera_id)).map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        🎯 {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {getPresetsForCamera(parseInt(formData.camera_id)).length === 0 ? (
+                      <>No presets available. <a href="/presets" className="text-primary-400 hover:text-primary-300">Create presets →</a></>
+                    ) : (
+                      'Camera will move to this preset before streaming starts'
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {/* Destination */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Streaming Destination *
+                </label>
+                <select
+                  required
+                  value={formData.destination_id}
+                  onChange={(e) => setFormData({ ...formData, destination_id: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select a destination</option>
+                  {destinations.map((dest) => (
+                    <option key={dest.id} value={dest.id}>
+                      {dest.platform === 'youtube' && '📺 '}
+                      {dest.platform === 'facebook' && '👥 '}
+                      {dest.platform === 'twitch' && '🎮 '}
+                      {dest.platform === 'custom' && '🔧 '}
+                      {dest.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Choose from configured streaming destinations. <a href="/destinations" className="text-primary-400 hover:text-primary-300">Manage destinations →</a>
+                </p>
+              </div>
+
+              {/* Encoding Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Resolution
+                  </label>
+                  <select
+                    required
+                    value={formData.resolution}
+                    onChange={(e) => setFormData({ ...formData, resolution: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="1920x1080">1920x1080 (1080p)</option>
+                    <option value="1280x720">1280x720 (720p)</option>
+                    <option value="854x480">854x480 (480p)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Bitrate
+                  </label>
+                  <select
+                    required
+                    value={formData.bitrate}
+                    onChange={(e) => setFormData({ ...formData, bitrate: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="6000k">6000k (High)</option>
+                    <option value="4500k">4500k (Medium)</option>
+                    <option value="2500k">2500k (Low)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Frame Rate
+                  </label>
+                  <select
+                    required
+                    value={formData.framerate}
+                    onChange={(e) => setFormData({ ...formData, framerate: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="60">60 fps</option>
+                    <option value="30">30 fps</option>
+                    <option value="24">24 fps</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-dark-700">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingStream(null);
+                    setFormData({
+                      name: '',
+                      camera_id: '',
+                      preset_id: '',
+                      destination_id: '',
+                      resolution: '1920x1080',
+                      bitrate: '4500k',
+                      framerate: 30
+                    });
+                  }}
+                  className="px-4 py-2 bg-dark-700 text-white rounded-md hover:bg-dark-600"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={saving}
+                >
+                  {saving ? 'Updating...' : 'Update Stream'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
