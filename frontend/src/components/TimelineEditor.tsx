@@ -226,6 +226,17 @@ const TimelineEditor: React.FC = () => {
     }
 
     try {
+      // First, try to stop the timeline if it's already running
+      try {
+        await axios.post(`/api/timeline-execution/stop/${selectedTimeline.id}`);
+        console.log('Stopped existing timeline instance');
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+      } catch (stopError) {
+        // Timeline wasn't running, that's fine
+        console.log('No existing timeline to stop');
+      }
+
+      // Now start the timeline
       const response = await axios.post('/api/timeline-execution/start', {
         timeline_id: selectedTimeline.id,
         destination_ids: selectedDestinations
