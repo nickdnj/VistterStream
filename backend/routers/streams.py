@@ -20,6 +20,7 @@ def enrich_stream(stream_db: Stream, db: Session) -> dict:
         "id": stream_db.id,
         "name": stream_db.name,
         "camera_id": stream_db.camera_id,
+        "preset_id": stream_db.preset_id,
         "destination_id": stream_db.destination_id,
         "resolution": stream_db.resolution,
         "bitrate": stream_db.bitrate,
@@ -48,8 +49,22 @@ def enrich_stream(stream_db: Stream, db: Session) -> dict:
     if camera:
         stream_dict["camera"] = {
             "id": camera.id,
-            "name": camera.name
+            "name": camera.name,
+            "type": camera.type
         }
+    
+    # Add preset details (if preset is selected)
+    if stream_db.preset_id:
+        from models.database import Preset
+        preset = db.query(Preset).filter(Preset.id == stream_db.preset_id).first()
+        if preset:
+            stream_dict["preset"] = {
+                "id": preset.id,
+                "name": preset.name,
+                "pan": preset.pan,
+                "tilt": preset.tilt,
+                "zoom": preset.zoom
+            }
     
     return stream_dict
 
@@ -76,6 +91,7 @@ async def create_stream(stream_data: StreamCreate, db: Session = Depends(get_db)
         stream_db = Stream(
             name=stream_data.name,
             camera_id=stream_data.camera_id,
+            preset_id=stream_data.preset_id,
             destination_id=stream_data.destination_id,
             resolution=stream_data.resolution,
             bitrate=stream_data.bitrate,

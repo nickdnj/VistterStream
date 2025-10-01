@@ -104,8 +104,8 @@ async def move_to_preset(preset_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Camera credentials not configured")
     
     # Move to preset
-    # ONVIF typically runs on port 80, not the RTSP port
-    onvif_port = 80 if camera.port == 554 else camera.port
+    # ONVIF port detection (Sunba cameras use 8899)
+    onvif_port = 8899 if camera.port == 554 else camera.port
     ptz_service = get_ptz_service()
     success = await ptz_service.move_to_preset(
         address=camera.address,
@@ -147,8 +147,8 @@ async def capture_current_position(camera_id: int, preset_name: str, db: Session
         raise HTTPException(status_code=400, detail="Camera credentials not configured")
     
     # Get current position
-    # ONVIF typically runs on port 80, not the RTSP port
-    onvif_port = 80 if camera.port == 554 else camera.port
+    # ONVIF port detection (Sunba cameras use 8899)
+    onvif_port = 8899 if camera.port == 554 else camera.port
     ptz_service = get_ptz_service()
     position = await ptz_service.get_current_position(
         address=camera.address,

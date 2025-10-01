@@ -70,7 +70,7 @@ class PresetBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
     pan: float = Field(default=0.0, ge=-180.0, le=180.0)
     tilt: float = Field(default=0.0, ge=-90.0, le=90.0)
-    zoom: float = Field(default=1.0, ge=0.1, le=10.0)
+    zoom: float = Field(default=1.0, ge=0.0, le=10.0)
 
 class PresetCreate(PresetBase):
     camera_id: int
@@ -79,7 +79,7 @@ class PresetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=50)
     pan: Optional[float] = Field(None, ge=-180.0, le=180.0)
     tilt: Optional[float] = Field(None, ge=-90.0, le=90.0)
-    zoom: Optional[float] = Field(None, ge=0.1, le=10.0)
+    zoom: Optional[float] = Field(None, ge=0.0, le=10.0)
 
 class Preset(PresetBase):
     id: int
@@ -99,6 +99,7 @@ class StreamBase(BaseModel):
 
 class StreamCreate(StreamBase):
     camera_id: int
+    preset_id: Optional[int] = None
 
 class StreamUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)

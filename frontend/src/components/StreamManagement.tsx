@@ -38,7 +38,18 @@ interface Stream {
 interface Camera {
   id: number;
   name: string;
+  type: string;
   status: string;
+}
+
+interface Preset {
+  id: number;
+  camera_id: number;
+  name: string;
+  pan: number;
+  tilt: number;
+  zoom: number;
+  created_at: string;
 }
 
 interface Destination {
@@ -53,6 +64,7 @@ const StreamManagement: React.FC = () => {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [presets, setPresets] = useState<Preset[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
@@ -62,6 +74,7 @@ const StreamManagement: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     camera_id: '',
+    preset_id: '',
     destination_id: '',
     resolution: '1920x1080',
     bitrate: '4500k',
@@ -81,10 +94,11 @@ const StreamManagement: React.FC = () => {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [streamsRes, camerasRes, destinationsRes] = await Promise.all([
+      const [streamsRes, camerasRes, destinationsRes, presetsRes] = await Promise.all([
         fetch('http://localhost:8000/api/streams/', { headers }),
         fetch('http://localhost:8000/api/cameras/', { headers }),
-        fetch('http://localhost:8000/api/destinations/', { headers })
+        fetch('http://localhost:8000/api/destinations/', { headers }),
+        fetch('http://localhost:8000/api/presets/', { headers })
       ]);
       
       if (streamsRes.ok) {
@@ -100,6 +114,11 @@ const StreamManagement: React.FC = () => {
       if (destinationsRes.ok) {
         const destinationsData = await destinationsRes.json();
         setDestinations(destinationsData.filter((d: Destination) => d.is_active));
+      }
+      
+      if (presetsRes.ok) {
+        const presetsData = await presetsRes.json();
+        setPresets(presetsData);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -182,6 +201,7 @@ const StreamManagement: React.FC = () => {
           ...formData,
           camera_id: parseInt(formData.camera_id),
           destination_id: parseInt(formData.destination_id),
+          preset_id: formData.preset_id ? parseInt(formData.preset_id) : undefined,
           framerate: parseInt(String(formData.framerate))
         })
       });
@@ -191,6 +211,7 @@ const StreamManagement: React.FC = () => {
         setFormData({
           name: '',
           camera_id: '',
+          preset_id: '',
           destination_id: '',
           resolution: '1920x1080',
           bitrate: '4500k',
@@ -228,6 +249,28 @@ const StreamManagement: React.FC = () => {
   const getCameraName = (cameraId: number) => {
     const camera = cameras.find(c => c.id === cameraId);
     return camera ? camera.name : `Camera ${cameraId}`;
+  };
+
+  // Helper functions for PTZ presets
+  const getSelectedCamera = (): Camera | null => {
+    if (!formData.camera_id) return null;
+    return cameras.find(c => c.id === parseInt(formData.camera_id)) || null;
+  };
+
+  const getPresetsForCamera = (cameraId: number): Preset[] => {
+    return presets.filter(p => p.camera_id === cameraId);
+  };
+
+  const isPTZCamera = (camera: Camera | null): boolean => {
+    return camera?.type === 'ptz';
+  };
+
+  const handleCameraChange = (cameraId: string) => {
+    setFormData({ 
+      ...formData, 
+      camera_id: cameraId,
+      preset_id: '' // Reset preset when camera changes
+    });
   };
 
   if (loading) {
@@ -402,17 +445,47 @@ const StreamManagement: React.FC = () => {
                 <select
                   required
                   value={formData.camera_id}
-                  onChange={(e) => setFormData({ ...formData, camera_id: e.target.value })}
+                  onChange={(e) => handleCameraChange(e.target.value)}
                   className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">Select a camera</option>
                   {cameras.map((camera) => (
                     <option key={camera.id} value={camera.id}>
+                      {camera.type === 'ptz' && '🎯 '}
                       {camera.name}
+                      {camera.type === 'ptz' && ' (PTZ)'}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* PTZ Preset (conditional) */}
+              {isPTZCamera(getSelectedCamera()) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    PTZ Preset (Optional)
+                  </label>
+                  <select
+                    value={formData.preset_id}
+                    onChange={(e) => setFormData({ ...formData, preset_id: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">No preset (current position)</option>
+                    {getPresetsForCamera(parseInt(formData.camera_id)).map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        🎯 {preset.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {getPresetsForCamera(parseInt(formData.camera_id)).length === 0 ? (
+                      <>No presets available. <a href="/presets" className="text-primary-400 hover:text-primary-300">Create presets →</a></>
+                    ) : (
+                      'Camera will move to this preset before streaming starts'
+                    )}
+                  </p>
+                </div>
+              )}
 
               {/* Destination */}
               <div>
@@ -501,6 +574,7 @@ const StreamManagement: React.FC = () => {
                     setFormData({
                       name: '',
                       camera_id: '',
+                      preset_id: '',
                       destination_id: '',
                       resolution: '1920x1080',
                       bitrate: '4500k',

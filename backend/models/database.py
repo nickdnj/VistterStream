@@ -71,6 +71,7 @@ class Stream(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)  # "YouTube Main Stream", etc.
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=False)
+    preset_id = Column(Integer, ForeignKey("presets.id"), nullable=True)  # Optional PTZ preset
     destination_id = Column(Integer, ForeignKey("streaming_destinations.id"), nullable=False)
     
     # Encoding profile
@@ -90,6 +91,7 @@ class Stream(Base):
     
     # Relationships
     camera = relationship("Camera", back_populates="streams")
+    preset = relationship("Preset", foreign_keys=[preset_id])
     destination = relationship("StreamingDestination", foreign_keys=[destination_id])
 
 # Import timeline models to register them with SQLAlchemy
