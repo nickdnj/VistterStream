@@ -14,9 +14,16 @@ interface Stream {
   id: number;
   name: string;
   camera_id: number;
-  destination: string;
-  stream_key: string;
-  rtmp_url: string;
+  destination_id: number;
+  destination?: {
+    id: number;
+    name: string;
+    platform: string;
+  };
+  camera?: {
+    id: number;
+    name: string;
+  };
   resolution: string;
   bitrate: string;
   framerate: number;
@@ -34,9 +41,18 @@ interface Camera {
   status: string;
 }
 
+interface Destination {
+  id: number;
+  name: string;
+  platform: string;
+  rtmp_url: string;
+  is_active: boolean;
+}
+
 const StreamManagement: React.FC = () => {
   const [streams, setStreams] = useState<Stream[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
@@ -46,9 +62,7 @@ const StreamManagement: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     camera_id: '',
-    destination: 'youtube',
-    stream_key: '',
-    rtmp_url: '',
+    destination_id: '',
     resolution: '1920x1080',
     bitrate: '4500k',
     framerate: 30
@@ -67,9 +81,10 @@ const StreamManagement: React.FC = () => {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
       
-      const [streamsRes, camerasRes] = await Promise.all([
+      const [streamsRes, camerasRes, destinationsRes] = await Promise.all([
         fetch('http://localhost:8000/api/streams/', { headers }),
-        fetch('http://localhost:8000/api/cameras/', { headers })
+        fetch('http://localhost:8000/api/cameras/', { headers }),
+        fetch('http://localhost:8000/api/destinations/', { headers })
       ]);
       
       if (streamsRes.ok) {
@@ -80,6 +95,11 @@ const StreamManagement: React.FC = () => {
       if (camerasRes.ok) {
         const camerasData = await camerasRes.json();
         setCameras(camerasData);
+      }
+      
+      if (destinationsRes.ok) {
+        const destinationsData = await destinationsRes.json();
+        setDestinations(destinationsData.filter((d: Destination) => d.is_active));
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -161,6 +181,7 @@ const StreamManagement: React.FC = () => {
         body: JSON.stringify({
           ...formData,
           camera_id: parseInt(formData.camera_id),
+          destination_id: parseInt(formData.destination_id),
           framerate: parseInt(String(formData.framerate))
         })
       });
@@ -170,9 +191,7 @@ const StreamManagement: React.FC = () => {
         setFormData({
           name: '',
           camera_id: '',
-          destination: 'youtube',
-          stream_key: '',
-          rtmp_url: '',
+          destination_id: '',
           resolution: '1920x1080',
           bitrate: '4500k',
           framerate: 30
@@ -189,22 +208,6 @@ const StreamManagement: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleDestinationChange = (destination: string) => {
-    // Set default RTMP URLs for common platforms
-    const defaultUrls: { [key: string]: string } = {
-      youtube: 'rtmp://a.rtmp.youtube.com/live2',
-      facebook: 'rtmps://live-api-s.facebook.com:443/rtmp/',
-      twitch: 'rtmp://live.twitch.tv/app',
-      custom: ''
-    };
-    
-    setFormData({
-      ...formData,
-      destination,
-      rtmp_url: defaultUrls[destination] || ''
-    });
   };
 
   const getStatusIcon = (status: string) => {
@@ -239,7 +242,7 @@ const StreamManagement: React.FC = () => {
     <div className="p-6">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Stream Management</h1>
+        <h1 className="text-3xl font-bold text-white">Stream Management</h1>
           <p className="mt-2 text-gray-400">Manage your live streams to YouTube, Facebook, Twitch, and more</p>
         </div>
         <button
@@ -250,7 +253,7 @@ const StreamManagement: React.FC = () => {
           Add Stream
         </button>
       </div>
-
+      
       {streams.length === 0 ? (
         <div className="bg-dark-800 rounded-lg p-12 border border-dark-700 text-center">
           <h3 className="text-lg font-medium text-white mb-2">No streams configured</h3>
@@ -293,15 +296,24 @@ const StreamManagement: React.FC = () => {
                 <tr key={stream.id} className="hover:bg-dark-700">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-white">{stream.name}</div>
-                    <div className="text-xs text-gray-400">{stream.rtmp_url}</div>
+                    <div className="text-xs text-gray-400">ID: {stream.id}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                    {getCameraName(stream.camera_id)}
+                    {stream.camera?.name || getCameraName(stream.camera_id)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-900 text-primary-300 uppercase">
-                      {stream.destination}
-                    </span>
+                    <div className="flex items-center">
+                      <span className="text-xl mr-2">
+                        {stream.destination?.platform === 'youtube' && '📺'}
+                        {stream.destination?.platform === 'facebook' && '👥'}
+                        {stream.destination?.platform === 'twitch' && '🎮'}
+                        {stream.destination?.platform === 'custom' && '🔧'}
+                      </span>
+                      <div>
+                        <div className="text-sm font-medium text-white">{stream.destination?.name || 'Unknown'}</div>
+                        <div className="text-xs text-gray-400 capitalize">{stream.destination?.platform || 'N/A'}</div>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                     <div>{stream.resolution} @ {stream.framerate}fps</div>
@@ -405,54 +417,27 @@ const StreamManagement: React.FC = () => {
               {/* Destination */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Destination *
+                  Streaming Destination *
                 </label>
                 <select
                   required
-                  value={formData.destination}
-                  onChange={(e) => handleDestinationChange(e.target.value)}
+                  value={formData.destination_id}
+                  onChange={(e) => setFormData({ ...formData, destination_id: e.target.value })}
                   className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
-                  <option value="youtube">YouTube</option>
-                  <option value="facebook">Facebook</option>
-                  <option value="twitch">Twitch</option>
-                  <option value="custom">Custom RTMP</option>
+                  <option value="">Select a destination</option>
+                  {destinations.map((dest) => (
+                    <option key={dest.id} value={dest.id}>
+                      {dest.platform === 'youtube' && '📺 '}
+                      {dest.platform === 'facebook' && '👥 '}
+                      {dest.platform === 'twitch' && '🎮 '}
+                      {dest.platform === 'custom' && '🔧 '}
+                      {dest.name}
+                    </option>
+                  ))}
                 </select>
-              </div>
-
-              {/* RTMP URL */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  RTMP Server URL *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.rtmp_url}
-                  onChange={(e) => setFormData({ ...formData, rtmp_url: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="rtmp://a.rtmp.youtube.com/live2"
-                />
                 <p className="mt-1 text-xs text-gray-500">
-                  The RTMP server URL (without stream key)
-                </p>
-              </div>
-
-              {/* Stream Key */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Stream Key *
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={formData.stream_key}
-                  onChange={(e) => setFormData({ ...formData, stream_key: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="xxxx-xxxx-xxxx-xxxx"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Your stream key from YouTube, Facebook, Twitch, etc.
+                  Choose from configured streaming destinations. <a href="/destinations" className="text-primary-400 hover:text-primary-300">Manage destinations →</a>
                 </p>
               </div>
 
@@ -516,9 +501,7 @@ const StreamManagement: React.FC = () => {
                     setFormData({
                       name: '',
                       camera_id: '',
-                      destination: 'youtube',
-                      stream_key: '',
-                      rtmp_url: '',
+                      destination_id: '',
                       resolution: '1920x1080',
                       bitrate: '4500k',
                       framerate: 30
@@ -539,7 +522,7 @@ const StreamManagement: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+      </div>
       )}
     </div>
   );
