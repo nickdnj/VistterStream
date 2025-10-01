@@ -70,6 +70,7 @@ class TimelineUpdate(BaseModel):
     resolution: str = None
     loop: bool = None
     is_active: bool = None
+    tracks: List[TrackCreate] = None
 
 
 class TimelineResponse(BaseModel):
@@ -163,27 +164,62 @@ def update_timeline(timeline_id: int, timeline_data: TimelineUpdate, db: Session
     if not timeline:
         raise HTTPException(status_code=404, detail="Timeline not found")
     
-    # Update fields
-    if timeline_data.name is not None:
-        timeline.name = timeline_data.name
-    if timeline_data.description is not None:
-        timeline.description = timeline_data.description
-    if timeline_data.duration is not None:
-        timeline.duration = timeline_data.duration
-    if timeline_data.fps is not None:
-        timeline.fps = timeline_data.fps
-    if timeline_data.resolution is not None:
-        timeline.resolution = timeline_data.resolution
-    if timeline_data.loop is not None:
-        timeline.loop = timeline_data.loop
-    if timeline_data.is_active is not None:
-        timeline.is_active = timeline_data.is_active
-    
-    timeline.updated_at = datetime.utcnow()
-    
-    db.commit()
-    db.refresh(timeline)
-    return timeline
+    try:
+        # Update fields
+        if timeline_data.name is not None:
+            timeline.name = timeline_data.name
+        if timeline_data.description is not None:
+            timeline.description = timeline_data.description
+        if timeline_data.duration is not None:
+            timeline.duration = timeline_data.duration
+        if timeline_data.fps is not None:
+            timeline.fps = timeline_data.fps
+        if timeline_data.resolution is not None:
+            timeline.resolution = timeline_data.resolution
+        if timeline_data.loop is not None:
+            timeline.loop = timeline_data.loop
+        if timeline_data.is_active is not None:
+            timeline.is_active = timeline_data.is_active
+        
+        # Update tracks and cues if provided
+        if timeline_data.tracks is not None:
+            # Delete existing tracks and cues (cascade delete)
+            db.query(TimelineTrack).filter(TimelineTrack.timeline_id == timeline_id).delete()
+            
+            # Create new tracks and cues
+            for track_data in timeline_data.tracks:
+                track = TimelineTrack(
+                    timeline_id=timeline.id,
+                    track_type=track_data.track_type,
+                    layer=track_data.layer,
+                    is_enabled=track_data.is_enabled
+                )
+                db.add(track)
+                db.flush()  # Get track ID
+                
+                # Create cues
+                for cue_data in track_data.cues:
+                    cue = TimelineCue(
+                        track_id=track.id,
+                        cue_order=cue_data.cue_order,
+                        start_time=cue_data.start_time,
+                        duration=cue_data.duration,
+                        action_type=cue_data.action_type,
+                        action_params=cue_data.action_params,
+                        transition_type=cue_data.transition_type,
+                        transition_duration=cue_data.transition_duration
+                    )
+                    db.add(cue)
+        
+        timeline.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(timeline)
+        return timeline
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update timeline: {str(e)}")
 
 
 @router.delete("/{timeline_id}")
