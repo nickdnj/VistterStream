@@ -125,7 +125,7 @@
 ## 🎬 **PHASE 2: TIMELINE & SEGMENT ENGINE** (Weeks 3-4)
 *Reference: [StreamingPipeline-TechnicalSpec.md](docs/StreamingPipeline-TechnicalSpec.md)*
 
-### 📊 **Phase 2 Progress: 60% Complete** ✅ **COMPOSITE STREAMS WORKING!**
+### 📊 **Phase 2 Progress: 80% Complete** ✅ **PTZ PRESET SYSTEM COMPLETE!**
 
 ### **2.1 Timeline Data Model** 📋
 *See spec §"Multi-Track Timeline System" for complete schema*
@@ -158,8 +158,23 @@
   - ✅ `show_camera` action executes camera switches
   - ✅ Stop current FFmpeg stream → Start new stream with different camera
   - ✅ Cue duration control (e.g., 1 minute per camera)
-  - ⏳ PTZ preset execution (coming later)
+  - ✅ **PTZ preset execution** ✅ **(COMPLETED 2025-10-01)** 🎉
   - ⏳ Overlay scene activation (next priority)
+
+- [x] **PTZ Preset System** ✅ **(COMPLETED 2025-10-01)** 🎯 **GAME CHANGER!**
+  - ✅ ONVIF integration with lazy loading (onvif-zeep library)
+  - ✅ Port discovery (Sunba cameras use port 8899)
+  - ✅ PTZ Service: move_to_preset(), get_current_position(), set_preset()
+  - ✅ Preset Management API (CRUD, move to preset, capture current position)
+  - ✅ Preset Management UI (capture, test "Go To", delete, grouped by camera)
+  - ✅ Stream dialog preset selector (conditional for PTZ cameras only)
+  - ✅ Stream start PTZ execution (move to preset before streaming)
+  - ✅ Timeline cue preset support (action_params.preset_id)
+  - ✅ Timeline executor PTZ integration (move camera between presets)
+  - ✅ Timeline editor preset palette (expandable preset list per PTZ camera)
+  - ✅ Database schema: presets table, streams.preset_id, timeline cue integration
+  - ✅ **Critical fix**: Timeline save now persists tracks and cues to database
+  - ✅ **Breakthrough**: Single PTZ camera → Multi-angle automated shows! 🎬
 
 - [ ] **Advanced Playback Controls** (Next up!)
   - ⏳ Pause/resume timeline execution
@@ -180,11 +195,13 @@
   - ✅ Visual timeline creator with sidebar
   - ✅ Multi-track view (video track visible)
   - ✅ Camera selector from camera palette
-  - ✅ Add/remove/edit cues (camera + duration)
+  - ✅ **PTZ preset selector** - Expandable preset list under PTZ cameras ✅
+  - ✅ Add/remove/edit cues (camera + preset + duration)
   - ✅ Duration editor for each cue
   - ✅ Timeline metadata (name, description, resolution, fps, loop)
-  - ✅ Save timeline to database
+  - ✅ Save timeline to database (with tracks and cues!)
   - ✅ Multi-destination selector for streaming
+  - ✅ Auto-restart feature for running timelines
   - ⏳ Drag-drop cue reordering (future enhancement)
   - ⏳ Overlay track UI (coming next)
   - ⏳ Timeline preview/simulation mode (future)
