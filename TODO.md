@@ -25,7 +25,7 @@
 ## 🚀 **PHASE 1: STREAMING PIPELINE** (Weeks 1-2)
 *Reference: [StreamingPipeline-TechnicalSpec.md](docs/StreamingPipeline-TechnicalSpec.md)*
 
-### 📊 **Phase 1 Progress: 70% Complete** ✅ **STREAMING TO YOUTUBE LIVE!**
+### 📊 **Phase 1 Progress: 90% Complete** ✅ **STREAMING TO YOUTUBE LIVE!**
 
 ### **1.1 FFmpeg Streaming Engine** ⚡
 *See spec §"Streaming Pipeline Architecture"*
@@ -39,16 +39,27 @@
   - ✅ RTSP camera input → RTMP output streaming
   - ✅ Successfully streaming to YouTube Live!
 
-- [x] **Single-Destination Streaming** ✅ **(COMPLETED 2025-10-01)**
-  - ✅ YouTube RTMP streaming (LIVE and working!)
-  - ✅ Encoding profiles (1920x1080, 30fps, 4500k bitrate)
-  - ✅ Stream key management
-  - ⏳ Multi-destination (coming next)
+- [x] **Streaming Destinations Architecture** ✅ **(COMPLETED 2025-10-01)** 🎉 **DESTINATION-FIRST DESIGN!**
+  - ✅ Centralized destination management (YouTube, Facebook, Twitch, Custom RTMP)
+  - ✅ Reusable destination configs with platform presets
+  - ✅ Stream keys configured once, used everywhere
+  - ✅ Streams reference destinations (no duplicate keys)
+  - ✅ Timelines reference destinations (multi-select support)
+  - ✅ Usage tracking (`last_used` timestamp)
+  - ✅ CRUD API for destination management
+  - ✅ Frontend UI with platform-specific forms
 
-- [ ] **Multi-Destination Streaming** (Next up!)
-  - Simultaneous streaming to 3+ destinations (YouTube + Facebook + Twitch)
-  - Per-destination encoding profiles
-  - Destination-specific retry logic and failure isolation
+- [x] **Single-Camera Streaming** ✅ **(COMPLETED 2025-10-01)**
+  - ✅ YouTube RTMP streaming (LIVE and working!)
+  - ✅ Encoding profiles (1920x1080/720p/480p, 4500k/6000k/2500k bitrate, 30/60fps)
+  - ✅ Start/Stop control with orphaned process cleanup
+  - ✅ Emergency "Kill All Streams" button
+  - ✅ Stream status tracking and auto-refresh
+
+- [ ] **Multi-Destination Streaming** (Architecture ready, needs testing!)
+  - ⏳ Simultaneous streaming to 3+ destinations (YouTube + Facebook + Twitch)
+  - ⏳ Per-destination encoding profiles
+  - ⏳ Destination-specific retry logic and failure isolation
 
 - [ ] **Input Source Management**
   - RTSP camera feed ingestion with failover
@@ -114,59 +125,77 @@
 ## 🎬 **PHASE 2: TIMELINE & SEGMENT ENGINE** (Weeks 3-4)
 *Reference: [StreamingPipeline-TechnicalSpec.md](docs/StreamingPipeline-TechnicalSpec.md)*
 
+### 📊 **Phase 2 Progress: 60% Complete** ✅ **COMPOSITE STREAMS WORKING!**
+
 ### **2.1 Timeline Data Model** 📋
 *See spec §"Multi-Track Timeline System" for complete schema*
 
-- [ ] **Timeline Schema Design**
-  - Multi-track structure: 1 video track + multiple overlay tracks
-  - Action/Cue definitions (camera preset, overlay change, stream control)
-  - Timing model: Sequential per track, parallel across tracks
-  - Validation rules and schema versioning
-  - *Reference: JSON schema example in spec*
+- [x] **Timeline Schema Design** ✅ **(COMPLETED 2025-10-01)**
+  - ✅ Multi-track structure: 1 video track + multiple overlay tracks
+  - ✅ Action/Cue definitions (show_camera with camera_id, duration, transitions)
+  - ✅ Timing model: Sequential per track, parallel across tracks
+  - ✅ Validation with Pydantic schemas
+  - ✅ Looping support for infinite playback
 
-- [ ] **Database Extensions**
-  - Timelines table (id, name, created, modified, status)
-  - Timeline tracks table (track_type, layer, timeline_id)
-  - Timeline cues table (track_id, start_time, duration, action_type, params)
-  - Assets table (overlays, test patterns, transitions)
-  - Execution history and audit logs
-  - *Reference: Complete SQL schema in spec §"Database Schema Extensions"*
+- [x] **Database Extensions** ✅ **(COMPLETED 2025-10-01)**
+  - ✅ `timelines` table (id, name, description, duration, fps, resolution, loop, is_active)
+  - ✅ `timeline_tracks` table (track_type, layer, is_enabled, timeline_id)
+  - ✅ `timeline_cues` table (track_id, cue_order, start_time, duration, action_type, action_params, transitions)
+  - ✅ `timeline_executions` table (timeline_id, started_at, completed_at, status, error_message, metrics)
+  - ⏳ Assets table (overlays, test patterns - coming next)
+  - ⏳ Execution audit logs (detailed tracking - future)
 
 ### **2.2 Timeline Execution Engine** ⚙️
-- [ ] **Scheduler & State Machine**
-  - Timeline player with play/pause/stop/seek
-  - Precise cue execution (sub-second accuracy)
-  - Action dispatch to camera, overlay, and stream services
-  - Progress tracking and completion detection
+- [x] **Timeline Executor Core** ✅ **(COMPLETED 2025-10-01)** 🎉 **MULTI-CAMERA SWITCHING WORKING!**
+  - ✅ Timeline playback with start/stop control
+  - ✅ Sequential cue execution with precise timing
+  - ✅ Camera switching via FFmpeg stream restart
+  - ✅ Looping support for continuous operation
+  - ✅ Execution state tracking in database
+  - ✅ Error handling and graceful failure recovery
 
-- [ ] **Action Handlers**
-  - Camera preset execution (move PTZ, switch input)
-  - Overlay scene activation (show/hide, transition)
-  - Stream control (start/stop destination, adjust quality)
-  - Wait/delay actions for sequencing
+- [x] **Camera Switching Action Handler** ✅ **(COMPLETED 2025-10-01)**
+  - ✅ `show_camera` action executes camera switches
+  - ✅ Stop current FFmpeg stream → Start new stream with different camera
+  - ✅ Cue duration control (e.g., 1 minute per camera)
+  - ⏳ PTZ preset execution (coming later)
+  - ⏳ Overlay scene activation (next priority)
 
-- [ ] **Manual Operator Controls**
-  - Timeline queue management (next up, schedule)
-  - Manual playback controls (UI + API)
-  - Override capabilities (emergency stop, pin camera/overlay)
-  - Execution logging for audit trail
+- [ ] **Advanced Playback Controls** (Next up!)
+  - ⏳ Pause/resume timeline execution
+  - ⏳ Seek to specific cue
+  - ⏳ Manual override (pin camera, skip cue)
+  - ⏳ Timeline queue management
+
+- [ ] **Timeline Scheduling** (Future)
+  - Schedule timeline for future execution
+  - Recurring schedules (daily, weekly, etc.)
+  - Pre-flight checks before go-live
+  - Scheduled timeline queue
 
 ### **2.3 Timeline Builder UI** 🛠️
 *See spec §"Operator Interface" for "GO LIVE" experience and controls*
 
-- [ ] **Frontend Timeline Editor**
-  - Visual timeline builder (drag-drop cues)
-  - Multi-track view (video + overlay tracks)
-  - Camera preset picker with preview
-  - Overlay scene selector
-  - Duration/timing editor with validation
-  - Timeline preview/simulation mode
+- [x] **Frontend Timeline Editor** ✅ **(COMPLETED 2025-10-01)** 🎉 **VISUAL TIMELINE EDITOR!**
+  - ✅ Visual timeline creator with sidebar
+  - ✅ Multi-track view (video track visible)
+  - ✅ Camera selector from camera palette
+  - ✅ Add/remove/edit cues (camera + duration)
+  - ✅ Duration editor for each cue
+  - ✅ Timeline metadata (name, description, resolution, fps, loop)
+  - ✅ Save timeline to database
+  - ✅ Multi-destination selector for streaming
+  - ⏳ Drag-drop cue reordering (future enhancement)
+  - ⏳ Overlay track UI (coming next)
+  - ⏳ Timeline preview/simulation mode (future)
 
-- [ ] **Timeline Library**
-  - Browse, search, filter timelines
-  - Clone/duplicate existing timelines
-  - Import/export timeline packages
-  - Version history and rollback
+- [ ] **Timeline Library** (Partially implemented)
+  - ✅ Browse existing timelines (sidebar list)
+  - ✅ Select timeline to edit
+  - ⏳ Search/filter timelines
+  - ⏳ Clone/duplicate timelines
+  - ⏳ Import/export timeline packages
+  - ⏳ Version history and rollback
 
 ### **2.4 Segment System** 📦
 - [ ] **Segment Package Format**
