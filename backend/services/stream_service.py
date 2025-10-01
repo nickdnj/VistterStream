@@ -8,6 +8,7 @@ from datetime import datetime
 import base64
 
 from models.database import Stream, Camera
+from models.destination import StreamingDestination
 from models.schemas import StreamCreate, StreamUpdate, Stream as StreamSchema, StreamStatus
 from services.ffmpeg_manager import FFmpegProcessManager
 
@@ -40,9 +41,7 @@ class StreamService:
         stream = Stream(
             name=stream_data.name,
             camera_id=stream_data.camera_id,
-            destination=stream_data.destination.value,  # Convert enum to string
-            stream_key=stream_data.stream_key,
-            rtmp_url=stream_data.rtmp_url,
+            destination_id=stream_data.destination_id,
             resolution=stream_data.resolution,
             bitrate=stream_data.bitrate,
             framerate=stream_data.framerate,
@@ -105,6 +104,16 @@ class StreamService:
             self.db.commit()
             return False
         
+        # Get the destination
+        destination = self.db.query(StreamingDestination).filter(
+            StreamingDestination.id == stream.destination_id
+        ).first()
+        if not destination:
+            stream.last_error = "Destination not found"
+            stream.status = StreamStatus.ERROR.value
+            self.db.commit()
+            return False
+        
         # Update stream status
         stream.status = StreamStatus.STARTING.value
         stream.started_at = datetime.utcnow()
@@ -115,8 +124,12 @@ class StreamService:
             # Build RTSP input URL
             rtsp_url = self._build_rtsp_url(camera)
             
-            # Build RTMP output URL with stream key
-            rtmp_output = f"{stream.rtmp_url}/{stream.stream_key}"
+            # Build RTMP output URL from destination
+            rtmp_output = destination.get_full_rtmp_url()
+            
+            # Mark destination as used
+            destination.last_used = datetime.utcnow()
+            self.db.commit()
             
             # Parse resolution
             width, height = stream.resolution.split('x')
@@ -183,36 +196,44 @@ class StreamService:
                 # Kill orphaned FFmpeg processes manually
                 print(f"DEBUG: Stream {stream_id} not in FFmpeg manager, searching for orphaned processes...")
                 
-                # Build the output URL to search for
-                rtmp_output = f"{stream.rtmp_url}/{stream.stream_key}"
+                # Get the destination to build the output URL
+                destination = self.db.query(StreamingDestination).filter(
+                    StreamingDestination.id == stream.destination_id
+                ).first()
+                if destination:
+                    rtmp_output = destination.get_full_rtmp_url()
+                else:
+                    print(f"DEBUG: Destination not found for stream {stream_id}, cannot search for orphaned processes")
+                    rtmp_output = None
                 
-                # Find FFmpeg processes with this output URL
-                try:
-                    result = subprocess.run(
-                        ['pgrep', '-f', f'ffmpeg.*{rtmp_output}'],
-                        capture_output=True,
-                        text=True
-                    )
-                    
-                    if result.returncode == 0 and result.stdout.strip():
-                        pids = result.stdout.strip().split('\n')
-                        print(f"DEBUG: Found {len(pids)} orphaned FFmpeg process(es) for stream {stream_id}: {pids}")
+                if rtmp_output:
+                    # Find FFmpeg processes with this output URL
+                    try:
+                        result = subprocess.run(
+                            ['pgrep', '-f', f'ffmpeg.*{rtmp_output}'],
+                            capture_output=True,
+                            text=True
+                        )
                         
-                        # Kill each process
-                        for pid in pids:
-                            try:
-                                import os
-                                os.kill(int(pid), signal.SIGTERM)
-                                print(f"DEBUG: Killed orphaned FFmpeg process {pid}")
-                            except ProcessLookupError:
-                                print(f"DEBUG: Process {pid} already terminated")
-                            except Exception as e:
-                                print(f"DEBUG: Failed to kill process {pid}: {e}")
-                    else:
-                        print(f"DEBUG: No orphaned FFmpeg processes found for stream {stream_id}")
-                        
-                except Exception as e:
-                    print(f"DEBUG: Failed to search for orphaned processes: {e}")
+                        if result.returncode == 0 and result.stdout.strip():
+                            pids = result.stdout.strip().split('\n')
+                            print(f"DEBUG: Found {len(pids)} orphaned FFmpeg process(es) for stream {stream_id}: {pids}")
+                            
+                            # Kill each process
+                            for pid in pids:
+                                try:
+                                    import os
+                                    os.kill(int(pid), signal.SIGTERM)
+                                    print(f"DEBUG: Killed orphaned FFmpeg process {pid}")
+                                except ProcessLookupError:
+                                    print(f"DEBUG: Process {pid} already terminated")
+                                except Exception as e:
+                                    print(f"DEBUG: Failed to kill process {pid}: {e}")
+                        else:
+                            print(f"DEBUG: No orphaned FFmpeg processes found for stream {stream_id}")
+                            
+                    except Exception as e:
+                        print(f"DEBUG: Failed to search for orphaned processes: {e}")
             
             # Update stream status
             stream.status = StreamStatus.STOPPED.value
@@ -243,11 +264,21 @@ class StreamService:
         else:
             uptime_seconds = 0
 
+        # Get destination details
+        destination = self.db.query(StreamingDestination).filter(
+            StreamingDestination.id == stream.destination_id
+        ).first()
+        
         return {
             "id": stream.id,
             "name": stream.name,
             "camera_id": stream.camera_id,
-            "destination": stream.destination,
+            "destination_id": stream.destination_id,
+            "destination": {
+                "id": destination.id,
+                "name": destination.name,
+                "platform": destination.platform
+            } if destination else None,
             "status": stream.status,
             "is_active": stream.is_active,
             "created_at": stream.created_at,

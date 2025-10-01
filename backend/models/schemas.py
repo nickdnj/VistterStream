@@ -92,9 +92,7 @@ class Preset(PresetBase):
 # Stream schemas
 class StreamBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    destination: StreamDestination
-    stream_key: str = Field(..., min_length=1)
-    rtmp_url: str = Field(..., min_length=1)
+    destination_id: int
     resolution: str = Field(default="1920x1080")
     bitrate: str = Field(default="4500k")
     framerate: int = Field(default=30, ge=15, le=60)
@@ -104,9 +102,7 @@ class StreamCreate(StreamBase):
 
 class StreamUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
-    destination: Optional[StreamDestination] = None
-    stream_key: Optional[str] = Field(None, min_length=1)
-    rtmp_url: Optional[str] = Field(None, min_length=1)
+    destination_id: Optional[int] = None
     resolution: Optional[str] = None
     bitrate: Optional[str] = None
     framerate: Optional[int] = Field(None, ge=15, le=60)
@@ -121,6 +117,10 @@ class Stream(StreamBase):
     started_at: Optional[datetime] = None
     stopped_at: Optional[datetime] = None
     last_error: Optional[str] = None
+    
+    # Include destination details in response
+    destination: Optional[dict] = None  # Will be populated from relationship
+    camera: Optional[dict] = None  # Will be populated from relationship
     
     class Config:
         from_attributes = True

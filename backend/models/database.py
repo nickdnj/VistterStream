@@ -71,9 +71,7 @@ class Stream(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)  # "YouTube Main Stream", etc.
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=False)
-    destination = Column(String, nullable=False)  # "youtube", "facebook", "twitch", "custom"
-    stream_key = Column(String, nullable=False)
-    rtmp_url = Column(String, nullable=False)
+    destination_id = Column(Integer, ForeignKey("streaming_destinations.id"), nullable=False)
     
     # Encoding profile
     resolution = Column(String, default="1920x1080")  # "1920x1080", "1280x720", etc.
@@ -92,6 +90,7 @@ class Stream(Base):
     
     # Relationships
     camera = relationship("Camera", back_populates="streams")
+    destination = relationship("StreamingDestination", foreign_keys=[destination_id])
 
 # Import timeline models to register them with SQLAlchemy
 from .timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecution  # noqa: F401
