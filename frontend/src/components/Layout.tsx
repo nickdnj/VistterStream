@@ -5,6 +5,7 @@ import {
   HomeIcon,
   CameraIcon,
   PlayIcon,
+  FilmIcon,
   Cog6ToothIcon,
   Bars3Icon,
   XMarkIcon,
@@ -25,6 +26,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Cameras', href: '/cameras', icon: CameraIcon },
     { name: 'Streams', href: '/streams', icon: PlayIcon },
+    { name: 'Timelines', href: '/timelines', icon: FilmIcon },
     { name: 'Presets', href: '/presets', icon: Cog6ToothIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];

@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import CameraManagement from './components/CameraManagement';
 import StreamManagement from './components/StreamManagement';
 import PresetManagement from './components/PresetManagement';
+import TimelineEditor from './components/TimelineEditor';
 import Settings from './components/Settings';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -25,6 +26,7 @@ function App() {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/cameras" element={<CameraManagement />} />
                     <Route path="/streams" element={<StreamManagement />} />
+                    <Route path="/timelines" element={<TimelineEditor />} />
                     <Route path="/presets" element={<PresetManagement />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>
@@ -56,6 +58,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <PresetManagement />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/timelines" element={
+              <ProtectedRoute>
+                <Layout>
+                  <TimelineEditor />
                 </Layout>
               </ProtectedRoute>
             } />
