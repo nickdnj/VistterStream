@@ -433,8 +433,23 @@ class FFmpegProcessManager:
                     stream_process.status = StreamStatus.ERROR
                     stream_process.last_error = f"Process exited with code {returncode}"
                     
-                    # Only attempt restart if auto-restart is enabled
-                    if stream_process.should_auto_restart:
+                    # Check if stream should auto-restart by checking database status
+                    should_restart = stream_process.should_auto_restart
+                    
+                    # Also check database - if stream is stopped in DB, don't restart
+                    try:
+                        from models.database import SessionLocal, Stream
+                        db = SessionLocal()
+                        db_stream = db.query(Stream).filter(Stream.id == stream_id).first()
+                        if db_stream and db_stream.status == 'stopped':
+                            logger.info(f"Stream {stream_id} is marked as stopped in database, not restarting")
+                            should_restart = False
+                        db.close()
+                    except Exception as e:
+                        logger.error(f"Failed to check database status for stream {stream_id}: {e}")
+                    
+                    # Only attempt restart if auto-restart is enabled AND database allows it
+                    if should_restart:
                         logger.info(f"Auto-restart enabled for stream {stream_id}, attempting restart...")
                         try:
                             await self.restart_stream(stream_id)
