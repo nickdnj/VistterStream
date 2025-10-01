@@ -10,7 +10,7 @@ from typing import Optional
 from models.database import get_db
 from models.timeline import Timeline
 from services.timeline_executor import get_timeline_executor
-from models.schemas import EncodingProfile
+from services.ffmpeg_manager import EncodingProfile
 
 router = APIRouter(prefix="/api/timeline-execution", tags=["timeline-execution"])
 
