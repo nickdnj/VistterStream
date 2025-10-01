@@ -165,3 +165,52 @@ class CameraTestResponse(BaseModel):
     rtsp_accessible: bool = False
     snapshot_accessible: bool = False
     error_details: Optional[str] = None
+
+# FFmpeg and Streaming schemas
+class StreamMetricsSchema(BaseModel):
+    """Real-time stream metrics from FFmpeg"""
+    bitrate_current: float = Field(0.0, description="Current bitrate in Mbps")
+    bitrate_target: float = Field(4.5, description="Target bitrate in Mbps")
+    framerate_actual: float = Field(0.0, description="Actual framerate")
+    framerate_target: float = Field(30.0, description="Target framerate")
+    dropped_frames: int = Field(0, description="Number of dropped frames")
+    encoding_time_ms: float = Field(0.0, description="Encoding time per frame in ms")
+    buffer_fullness: float = Field(100.0, description="Buffer fullness percentage")
+    uptime_seconds: int = Field(0, description="Stream uptime in seconds")
+    total_bytes_sent: int = Field(0, description="Total bytes sent")
+    last_update: datetime = Field(default_factory=datetime.utcnow, description="Last metrics update time")
+    
+    class Config:
+        from_attributes = True
+
+class EncodingProfileSchema(BaseModel):
+    """Encoding profile configuration"""
+    codec: str = Field(..., description="Video codec (h264_v4l2m2m, h264_videotoolbox, libx264)")
+    resolution: tuple[int, int] = Field((1920, 1080), description="Video resolution (width, height)")
+    framerate: int = Field(30, ge=1, le=60, description="Target framerate")
+    bitrate: str = Field("4500k", description="Target bitrate (e.g., '4500k')")
+    keyframe_interval: int = Field(2, ge=1, description="Keyframe interval in seconds")
+    buffer_size: str = Field("9000k", description="Encoder buffer size")
+    preset: str = Field("fast", description="Encoding preset (fast, medium, slow)")
+    profile: str = Field("main", description="H.264 profile (baseline, main, high)")
+    level: str = Field("4.1", description="H.264 level")
+
+class StreamProcessStatus(BaseModel):
+    """Stream process status information"""
+    stream_id: int
+    status: str = Field(..., description="Stream status (stopped, starting, running, degraded, error)")
+    retry_count: int = Field(0, description="Number of restart attempts")
+    started_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+    metrics: StreamMetricsSchema
+    
+    class Config:
+        from_attributes = True
+
+class HardwareCapabilitiesSchema(BaseModel):
+    """Hardware encoder capabilities"""
+    encoder: str = Field(..., description="Detected encoder (h264_v4l2m2m, h264_videotoolbox, libx264)")
+    decoder: Optional[str] = Field(None, description="Hardware decoder if available")
+    platform: str = Field(..., description="Platform (pi5, mac, software)")
+    max_concurrent_streams: int = Field(..., description="Maximum concurrent streams supported")
+    supports_hardware: bool = Field(..., description="Whether hardware acceleration is available")
