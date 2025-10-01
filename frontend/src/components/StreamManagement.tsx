@@ -40,6 +40,19 @@ const StreamManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
+  const [saving, setSaving] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    camera_id: '',
+    destination: 'youtube',
+    stream_key: '',
+    rtmp_url: '',
+    resolution: '1920x1080',
+    bitrate: '4500k',
+    framerate: 30
+  });
 
   useEffect(() => {
     loadData();
@@ -131,6 +144,67 @@ const StreamManagement: React.FC = () => {
     } catch (error) {
       console.error('Failed to delete stream:', error);
     }
+  };
+
+  const handleSubmitStream = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:8000/api/streams/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...formData,
+          camera_id: parseInt(formData.camera_id),
+          framerate: parseInt(String(formData.framerate))
+        })
+      });
+      
+      if (response.ok) {
+        // Reset form
+        setFormData({
+          name: '',
+          camera_id: '',
+          destination: 'youtube',
+          stream_key: '',
+          rtmp_url: '',
+          resolution: '1920x1080',
+          bitrate: '4500k',
+          framerate: 30
+        });
+        setShowAddModal(false);
+        loadData(); // Refresh streams
+      } else {
+        const error = await response.json();
+        alert(`Failed to create stream: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Failed to create stream:', error);
+      alert('Failed to create stream. Check console for details.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDestinationChange = (destination: string) => {
+    // Set default RTMP URLs for common platforms
+    const defaultUrls: { [key: string]: string } = {
+      youtube: 'rtmp://a.rtmp.youtube.com/live2',
+      facebook: 'rtmps://live-api-s.facebook.com:443/rtmp/',
+      twitch: 'rtmp://live.twitch.tv/app',
+      custom: ''
+    };
+    
+    setFormData({
+      ...formData,
+      destination,
+      rtmp_url: defaultUrls[destination] || ''
+    });
   };
 
   const getStatusIcon = (status: string) => {
@@ -286,26 +360,184 @@ const StreamManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Add Stream Modal - Simplified for now */}
+      {/* Add Stream Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-900 rounded-lg p-6 max-w-2xl w-full mx-4">
+          <div className="bg-dark-900 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-white mb-4">Add New Stream</h2>
-            <p className="text-gray-400 mb-4">
-              Use the test script to add streams for now:
-              <code className="block mt-2 bg-dark-800 p-3 rounded text-sm text-primary-400">
-                python test_youtube_stream.py
-              </code>
-            </p>
-            <p className="text-gray-400 text-sm mb-4">
-              Full UI form coming soon!
-            </p>
-            <button
-              onClick={() => setShowAddModal(false)}
-              className="px-4 py-2 bg-dark-700 text-white rounded-md hover:bg-dark-600"
-            >
-              Close
-            </button>
+            
+            <form onSubmit={handleSubmitStream} className="space-y-4">
+              {/* Stream Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Stream Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="My Live Stream"
+                />
+              </div>
+
+              {/* Camera */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Camera *
+                </label>
+                <select
+                  required
+                  value={formData.camera_id}
+                  onChange={(e) => setFormData({ ...formData, camera_id: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Select a camera</option>
+                  {cameras.map((camera) => (
+                    <option key={camera.id} value={camera.id}>
+                      {camera.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Destination */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Destination *
+                </label>
+                <select
+                  required
+                  value={formData.destination}
+                  onChange={(e) => handleDestinationChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="youtube">YouTube</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="twitch">Twitch</option>
+                  <option value="custom">Custom RTMP</option>
+                </select>
+              </div>
+
+              {/* RTMP URL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  RTMP Server URL *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.rtmp_url}
+                  onChange={(e) => setFormData({ ...formData, rtmp_url: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="rtmp://a.rtmp.youtube.com/live2"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  The RTMP server URL (without stream key)
+                </p>
+              </div>
+
+              {/* Stream Key */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Stream Key *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={formData.stream_key}
+                  onChange={(e) => setFormData({ ...formData, stream_key: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="xxxx-xxxx-xxxx-xxxx"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Your stream key from YouTube, Facebook, Twitch, etc.
+                </p>
+              </div>
+
+              {/* Quality Settings */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Resolution *
+                  </label>
+                  <select
+                    required
+                    value={formData.resolution}
+                    onChange={(e) => setFormData({ ...formData, resolution: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="1920x1080">1920x1080 (1080p)</option>
+                    <option value="1280x720">1280x720 (720p)</option>
+                    <option value="854x480">854x480 (480p)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Bitrate *
+                  </label>
+                  <select
+                    required
+                    value={formData.bitrate}
+                    onChange={(e) => setFormData({ ...formData, bitrate: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="6000k">6000k (High)</option>
+                    <option value="4500k">4500k (Medium)</option>
+                    <option value="2500k">2500k (Low)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Frame Rate *
+                  </label>
+                  <select
+                    required
+                    value={formData.framerate}
+                    onChange={(e) => setFormData({ ...formData, framerate: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 bg-dark-800 border border-dark-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="60">60 fps</option>
+                    <option value="30">30 fps</option>
+                    <option value="24">24 fps</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-dark-700">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setFormData({
+                      name: '',
+                      camera_id: '',
+                      destination: 'youtube',
+                      stream_key: '',
+                      rtmp_url: '',
+                      resolution: '1920x1080',
+                      bitrate: '4500k',
+                      framerate: 30
+                    });
+                  }}
+                  className="px-4 py-2 bg-dark-700 text-white rounded-md hover:bg-dark-600"
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={saving}
+                >
+                  {saving ? 'Creating...' : 'Create Stream'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
