@@ -93,6 +93,9 @@ class Stream(Base):
     # Relationships
     camera = relationship("Camera", back_populates="streams")
 
+# Import timeline models to register them with SQLAlchemy
+from .timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecution  # noqa: F401
+
 # Create tables
 def create_tables():
     Base.metadata.create_all(bind=engine)
