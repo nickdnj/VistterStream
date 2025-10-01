@@ -26,7 +26,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
 
   const handleEmergencyStop = async () => {
-    if (!confirm('🚨 EMERGENCY STOP: Kill all streams and FFmpeg processes?')) {
+    if (!window.confirm('🚨 EMERGENCY STOP: Kill all streams and FFmpeg processes?')) {
       return;
     }
 
