@@ -24,6 +24,13 @@ const CameraManagement: React.FC = () => {
 
   useEffect(() => {
     loadCameras();
+    
+    // Auto-refresh every 4 minutes to keep cameras online (5-min timeout)
+    const interval = setInterval(() => {
+      loadCameras();
+    }, 4 * 60 * 1000); // 4 minutes
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Auto-refresh snapshot for live stream view

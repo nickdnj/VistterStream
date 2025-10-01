@@ -139,11 +139,13 @@ class StreamService:
             
             # Start the stream
             print(f"DEBUG: Starting stream {stream.id} from {rtsp_url} to {rtmp_output}")
+            from services.ffmpeg_manager import EncodingProfile
+            profile = EncodingProfile(**encoding_profile)
             await ffmpeg_manager.start_stream(
                 stream_id=stream.id,
                 input_url=rtsp_url,
-                output_url=rtmp_output,
-                encoding_profile=encoding_profile
+                output_urls=[rtmp_output],  # List of output URLs
+                profile=profile
             )
             
             # Update stream status
