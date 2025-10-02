@@ -112,7 +112,20 @@ async def get_camera_snapshot(camera_id: int, db: Session = Depends(get_db)):
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
     
-    # Build RTSP URL
+    # Try direct HTTP snapshot first (if camera supports it)
+    snapshot_url = f"http://{camera.username}:{camera.password}@{camera.ip_address}/webcapture.jpg?command=snap&channel=0&user={camera.username}&password={camera.password}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(snapshot_url)
+            if response.status_code == 200 and 'image' in response.headers.get('content-type', ''):
+                # Return the image directly
+                return Response(content=response.content, media_type="image/jpeg")
+    except:
+        # If HTTP snapshot fails, fall back to FFmpeg
+        pass
+    
+    # Fall back to RTSP with FFmpeg
     rtsp_url = f"rtsp://{camera.username}:{camera.password}@{camera.ip_address}:{camera.port}{camera.stream_path}"
     
     # Create temporary file for the snapshot

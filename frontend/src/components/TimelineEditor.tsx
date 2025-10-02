@@ -643,11 +643,12 @@ const TimelineEditor: React.FC = () => {
     }
 
     try {
-      const response = await axios.get(`/api/cameras/${cameraId}/snapshot`, {
-        responseType: 'blob'
-      });
-      const imageUrl = URL.createObjectURL(response.data);
-      setCameraSnapshots(prev => ({ ...prev, [cameraId]: imageUrl }));
+      const response = await axios.get(`/api/cameras/${cameraId}/snapshot`);
+      // Backend returns JSON with base64 encoded image
+      if (response.data && response.data.image_data) {
+        const imageUrl = `data:${response.data.content_type};base64,${response.data.image_data}`;
+        setCameraSnapshots(prev => ({ ...prev, [cameraId]: imageUrl }));
+      }
     } catch (error) {
       console.error('Failed to fetch camera snapshot:', error);
     }
