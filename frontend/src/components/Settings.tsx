@@ -1,11 +1,31 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import PresetManagement from './PresetManagement';
 import StreamingDestinations from './StreamingDestinations';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 type SettingsTab = 'general' | 'presets' | 'destinations' | 'system';
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [isKilling, setIsKilling] = useState(false);
+
+  const handleEmergencyStop = async () => {
+    if (!window.confirm('🚨 EMERGENCY STOP: Kill all streams and FFmpeg processes?')) {
+      return;
+    }
+
+    setIsKilling(true);
+    try {
+      const response = await axios.post('/api/emergency/kill-all-streams');
+      alert(`✅ Emergency stop complete!\n\nKilled ${response.data.total_killed} processes:\n${response.data.killed_processes.join('\n')}`);
+    } catch (error) {
+      console.error('Emergency stop failed:', error);
+      alert('❌ Emergency stop failed! Check console for details.');
+    } finally {
+      setIsKilling(false);
+    }
+  };
 
   const tabs = [
     { id: 'general' as SettingsTab, name: 'General', icon: '⚙️' },
@@ -91,24 +111,63 @@ const Settings: React.FC = () => {
         )}
 
         {activeTab === 'system' && (
-          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
-            <h2 className="text-xl font-semibold text-white mb-4">System Information</h2>
-            <div className="space-y-4 text-sm">
-              <div className="flex justify-between py-2 border-b border-dark-700">
-                <span className="text-gray-400">Version:</span>
-                <span className="text-white font-mono">1.0.0-beta</span>
+          <div className="space-y-6">
+            {/* System Information */}
+            <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
+              <h2 className="text-xl font-semibold text-white mb-4">System Information</h2>
+              <div className="space-y-4 text-sm">
+                <div className="flex justify-between py-2 border-b border-dark-700">
+                  <span className="text-gray-400">Version:</span>
+                  <span className="text-white font-mono">1.0.0-beta</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-dark-700">
+                  <span className="text-gray-400">Platform:</span>
+                  <span className="text-white font-mono">macOS</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-dark-700">
+                  <span className="text-gray-400">Database:</span>
+                  <span className="text-white font-mono">SQLite</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-dark-700">
+                  <span className="text-gray-400">FFmpeg:</span>
+                  <span className="text-white font-mono">7.1.1</span>
+                </div>
               </div>
-              <div className="flex justify-between py-2 border-b border-dark-700">
-                <span className="text-gray-400">Platform:</span>
-                <span className="text-white font-mono">macOS</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-dark-700">
-                <span className="text-gray-400">Database:</span>
-                <span className="text-white font-mono">SQLite</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-dark-700">
-                <span className="text-gray-400">FFmpeg:</span>
-                <span className="text-white font-mono">7.1.1</span>
+            </div>
+
+            {/* Emergency Controls */}
+            <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
+              <h2 className="text-xl font-semibold text-white mb-4">Emergency Controls</h2>
+              <p className="text-gray-400 mb-6">
+                Use these controls to forcefully stop all streaming processes in case of emergencies.
+              </p>
+              
+              <button
+                onClick={handleEmergencyStop}
+                disabled={isKilling}
+                className={`flex items-center gap-3 px-6 py-3 rounded-lg font-semibold transition-colors ${
+                  isKilling
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700 text-white'
+                }`}
+                title="Emergency: Kill all streams and FFmpeg processes"
+              >
+                <ExclamationTriangleIcon className="h-6 w-6" />
+                <div className="text-left">
+                  <div className="text-base">
+                    {isKilling ? 'Stopping All Processes...' : 'Kill All Streams'}
+                  </div>
+                  <div className="text-xs opacity-75">
+                    Forcefully stop all FFmpeg processes
+                  </div>
+                </div>
+              </button>
+              
+              <div className="mt-4 p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-md">
+                <p className="text-sm text-yellow-400">
+                  ⚠️ <strong>Warning:</strong> This will immediately terminate all active streams and FFmpeg processes. 
+                  Use only when streams are unresponsive or you need to stop everything quickly.
+                </p>
               </div>
             </div>
           </div>

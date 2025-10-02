@@ -1,20 +1,16 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
 import {
   HomeIcon,
   CameraIcon,
   PlayIcon,
   FilmIcon,
-  GlobeAltIcon,
   Cog6ToothIcon,
   Bars3Icon,
   XMarkIcon,
   UserIcon,
   ArrowRightOnRectangleIcon,
-  ExclamationTriangleIcon,
-  RectangleGroupIcon,
 } from '@heroicons/react/24/outline';
 
 interface LayoutProps {
@@ -23,26 +19,8 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isKilling, setIsKilling] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
-
-  const handleEmergencyStop = async () => {
-    if (!window.confirm('🚨 EMERGENCY STOP: Kill all streams and FFmpeg processes?')) {
-      return;
-    }
-
-    setIsKilling(true);
-    try {
-      const response = await axios.post('/api/emergency/kill-all-streams');
-      alert(`✅ Emergency stop complete!\n\nKilled ${response.data.total_killed} processes:\n${response.data.killed_processes.join('\n')}`);
-    } catch (error) {
-      console.error('Emergency stop failed:', error);
-      alert('❌ Emergency stop failed! Check console for details.');
-    } finally {
-      setIsKilling(false);
-    }
-  };
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
@@ -134,24 +112,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <Bars3Icon className="h-6 w-6" />
             </button>
             
-            <div className="flex items-center space-x-4">
-              {/* Emergency Stop Button */}
-              <button
-                onClick={handleEmergencyStop}
-                disabled={isKilling}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  isKilling
-                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
-                title="Emergency: Kill all streams and FFmpeg processes"
-              >
-                <ExclamationTriangleIcon className="h-5 w-5" />
-                <span className="hidden sm:inline">
-                  {isKilling ? 'Stopping...' : 'Kill All Streams'}
-                </span>
-              </button>
-            </div>
+            <div className="flex-1"></div>
             
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-3">
