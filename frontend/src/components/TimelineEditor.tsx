@@ -18,6 +18,24 @@ interface Preset {
   created_at: string;
 }
 
+interface Asset {
+  id: number;
+  name: string;
+  type: string;
+  file_path: string | null;
+  api_url: string | null;
+  api_refresh_interval: number;
+  width: number | null;
+  height: number | null;
+  position_x: number;
+  position_y: number;
+  opacity: number;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_updated: string | null;
+}
+
 interface Cue {
   id?: number;
   cue_order: number;
@@ -27,6 +45,7 @@ interface Cue {
   action_params: {
     camera_id?: number;
     preset_id?: number;
+    asset_id?: number;
     transition?: string;
   };
   transition_type: string;
@@ -70,6 +89,7 @@ const TimelineEditor: React.FC = () => {
   const [selectedTimeline, setSelectedTimeline] = useState<Timeline | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -119,6 +139,7 @@ const TimelineEditor: React.FC = () => {
         loadTimelines(),
         loadCameras(),
         loadPresets(),
+        loadAssets(),
         loadDestinations()
       ]);
       setLoading(false);
@@ -211,6 +232,15 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
+  const loadAssets = async () => {
+    try {
+      const response = await axios.get('/api/assets/');
+      setAssets(response.data);
+    } catch (error) {
+      console.error('Failed to load assets:', error);
+    }
+  };
+
   const loadDestinations = async () => {
     try {
       const response = await axios.get('/api/destinations/');
@@ -230,6 +260,10 @@ const TimelineEditor: React.FC = () => {
 
   const getPresetById = (presetId: number) => {
     return presets.find(p => p.id === presetId);
+  };
+
+  const getAssetById = (assetId: number) => {
+    return assets.find(a => a.id === assetId);
   };
 
   const toggleCameraExpand = (cameraId: number) => {
@@ -550,6 +584,24 @@ const TimelineEditor: React.FC = () => {
         track.cues.push(newCue);
         setSelectedTimeline({ ...selectedTimeline });
       }
+    } else if (data.type === 'asset') {
+      const asset = assets.find(a => a.id === data.assetId);
+      if (asset) {
+        const newCue: Cue = {
+          cue_order: track.cues.length,
+          start_time: Math.max(0, Math.round(dropTime * 2) / 2),
+          duration: 10,
+          action_type: 'overlay',
+          action_params: {
+            asset_id: asset.id,
+            transition: 'fade'
+          },
+          transition_type: 'fade',
+          transition_duration: 0.5
+        };
+        track.cues.push(newCue);
+        setSelectedTimeline({ ...selectedTimeline });
+      }
     }
   };
 
@@ -781,7 +833,7 @@ const TimelineEditor: React.FC = () => {
             )}
           </div>
 
-          {/* Assets Section (Placeholder) */}
+          {/* Assets Section */}
           <div className="border-b border-dark-700">
             <button
               onClick={() => setAssetsExpanded(!assetsExpanded)}
@@ -789,13 +841,41 @@ const TimelineEditor: React.FC = () => {
             >
               <div className="flex items-center gap-2 text-white font-semibold">
                 {assetsExpanded ? <ChevronDownIcon className="h-5 w-5" /> : <ChevronRightIcon className="h-5 w-5" />}
-                <span>🖼️ Assets (0)</span>
+                <span>🎨 Assets ({assets.length})</span>
               </div>
             </button>
             
             {assetsExpanded && (
-              <div className="px-4 py-3 text-gray-400 text-sm">
-                Image and graphic overlays coming soon...
+              <div className="px-2 pb-2 space-y-1 max-h-96 overflow-y-auto">
+                {assets.length === 0 ? (
+                  <div className="px-4 py-3 text-gray-400 text-sm">
+                    No assets yet. Create assets in Settings → Assets.
+                  </div>
+                ) : (
+                  assets.map((asset) => (
+                    <div
+                      key={asset.id}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('application/json', JSON.stringify({ type: 'asset', assetId: asset.id }));
+                      }}
+                      className="bg-dark-700 rounded-lg overflow-hidden hover:bg-dark-600 cursor-move transition-colors"
+                    >
+                      <div className="flex items-center gap-2 p-3">
+                        <span className="text-2xl flex-shrink-0">
+                          {asset.type === 'api_image' && '🌐'}
+                          {asset.type === 'static_image' && '🖼️'}
+                          {asset.type === 'video' && '🎥'}
+                          {asset.type === 'graphic' && '🎨'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-white text-sm font-medium truncate">{asset.name}</div>
+                          <div className="text-gray-400 text-xs">{asset.type.replace('_', ' ')}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -979,6 +1059,7 @@ const TimelineEditor: React.FC = () => {
                         {track.cues.map((cue, cueIndex) => {
                           const camera = getCameraById(cue.action_params.camera_id || 0);
                           const preset = cue.action_params.preset_id ? getPresetById(cue.action_params.preset_id) : null;
+                          const asset = cue.action_params.asset_id ? getAssetById(cue.action_params.asset_id) : null;
                           const cueColor = getTrackColor(track.track_type);
 
                           return (
@@ -1005,11 +1086,20 @@ const TimelineEditor: React.FC = () => {
                               {/* Cue Content */}
                               <div className="flex-1 overflow-hidden">
                                 <div className="text-xs font-semibold truncate">
-                                  {camera?.name || 'Camera'}
+                                  {asset ? asset.name : (camera?.name || 'Camera')}
                                 </div>
-                                {preset && (
+                                {preset && !asset && (
                                   <div className="text-xs opacity-75 truncate">
                                     🎯 {preset.name}
+                                  </div>
+                                )}
+                                {asset && (
+                                  <div className="text-xs opacity-75 truncate">
+                                    {asset.type === 'api_image' && '🌐'}
+                                    {asset.type === 'static_image' && '🖼️'}
+                                    {asset.type === 'video' && '🎥'}
+                                    {asset.type === 'graphic' && '🎨'}
+                                    {' '}{asset.type.replace('_', ' ')}
                                   </div>
                                 )}
                                 <div className="text-xs opacity-50">
