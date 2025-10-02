@@ -123,7 +123,8 @@ class FFmpegProcessManager:
         stream_id: int,
         input_url: str,
         output_urls: List[str],
-        profile: Optional[EncodingProfile] = None
+        profile: Optional[EncodingProfile] = None,
+        overlay_images: Optional[List[Dict]] = None
     ) -> StreamProcess:
         """
         Start a new FFmpeg stream process.
@@ -133,6 +134,7 @@ class FFmpegProcessManager:
             input_url: RTSP/RTMP input URL (camera feed)
             output_urls: List of RTMP output destinations
             profile: Encoding profile (uses reliability profile if None)
+            overlay_images: Optional list of overlay dicts with {path, x, y, opacity}
         
         Returns:
             StreamProcess representing the running stream
@@ -156,9 +158,11 @@ class FFmpegProcessManager:
             profile = EncodingProfile.reliability_profile(self.hw_capabilities)
         
         logger.info(f"Starting stream {stream_id} with {len(output_urls)} destinations")
+        if overlay_images:
+            logger.info(f"  🎨 With {len(overlay_images)} overlay(s)")
         
         # Build FFmpeg command
-        command = self._build_ffmpeg_command(input_url, output_urls, profile)
+        command = self._build_ffmpeg_command(input_url, output_urls, profile, overlay_images)
         
         # Create stream process entry
         stream_process = StreamProcess(
@@ -326,10 +330,17 @@ class FFmpegProcessManager:
         self,
         input_url: str,
         output_urls: List[str],
-        profile: EncodingProfile
+        profile: EncodingProfile,
+        overlay_images: Optional[List[Dict]] = None
     ) -> List[str]:
         """
-        Build FFmpeg command with hardware acceleration.
+        Build FFmpeg command with hardware acceleration and optional overlays.
+        
+        Args:
+            input_url: RTSP URL of camera feed
+            output_urls: List of RTMP destinations
+            profile: Encoding profile
+            overlay_images: List of overlay dicts with {path, x, y, opacity}
         
         References:
             See StreamingPipeline-TechnicalSpec.md §"FFmpeg Strategy"
@@ -343,8 +354,46 @@ class FFmpegProcessManager:
             '-i', input_url
         ])
         
+        # Add overlay image inputs
+        if overlay_images:
+            for overlay in overlay_images:
+                cmd.extend(['-i', overlay['path']])
+        
         # Video encoding options
         resolution_str = f"{profile.resolution[0]}x{profile.resolution[1]}"
+        
+        # Build filter complex for overlays
+        filter_parts = []
+        if overlay_images:
+            # Start with base video scaled to output resolution
+            filter_parts.append(f"[0:v]scale={resolution_str}[base]")
+            
+            # Layer each overlay on top
+            current_label = "base"
+            for idx, overlay in enumerate(overlay_images):
+                next_label = f"tmp{idx}" if idx < len(overlay_images) - 1 else "out"
+                x = int(overlay.get('x', 0))
+                y = int(overlay.get('y', 0))
+                opacity = overlay.get('opacity', 1.0)
+                
+                # Overlay filter with positioning
+                overlay_filter = f"[{current_label}][{idx+1}:v]overlay=x={x}:y={y}"
+                if opacity < 1.0:
+                    overlay_filter += f":alpha={opacity}"
+                overlay_filter += f"[{next_label}]"
+                
+                filter_parts.append(overlay_filter)
+                current_label = next_label
+            
+            filter_complex = ";".join(filter_parts)
+            cmd.extend(['-filter_complex', filter_complex, '-map', '[out]'])
+        else:
+            # No overlays, just scale video
+            cmd.extend(['-vf', f'scale={resolution_str}'])
+            cmd.extend(['-map', '0:v'])
+        
+        # Map audio from camera feed
+        cmd.extend(['-map', '0:a'])
         
         if profile.codec == 'h264_v4l2m2m':
             # Pi 5 V4L2 hardware encoding
@@ -370,7 +419,6 @@ class FFmpegProcessManager:
         
         # Common encoding parameters
         cmd.extend([
-            '-s', resolution_str,
             '-r', str(profile.framerate),
             '-b:v', profile.bitrate,
             '-maxrate', profile.bitrate,
@@ -398,7 +446,7 @@ class FFmpegProcessManager:
         else:
             # Use tee muxer for multiple destinations
             tee_outputs = '|'.join(output_urls)
-            cmd.extend(['-f', 'tee', '-map', '0:v', '-map', '0:a', tee_outputs])
+            cmd.extend(['-f', 'tee', tee_outputs])
         
         return cmd
     
