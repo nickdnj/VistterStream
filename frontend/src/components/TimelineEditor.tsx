@@ -933,7 +933,7 @@ const TimelineEditor: React.FC = () => {
             <>
               {/* Program Monitor - Preview Window */}
               {showProgramMonitor && (
-                <div className="bg-dark-800 border-b border-dark-700">
+                <div className="bg-dark-800 border-b border-dark-700 pb-6">
                   <div className="flex items-center justify-between px-4 py-2 bg-dark-900 border-b border-dark-700">
                     <div className="flex items-center gap-2">
                       <span className="text-white font-semibold">📺 Program Monitor</span>
@@ -948,10 +948,22 @@ const TimelineEditor: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="p-6">
-                    {/* 16:9 Preview Monitor */}
-                    <div className="w-full max-w-5xl mx-auto">
-                      <div className="w-full h-[500px] bg-black rounded-lg border-2 border-dark-600 relative overflow-hidden shadow-2xl">
+                  {/* Preview Frame Container */}
+                  <div style={{ padding: '24px' }}>
+                    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+                      {/* 16:9 Video Preview */}
+                      <div 
+                        style={{
+                          width: '100%',
+                          height: '600px',
+                          backgroundColor: '#000000',
+                          borderRadius: '8px',
+                          border: '2px solid #4B5563',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+                        }}
+                      >
                         {(() => {
                           const currentCues = getCurrentCues();
                           const videoCue = currentCues.find(c => c.track.track_type === 'video');
@@ -959,11 +971,11 @@ const TimelineEditor: React.FC = () => {
                           
                           if (!videoCue) {
                             return (
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="text-center">
-                                  <div className="text-8xl mb-4">📹</div>
-                                  <div className="text-gray-400 text-lg font-medium">No Active Video Source</div>
-                                  <div className="text-gray-500 text-sm mt-2">Move playhead to a video cue or press Preview</div>
+                              <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div style={{ textAlign: 'center' }}>
+                                  <div style={{ fontSize: '96px', marginBottom: '16px' }}>📹</div>
+                                  <div style={{ color: '#9CA3AF', fontSize: '20px', fontWeight: '500' }}>No Active Video Source</div>
+                                  <div style={{ color: '#6B7280', fontSize: '14px', marginTop: '8px' }}>Move playhead to a video cue or press Preview</div>
                                 </div>
                               </div>
                             );
@@ -974,21 +986,27 @@ const TimelineEditor: React.FC = () => {
 
                           return (
                             <>
-                              {/* Base Video Layer - Camera Feed Placeholder */}
-                              <div className="absolute inset-0 bg-gradient-to-br from-blue-900/30 to-blue-600/20">
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                  <div className="text-center">
-                                    <div className="text-6xl mb-3">🎥</div>
-                                    <div className="text-white text-2xl font-bold">{camera?.name || 'Camera'}</div>
-                                    {preset && <div className="text-blue-400 text-lg mt-2">🎯 {preset.name}</div>}
-                                    <div className="text-gray-400 text-sm mt-4 px-4">
+                              {/* Base Video Layer */}
+                              <div 
+                                style={{
+                                  position: 'absolute',
+                                  inset: '0',
+                                  background: 'linear-gradient(to bottom right, rgba(30, 58, 138, 0.3), rgba(37, 99, 235, 0.2))'
+                                }}
+                              >
+                                <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '72px', marginBottom: '12px' }}>🎥</div>
+                                    <div style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 'bold' }}>{camera?.name || 'Camera'}</div>
+                                    {preset && <div style={{ color: '#60A5FA', fontSize: '18px', marginTop: '8px' }}>🎯 {preset.name}</div>}
+                                    <div style={{ color: '#9CA3AF', fontSize: '14px', marginTop: '16px', padding: '0 16px' }}>
                                       Live camera feed will appear here when streaming
                                     </div>
                                   </div>
                                 </div>
                               </div>
 
-                              {/* Overlay Layers - Composited on Top */}
+                              {/* Overlay Layers */}
                               {overlayCues.map((overlayCue, idx) => {
                                 const asset = getAssetById(overlayCue.cue.action_params.asset_id || 0);
                                 if (!asset) return null;
@@ -996,20 +1014,21 @@ const TimelineEditor: React.FC = () => {
                                 return (
                                   <div
                                     key={idx}
-                                    className="absolute pointer-events-none"
                                     style={{
+                                      position: 'absolute',
                                       left: `${asset.position_x * 100}%`,
                                       top: `${asset.position_y * 100}%`,
                                       transform: 'translate(-50%, -50%)',
                                       opacity: asset.opacity,
-                                      zIndex: 10 + idx
+                                      zIndex: 10 + idx,
+                                      pointerEvents: 'none'
                                     }}
                                   >
                                     {asset.type === 'api_image' && asset.api_url ? (
                                       <img
                                         src={asset.api_url}
                                         alt={asset.name}
-                                        className="max-w-md max-h-64 rounded shadow-2xl"
+                                        style={{ maxWidth: '448px', maxHeight: '256px', borderRadius: '8px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}
                                         onError={(e) => {
                                           (e.target as HTMLImageElement).style.display = 'none';
                                         }}
@@ -1018,13 +1037,21 @@ const TimelineEditor: React.FC = () => {
                                       <img
                                         src={asset.file_path}
                                         alt={asset.name}
-                                        className="max-w-md max-h-64 rounded shadow-2xl"
+                                        style={{ maxWidth: '448px', maxHeight: '256px', borderRadius: '8px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}
                                         onError={(e) => {
                                           (e.target as HTMLImageElement).style.display = 'none';
                                         }}
                                       />
                                     ) : (
-                                      <div className="bg-purple-600 text-white px-6 py-3 rounded shadow-2xl text-lg font-medium">
+                                      <div style={{ 
+                                        backgroundColor: '#9333EA', 
+                                        color: '#FFFFFF', 
+                                        padding: '12px 24px', 
+                                        borderRadius: '8px', 
+                                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+                                        fontSize: '18px',
+                                        fontWeight: '500'
+                                      }}>
                                         {asset.type === 'api_image' && '🌐 '}
                                         {asset.type === 'static_image' && '🖼️ '}
                                         {asset.type === 'video' && '🎥 '}
@@ -1037,7 +1064,17 @@ const TimelineEditor: React.FC = () => {
                               })}
 
                               {/* Timecode Overlay */}
-                              <div className="absolute top-4 left-4 bg-black/80 text-white text-sm font-mono px-3 py-1.5 rounded">
+                              <div style={{
+                                position: 'absolute',
+                                top: '16px',
+                                left: '16px',
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                color: '#FFFFFF',
+                                fontSize: '14px',
+                                fontFamily: 'monospace',
+                                padding: '6px 12px',
+                                borderRadius: '4px'
+                              }}>
                                 {formatTime(playheadTime)}
                               </div>
                             </>
@@ -1046,15 +1083,21 @@ const TimelineEditor: React.FC = () => {
                       </div>
 
                       {/* Warning Message */}
-                      <div className="mt-4 p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
-                        <div className="flex items-start gap-3">
-                          <span className="text-yellow-500 text-xl">⚠️</span>
-                          <div className="flex-1">
-                            <div className="text-yellow-500 text-sm font-semibold mb-1">
+                      <div style={{
+                        marginTop: '16px',
+                        padding: '16px',
+                        backgroundColor: 'rgba(113, 63, 18, 0.2)',
+                        border: '1px solid rgba(234, 179, 8, 0.3)',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                          <span style={{ fontSize: '20px', color: '#EAB308' }}>⚠️</span>
+                          <div style={{ flex: '1' }}>
+                            <div style={{ color: '#EAB308', fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
                               Setup Preview Only
                             </div>
-                            <div className="text-yellow-400/80 text-sm">
-                              This is a visual preview for timeline configuration. Click the <strong className="text-white">Start</strong> button in the top bar to begin actual streaming to your selected destinations.
+                            <div style={{ color: 'rgba(234, 179, 8, 0.8)', fontSize: '14px' }}>
+                              This is a visual preview for timeline configuration. Click the <strong style={{ color: '#FFFFFF' }}>Start</strong> button in the top bar to begin actual streaming to your selected destinations.
                             </div>
                           </div>
                         </div>
