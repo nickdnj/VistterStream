@@ -91,6 +91,45 @@ class Preset(PresetBase):
     class Config:
         from_attributes = True
 
+# Asset schemas
+class AssetBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    type: str = Field(..., pattern="^(static_image|api_image|video|graphic)$")
+    file_path: Optional[str] = None
+    api_url: Optional[str] = None
+    api_refresh_interval: int = Field(default=30, ge=1, le=3600)
+    width: Optional[int] = Field(None, ge=1, le=3840)
+    height: Optional[int] = Field(None, ge=1, le=2160)
+    position_x: float = Field(default=0.0, ge=0.0, le=1.0)
+    position_y: float = Field(default=0.0, ge=0.0, le=1.0)
+    opacity: float = Field(default=1.0, ge=0.0, le=1.0)
+    description: Optional[str] = None
+
+class AssetCreate(AssetBase):
+    pass
+
+class AssetUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    type: Optional[str] = Field(None, pattern="^(static_image|api_image|video|graphic)$")
+    file_path: Optional[str] = None
+    api_url: Optional[str] = None
+    api_refresh_interval: Optional[int] = Field(None, ge=1, le=3600)
+    width: Optional[int] = Field(None, ge=1, le=3840)
+    height: Optional[int] = Field(None, ge=1, le=2160)
+    position_x: Optional[float] = Field(None, ge=0.0, le=1.0)
+    position_y: Optional[float] = Field(None, ge=0.0, le=1.0)
+    opacity: Optional[float] = Field(None, ge=0.0, le=1.0)
+    description: Optional[str] = None
+
+class Asset(AssetBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    last_updated: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
 # Stream schemas
 class StreamBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import PresetManagement from './PresetManagement';
 import StreamingDestinations from './StreamingDestinations';
+import AssetManagement from './AssetManagement';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-type SettingsTab = 'general' | 'presets' | 'destinations' | 'system';
+type SettingsTab = 'general' | 'presets' | 'assets' | 'destinations' | 'system';
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -30,6 +31,7 @@ const Settings: React.FC = () => {
   const tabs = [
     { id: 'general' as SettingsTab, name: 'General', icon: '⚙️' },
     { id: 'presets' as SettingsTab, name: 'PTZ Presets', icon: '🎯' },
+    { id: 'assets' as SettingsTab, name: 'Assets', icon: '🎨' },
     { id: 'destinations' as SettingsTab, name: 'Destinations', icon: '📡' },
     { id: 'system' as SettingsTab, name: 'System', icon: '💻' },
   ];
@@ -101,6 +103,12 @@ const Settings: React.FC = () => {
         {activeTab === 'presets' && (
           <div>
             <PresetManagement />
+          </div>
+        )}
+
+        {activeTab === 'assets' && (
+          <div>
+            <AssetManagement />
           </div>
         )}
 

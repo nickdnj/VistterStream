@@ -66,6 +66,33 @@ class Preset(Base):
     # Relationships
     camera = relationship("Camera", back_populates="presets")
 
+class Asset(Base):
+    __tablename__ = "assets"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)  # "static_image", "api_image", "video", "graphic"
+    
+    # For static images/videos
+    file_path = Column(String)  # Local file path or URL
+    
+    # For API-based images (dynamic content)
+    api_url = Column(String)  # API endpoint that returns image
+    api_refresh_interval = Column(Integer, default=30)  # Seconds between refreshes
+    
+    # Display properties
+    width = Column(Integer)  # Width in pixels (null = auto)
+    height = Column(Integer)  # Height in pixels (null = auto)
+    position_x = Column(Float, default=0.0)  # X position (0-1, 0=left, 1=right)
+    position_y = Column(Float, default=0.0)  # Y position (0-1, 0=top, 1=bottom)
+    opacity = Column(Float, default=1.0)  # 0-1
+    
+    # Metadata
+    description = Column(String)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime)
+
 class Stream(Base):
     __tablename__ = "streams"
     
