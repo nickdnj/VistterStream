@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface Camera {
   id: number;
@@ -97,6 +97,7 @@ const TimelineEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [showProgramMonitor, setShowProgramMonitor] = useState(true);
 
   // Drag/resize state
   const [draggingCue, setDraggingCue] = useState<{ trackIndex: number; cueIndex: number } | null>(null);
@@ -612,6 +613,29 @@ const TimelineEditor: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}.${ms}`;
   };
 
+  const getCurrentCues = () => {
+    if (!selectedTimeline) return [];
+    
+    const currentCues: Array<{ cue: Cue; trackIndex: number; track: Track }> = [];
+    
+    selectedTimeline.tracks.forEach((track, trackIndex) => {
+      track.cues.forEach((cue) => {
+        const cueStart = cue.start_time;
+        const cueEnd = cue.start_time + cue.duration;
+        
+        if (playheadTime >= cueStart && playheadTime <= cueEnd) {
+          currentCues.push({ cue, trackIndex, track });
+        }
+      });
+    });
+    
+    // Sort by track type priority: video first, then overlays, then audio
+    return currentCues.sort((a, b) => {
+      const priority: Record<string, number> = { video: 0, overlay: 1, audio: 2 };
+      return (priority[a.track.track_type] || 99) - (priority[b.track.track_type] || 99);
+    });
+  };
+
   const getTrackColor = (trackType: string) => {
     switch (trackType) {
       case 'video': return 'bg-blue-600';
@@ -907,6 +931,151 @@ const TimelineEditor: React.FC = () => {
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedTimeline ? (
             <>
+              {/* Program Monitor - Preview Window */}
+              {showProgramMonitor && (
+                <div className="bg-dark-800 border-b border-dark-700">
+                  <div className="flex items-center justify-between px-4 py-2 bg-dark-900 border-b border-dark-700">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-semibold">📺 Program Monitor</span>
+                      <span className="text-xs text-gray-400">(Preview Before Streaming)</span>
+                    </div>
+                    <button
+                      onClick={() => setShowProgramMonitor(false)}
+                      className="text-gray-400 hover:text-white transition-colors"
+                      title="Hide program monitor"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="p-6">
+                    {/* 16:9 Preview Monitor */}
+                    <div className="max-w-5xl mx-auto">
+                      <div className="aspect-video bg-black rounded-lg border-2 border-dark-600 relative overflow-hidden shadow-2xl">
+                        {(() => {
+                          const currentCues = getCurrentCues();
+                          const videoCue = currentCues.find(c => c.track.track_type === 'video');
+                          const overlayCues = currentCues.filter(c => c.track.track_type === 'overlay');
+                          
+                          if (!videoCue) {
+                            return (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="text-center">
+                                  <div className="text-8xl mb-4">📹</div>
+                                  <div className="text-gray-400 text-lg font-medium">No Active Video Source</div>
+                                  <div className="text-gray-500 text-sm mt-2">Move playhead to a video cue or press Preview</div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          const camera = getCameraById(videoCue.cue.action_params.camera_id || 0);
+                          const preset = videoCue.cue.action_params.preset_id ? getPresetById(videoCue.cue.action_params.preset_id) : null;
+
+                          return (
+                            <>
+                              {/* Base Video Layer - Camera Feed Placeholder */}
+                              <div className="absolute inset-0 bg-gradient-to-br from-blue-900/30 to-blue-600/20">
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="text-center">
+                                    <div className="text-6xl mb-3">🎥</div>
+                                    <div className="text-white text-2xl font-bold">{camera?.name || 'Camera'}</div>
+                                    {preset && <div className="text-blue-400 text-lg mt-2">🎯 {preset.name}</div>}
+                                    <div className="text-gray-400 text-sm mt-4 px-4">
+                                      Live camera feed will appear here when streaming
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Overlay Layers - Composited on Top */}
+                              {overlayCues.map((overlayCue, idx) => {
+                                const asset = getAssetById(overlayCue.cue.action_params.asset_id || 0);
+                                if (!asset) return null;
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="absolute pointer-events-none"
+                                    style={{
+                                      left: `${asset.position_x * 100}%`,
+                                      top: `${asset.position_y * 100}%`,
+                                      transform: 'translate(-50%, -50%)',
+                                      opacity: asset.opacity,
+                                      zIndex: 10 + idx
+                                    }}
+                                  >
+                                    {asset.type === 'api_image' && asset.api_url ? (
+                                      <img
+                                        src={asset.api_url}
+                                        alt={asset.name}
+                                        className="max-w-md max-h-64 rounded shadow-2xl"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : asset.type === 'static_image' && asset.file_path ? (
+                                      <img
+                                        src={asset.file_path}
+                                        alt={asset.name}
+                                        className="max-w-md max-h-64 rounded shadow-2xl"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="bg-purple-600 text-white px-6 py-3 rounded shadow-2xl text-lg font-medium">
+                                        {asset.type === 'api_image' && '🌐 '}
+                                        {asset.type === 'static_image' && '🖼️ '}
+                                        {asset.type === 'video' && '🎥 '}
+                                        {asset.type === 'graphic' && '🎨 '}
+                                        {asset.name}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+
+                              {/* Timecode Overlay */}
+                              <div className="absolute top-4 left-4 bg-black/80 text-white text-sm font-mono px-3 py-1.5 rounded">
+                                {formatTime(playheadTime)}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Warning Message */}
+                      <div className="mt-4 p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <span className="text-yellow-500 text-xl">⚠️</span>
+                          <div className="flex-1">
+                            <div className="text-yellow-500 text-sm font-semibold mb-1">
+                              Setup Preview Only
+                            </div>
+                            <div className="text-yellow-400/80 text-sm">
+                              This is a visual preview for timeline configuration. Click the <strong className="text-white">Start</strong> button in the top bar to begin actual streaming to your selected destinations.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Show Program Monitor Button (if hidden) */}
+              {!showProgramMonitor && (
+                <div className="px-4 py-2 bg-dark-800 border-b border-dark-700">
+                  <button
+                    onClick={() => setShowProgramMonitor(true)}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors font-medium"
+                  >
+                    📺 Show Program Monitor
+                  </button>
+                </div>
+              )}
+
               {/* Track Controls */}
               <div className="flex items-center justify-between gap-2 px-4 py-3 bg-dark-800 border-b border-dark-700">
                 <div className="flex items-center gap-2">
