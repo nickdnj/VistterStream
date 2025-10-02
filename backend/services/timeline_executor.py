@@ -6,12 +6,15 @@ Based on docs/StreamingPipeline-TechnicalSpec.md Timeline Orchestrator
 import asyncio
 import logging
 import traceback
+import tempfile
+import os
+import httpx
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from sqlalchemy.orm import Session
 
-from models.database import SessionLocal
-from models.timeline import Timeline, TimelineCue, TimelineExecution
+from models.database import SessionLocal, Asset
+from models.timeline import Timeline, TimelineCue, TimelineExecution, TimelineTrack
 from models.database import Camera, Preset
 from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile
 from services.ptz_service import get_ptz_service
@@ -188,6 +191,47 @@ class TimelineExecutor:
         finally:
             db.close()
             
+    def _get_active_cues_at_time(self, timeline: Timeline, current_time: float) -> Dict[str, List[TimelineCue]]:
+        """Get all active cues at a specific time, grouped by track type"""
+        active_cues = {'video': [], 'overlay': [], 'audio': []}
+        
+        for track in timeline.tracks:
+            if not track.is_enabled:
+                continue
+                
+            for cue in track.cues:
+                cue_start = cue.start_time
+                cue_end = cue.start_time + cue.duration
+                
+                if current_time >= cue_start and current_time < cue_end:
+                    active_cues[track.track_type].append(cue)
+        
+        return active_cues
+    
+    async def _download_asset_image(self, asset: Asset) -> Optional[str]:
+        """Download an asset image to a temp file. Returns temp file path or None."""
+        try:
+            if asset.type == 'api_image' and asset.api_url:
+                # Download from API
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(asset.api_url)
+                    if response.status_code == 200:
+                        # Create temp file
+                        suffix = '.png' if 'png' in response.headers.get('content-type', '') else '.jpg'
+                        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                            tmp.write(response.content)
+                            logger.info(f"📥 Downloaded API image for asset '{asset.name}' to {tmp.name}")
+                            return tmp.name
+            elif asset.type == 'static_image' and asset.file_path:
+                # Use local file path
+                if os.path.exists(asset.file_path):
+                    logger.info(f"📁 Using local image for asset '{asset.name}': {asset.file_path}")
+                    return asset.file_path
+        except Exception as e:
+            logger.error(f"Failed to download asset {asset.id}: {e}")
+        
+        return None
+    
     async def _execute_cue(
         self,
         timeline_id: int,
@@ -197,7 +241,7 @@ class TimelineExecutor:
         encoding_profile: Optional[EncodingProfile],
         db: Session
     ):
-        """Execute a single cue (camera switch)"""
+        """Execute a single cue (camera switch) with overlays"""
         try:
             if cue.action_type == "show_camera":
                 camera_id = cue.action_params.get("camera_id")
@@ -260,6 +304,53 @@ class TimelineExecutor:
                 logger.debug(f"RTSP URL: {rtsp_url}")
                 logger.debug(f"Output URLs: {output_urls}")
                 
+                # Get the timeline to find overlay cues at this time
+                timeline = db.query(Timeline).filter(Timeline.id == timeline_id).first()
+                active_cues = self._get_active_cues_at_time(timeline, cue.start_time)
+                
+                # Process overlay cues
+                overlay_images = []
+                temp_files = []
+                
+                if active_cues['overlay']:
+                    logger.info(f"🎨 Found {len(active_cues['overlay'])} overlay cue(s) at time {cue.start_time}")
+                    
+                    for overlay_cue in active_cues['overlay']:
+                        asset_id = overlay_cue.action_params.get('asset_id')
+                        if not asset_id:
+                            continue
+                        
+                        # Get asset from database
+                        asset = db.query(Asset).filter(Asset.id == asset_id).first()
+                        if not asset or not asset.is_active:
+                            logger.warning(f"Asset {asset_id} not found or inactive")
+                            continue
+                        
+                        # Download/get asset image
+                        image_path = await self._download_asset_image(asset)
+                        if not image_path:
+                            logger.warning(f"Failed to get image for asset {asset.name}")
+                            continue
+                        
+                        # Track temp files for cleanup
+                        if image_path.startswith('/tmp/') or image_path.startswith(tempfile.gettempdir()):
+                            temp_files.append(image_path)
+                        
+                        # Calculate pixel positions from normalized coordinates (0-1 range)
+                        # Asset stores position as 0-1, FFmpeg needs pixels
+                        # Assuming 1920x1080 output
+                        x_pixels = int(asset.position_x * 1920)
+                        y_pixels = int(asset.position_y * 1080)
+                        
+                        overlay_images.append({
+                            'path': image_path,
+                            'x': x_pixels,
+                            'y': y_pixels,
+                            'opacity': asset.opacity
+                        })
+                        
+                        logger.info(f"  🖼️  {asset.name} at ({x_pixels}, {y_pixels}) opacity={asset.opacity}")
+                
                 # Stop existing stream if running
                 try:
                     logger.debug(f"Stopping existing stream {timeline_id} if running...")
@@ -271,8 +362,9 @@ class TimelineExecutor:
                     logger.error(f"Error stopping stream: {e}")
                     traceback.print_exc()
                     
-                # Start new stream with this camera
-                logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}")
+                # Start new stream with this camera and overlays
+                overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
+                logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
                 try:
                     await ffmpeg_manager.start_stream(
                         stream_id=timeline_id,
@@ -280,18 +372,33 @@ class TimelineExecutor:
                         output_urls=output_urls,
                         profile=encoding_profile or EncodingProfile.reliability_profile(
                             ffmpeg_manager.hw_capabilities
-                        )
+                        ),
+                        overlay_images=overlay_images if overlay_images else None
                     )
                     logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
                 except Exception as e:
                     logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
                     traceback.print_exc()
+                    # Clean up temp files
+                    for temp_file in temp_files:
+                        try:
+                            os.unlink(temp_file)
+                        except:
+                            pass
                     raise
                 
                 # Wait for cue duration
                 logger.info(f"⏱️  Waiting {cue.duration}s for cue to complete...")
                 await asyncio.sleep(cue.duration)
                 logger.info(f"✅ Cue {cue.id} ({camera.name}) completed successfully")
+                
+                # Clean up temp files after cue completes
+                for temp_file in temp_files:
+                    try:
+                        os.unlink(temp_file)
+                        logger.debug(f"🗑️  Cleaned up temp file: {temp_file}")
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up temp file {temp_file}: {e}")
                 
             else:
                 logger.warning(f"Unsupported action type: {cue.action_type}")
