@@ -23,6 +23,9 @@ class CueCreate(BaseModel):
     action_params: dict
     transition_type: str = "cut"
     transition_duration: float = 0.0
+    
+    class Config:
+        extra = "ignore"  # Ignore extra fields like id, track_id
 
 
 class CueResponse(CueCreate):
@@ -38,6 +41,9 @@ class TrackCreate(BaseModel):
     layer: int = 0
     is_enabled: bool = True
     cues: List[CueCreate] = []
+    
+    class Config:
+        extra = "ignore"  # Ignore extra fields like id, timeline_id
 
 
 class TrackResponse(BaseModel):
@@ -71,6 +77,9 @@ class TimelineUpdate(BaseModel):
     loop: bool = None
     is_active: bool = None
     tracks: List[TrackCreate] = None
+    
+    class Config:
+        extra = "ignore"  # Ignore extra fields like id, created_at, updated_at
 
 
 class TimelineResponse(BaseModel):
