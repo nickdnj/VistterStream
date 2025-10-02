@@ -1079,9 +1079,12 @@ const TimelineEditor: React.FC = () => {
                             >
                               {/* Left Resize Handle */}
                               <div
-                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20"
+                                className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize bg-white/10 hover:bg-yellow-400/60 border-r-2 border-white/40 transition-colors z-10"
                                 onMouseDown={(e) => handleCueMouseDown(e, trackIndex, cueIndex, 'left')}
-                              />
+                                title="◀ Drag to trim in-point"
+                              >
+                                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/50 rounded-r"></div>
+                              </div>
                               
                               {/* Cue Content */}
                               <div className="flex-1 overflow-hidden">
@@ -1121,9 +1124,12 @@ const TimelineEditor: React.FC = () => {
 
                               {/* Right Resize Handle */}
                               <div
-                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20"
+                                className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-white/10 hover:bg-yellow-400/60 border-l-2 border-white/40 transition-colors z-10"
                                 onMouseDown={(e) => handleCueMouseDown(e, trackIndex, cueIndex, 'right')}
-                              />
+                                title="▶ Drag to trim out-point"
+                              >
+                                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/50 rounded-l"></div>
+                              </div>
                             </div>
                           );
                         })}
