@@ -98,6 +98,7 @@ const TimelineEditor: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
   const [showProgramMonitor, setShowProgramMonitor] = useState(true);
+  const [cameraSnapshots, setCameraSnapshots] = useState<Record<number, string>>({});
 
   // Drag/resize state
   const [draggingCue, setDraggingCue] = useState<{ trackIndex: number; cueIndex: number } | null>(null);
@@ -636,6 +637,32 @@ const TimelineEditor: React.FC = () => {
     });
   };
 
+  const fetchCameraSnapshot = async (cameraId: number) => {
+    if (cameraSnapshots[cameraId]) {
+      return; // Already have this snapshot
+    }
+
+    try {
+      const response = await axios.get(`/api/cameras/${cameraId}/snapshot`, {
+        responseType: 'blob'
+      });
+      const imageUrl = URL.createObjectURL(response.data);
+      setCameraSnapshots(prev => ({ ...prev, [cameraId]: imageUrl }));
+    } catch (error) {
+      console.error('Failed to fetch camera snapshot:', error);
+    }
+  };
+
+  // Fetch snapshots when playhead changes
+  useEffect(() => {
+    const currentCues = getCurrentCues();
+    const videoCue = currentCues.find(c => c.track.track_type === 'video');
+    
+    if (videoCue && videoCue.cue.action_params.camera_id) {
+      fetchCameraSnapshot(videoCue.cue.action_params.camera_id);
+    }
+  }, [playheadTime, selectedTimeline]);
+
   const getTrackColor = (trackType: string) => {
     switch (trackType) {
       case 'video': return 'bg-blue-600';
@@ -991,57 +1018,96 @@ const TimelineEditor: React.FC = () => {
                                 style={{
                                   position: 'absolute',
                                   inset: '0',
-                                  background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 25%, #2563eb 50%, #1e40af 75%, #1e3a8a 100%)',
-                                  backgroundSize: '400% 400%'
+                                  backgroundColor: '#000000'
                                 }}
                               >
-                                {/* Video Frame Simulation */}
-                                <div style={{ 
-                                  position: 'absolute', 
-                                  inset: '0',
-                                  backgroundImage: `
-                                    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px),
-                                    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)
-                                  `
-                                }}>
-                                  <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div style={{ textAlign: 'center' }}>
-                                      <div style={{ fontSize: '72px', marginBottom: '12px' }}>🎥</div>
-                                      <div style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                                        {camera?.name || 'Camera'}
-                                      </div>
-                                      {preset && <div style={{ color: '#60A5FA', fontSize: '18px', marginTop: '8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>🎯 {preset.name}</div>}
-                                      <div style={{ 
-                                        color: '#E5E7EB', 
-                                        fontSize: '13px', 
-                                        marginTop: '16px', 
-                                        padding: '8px 16px',
-                                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                                        borderRadius: '6px',
-                                        display: 'inline-block',
-                                        textShadow: 'none'
-                                      }}>
-                                        📸 Static Frame Preview - For Overlay Positioning
+                                {cameraSnapshots[videoCue.cue.action_params.camera_id || 0] ? (
+                                  // Actual camera snapshot
+                                  <img
+                                    src={cameraSnapshots[videoCue.cue.action_params.camera_id || 0]}
+                                    alt={camera?.name}
+                                    style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      objectFit: 'contain'
+                                    }}
+                                  />
+                                ) : (
+                                  // Loading state with gradient
+                                  <div 
+                                    style={{
+                                      position: 'absolute',
+                                      inset: '0',
+                                      background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 25%, #2563eb 50%, #1e40af 75%, #1e3a8a 100%)',
+                                      backgroundSize: '400% 400%'
+                                    }}
+                                  >
+                                    <div style={{ 
+                                      position: 'absolute', 
+                                      inset: '0',
+                                      backgroundImage: `
+                                        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px),
+                                        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)
+                                      `
+                                    }}>
+                                      <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <div style={{ textAlign: 'center' }}>
+                                          <div style={{ fontSize: '72px', marginBottom: '12px' }}>🎥</div>
+                                          <div style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                                            {camera?.name || 'Camera'}
+                                          </div>
+                                          {preset && <div style={{ color: '#60A5FA', fontSize: '18px', marginTop: '8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>🎯 {preset.name}</div>}
+                                          <div style={{ 
+                                            color: '#E5E7EB', 
+                                            fontSize: '13px', 
+                                            marginTop: '16px', 
+                                            padding: '8px 16px',
+                                            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                                            borderRadius: '6px',
+                                            display: 'inline-block',
+                                            textShadow: 'none'
+                                          }}>
+                                            📸 Loading Camera Snapshot...
+                                          </div>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
+                                )}
+
+                                {/* Camera Name Overlay */}
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '20px',
+                                  right: '20px',
+                                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                  color: '#FFFFFF',
+                                  fontSize: '16px',
+                                  fontWeight: '600',
+                                  padding: '8px 16px',
+                                  borderRadius: '6px',
+                                  border: '2px solid rgba(59, 130, 246, 0.5)',
+                                  textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                                }}>
+                                  🎥 {camera?.name || 'Camera'}
+                                  {preset && <div style={{ fontSize: '13px', color: '#60A5FA', marginTop: '4px' }}>🎯 {preset.name}</div>}
                                 </div>
 
-                                {/* "PREVIEW FRAME" Watermark */}
+                                {/* "STATIC SNAPSHOT" Watermark */}
                                 <div style={{
                                   position: 'absolute',
                                   bottom: '20px',
                                   right: '20px',
-                                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
                                   color: '#60A5FA',
                                   fontSize: '11px',
                                   fontWeight: '600',
                                   padding: '6px 12px',
                                   borderRadius: '4px',
-                                  border: '1px solid rgba(96, 165, 250, 0.3)',
+                                  border: '1px solid rgba(96, 165, 250, 0.5)',
                                   letterSpacing: '0.5px'
                                 }}>
-                                  STATIC PREVIEW FRAME
+                                  📸 STATIC SNAPSHOT
                                 </div>
                               </div>
 
