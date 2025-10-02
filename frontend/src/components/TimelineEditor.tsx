@@ -951,7 +951,7 @@ const TimelineEditor: React.FC = () => {
                   <div className="p-6">
                     {/* 16:9 Preview Monitor */}
                     <div className="max-w-5xl mx-auto">
-                      <div className="aspect-video bg-black rounded-lg border-2 border-dark-600 relative overflow-hidden shadow-2xl">
+                      <div className="aspect-video bg-black rounded-lg border-2 border-dark-600 relative overflow-hidden shadow-2xl min-h-[400px]">
                         {(() => {
                           const currentCues = getCurrentCues();
                           const videoCue = currentCues.find(c => c.track.track_type === 'video');
