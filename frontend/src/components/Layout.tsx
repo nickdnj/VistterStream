@@ -11,6 +11,8 @@ import {
   XMarkIcon,
   UserIcon,
   ArrowRightOnRectangleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 
 interface LayoutProps {
@@ -19,6 +21,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, logout } = useAuth();
   const location = useLocation();
 
@@ -73,27 +76,45 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+      <div className={`hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col transition-all duration-300 ${
+        sidebarCollapsed ? 'lg:w-20' : 'lg:w-64'
+      }`}>
         <div className="flex flex-col flex-grow bg-dark-800 border-r border-dark-700">
-          <div className="flex items-center h-16 px-4 border-b border-dark-700">
-            <div className="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
-              <CameraIcon className="h-5 w-5 text-white" />
+          <div className="flex items-center justify-between h-16 px-4 border-b border-dark-700">
+            <div className="flex items-center overflow-hidden">
+              <div className="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <CameraIcon className="h-5 w-5 text-white" />
+              </div>
+              {!sidebarCollapsed && (
+                <span className="ml-2 text-xl font-bold text-white whitespace-nowrap">VistterStream</span>
+              )}
             </div>
-            <span className="ml-2 text-xl font-bold text-white">VistterStream</span>
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {sidebarCollapsed ? (
+                <ChevronRightIcon className="h-5 w-5" />
+              ) : (
+                <ChevronLeftIcon className="h-5 w-5" />
+              )}
+            </button>
           </div>
-          <nav className="mt-4 flex-1 px-4 space-y-1">
+          <nav className="mt-4 flex-1 px-2 space-y-1">
             {navigation.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'px-3'} py-3 rounded-lg text-sm font-medium transition-colors ${
                   isCurrentPath(item.href)
                     ? 'bg-primary-600 text-white'
                     : 'text-gray-300 hover:bg-dark-700 hover:text-white'
                 }`}
+                title={sidebarCollapsed ? item.name : undefined}
               >
-                <item.icon className="h-5 w-5 mr-3" />
-                {item.name}
+                <item.icon className={`h-5 w-5 flex-shrink-0 ${sidebarCollapsed ? '' : 'mr-3'}`} />
+                {!sidebarCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
               </Link>
             ))}
           </nav>
@@ -101,7 +122,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64'}`}>
         {/* Top bar */}
         <div className="sticky top-0 z-40 bg-dark-800 border-b border-dark-700">
           <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">

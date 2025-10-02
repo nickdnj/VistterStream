@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon } from '@heroicons/react/24/outline';
 
@@ -35,7 +35,7 @@ interface Cue {
 
 interface Track {
   id?: number;
-  track_type: string;
+  track_type: string; // 'video', 'overlay', 'audio'
   layer: number;
   is_enabled: boolean;
   cues: Cue[];
@@ -61,6 +61,9 @@ interface Destination {
   is_active: boolean;
 }
 
+const PIXELS_PER_SECOND = 40; // How many pixels = 1 second
+const TRACK_HEIGHT = 80; // Height of each track in pixels
+
 const TimelineEditor: React.FC = () => {
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [selectedTimeline, setSelectedTimeline] = useState<Timeline | null>(null);
@@ -73,6 +76,13 @@ const TimelineEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
+
+  // Drag/resize state
+  const [draggingCue, setDraggingCue] = useState<{ trackIndex: number; cueIndex: number } | null>(null);
+  const [resizingCue, setResizingCue] = useState<{ trackIndex: number; cueIndex: number; edge: 'left' | 'right' } | null>(null);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartTime, setDragStartTime] = useState(0);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   // Sidebar collapse states
   const [camerasExpanded, setCamerasExpanded] = useState(true);
@@ -108,6 +118,30 @@ const TimelineEditor: React.FC = () => {
     };
     loadAllData();
   }, []);
+
+  useEffect(() => {
+    // Add global mouse move and mouse up listeners for drag/resize
+    const handleMouseMove = (e: MouseEvent) => {
+      if (draggingCue && selectedTimeline) {
+        handleCueDrag(e);
+      } else if (resizingCue && selectedTimeline) {
+        handleCueResize(e);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setDraggingCue(null);
+      setResizingCue(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingCue, resizingCue, selectedTimeline]);
 
   const loadTimelines = async () => {
     try {
@@ -148,51 +182,40 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
-  const createTimeline = async () => {
-    if (!newTimeline.name.trim()) {
-      alert('Please enter a timeline name');
-      return;
-    }
-
-    try {
-      const response = await axios.post('/api/timelines/', newTimeline);
-      setTimelines([...timelines, response.data]);
-      setSelectedTimeline(response.data);
-      setShowNewTimelineModal(false);
-      setNewTimeline({
-        name: '',
-        description: '',
-        duration: 120,
-        fps: 30,
-        resolution: '1920x1080',
-        loop: true,
-        tracks: [{
-          track_type: 'video',
-          layer: 0,
-          is_enabled: true,
-          cues: []
-        }]
-      });
-    } catch (error) {
-      console.error('Failed to create timeline:', error);
-      alert('Failed to create timeline');
-    }
+  const getPresetsForCamera = (cameraId: number) => {
+    return presets.filter(p => p.camera_id === cameraId);
   };
 
-  const addCueToTimeline = (camera: Camera, preset?: Preset) => {
+  const getCameraById = (cameraId: number) => {
+    return cameras.find(c => c.id === cameraId);
+  };
+
+  const getPresetById = (presetId: number) => {
+    return presets.find(p => p.id === presetId);
+  };
+
+  const toggleCameraExpand = (cameraId: number) => {
+    const newExpanded = new Set(expandedCameras);
+    if (newExpanded.has(cameraId)) {
+      newExpanded.delete(cameraId);
+    } else {
+      newExpanded.add(cameraId);
+    }
+    setExpandedCameras(newExpanded);
+  };
+
+  const addCueToTimeline = (trackIndex: number, camera: Camera, preset?: Preset) => {
     if (!selectedTimeline) return;
 
-    const videoTrack = selectedTimeline.tracks.find(t => t.track_type === 'video');
-    if (!videoTrack) return;
-
-    const lastCue = videoTrack.cues[videoTrack.cues.length - 1];
-    const startTime = lastCue ? lastCue.start_time + lastCue.duration : 0;
+    const track = selectedTimeline.tracks[trackIndex];
+    const lastCue = track.cues[track.cues.length - 1];
+    const newStartTime = lastCue ? lastCue.start_time + lastCue.duration : 0;
 
     const newCue: Cue = {
-      cue_order: videoTrack.cues.length + 1,
-      start_time: startTime,
-      duration: 60,
-      action_type: 'show_camera',
+      cue_order: track.cues.length,
+      start_time: newStartTime,
+      duration: 10,
+      action_type: 'camera_switch',
       action_params: {
         camera_id: camera.id,
         preset_id: preset?.id,
@@ -202,30 +225,96 @@ const TimelineEditor: React.FC = () => {
       transition_duration: 0
     };
 
-    videoTrack.cues.push(newCue);
+    track.cues.push(newCue);
     setSelectedTimeline({ ...selectedTimeline });
-  };
-
-  const getPresetsForCamera = (cameraId: number): Preset[] => {
-    return presets.filter(p => p.camera_id === cameraId);
   };
 
   const removeCue = (trackIndex: number, cueIndex: number) => {
     if (!selectedTimeline) return;
-    
     selectedTimeline.tracks[trackIndex].cues.splice(cueIndex, 1);
+    setSelectedTimeline({ ...selectedTimeline });
+  };
+
+  const handleCueMouseDown = (e: React.MouseEvent, trackIndex: number, cueIndex: number, edge?: 'left' | 'right') => {
+    e.stopPropagation();
     
-    // Recalculate start times
-    selectedTimeline.tracks[trackIndex].cues.forEach((cue, idx) => {
-      if (idx === 0) {
-        cue.start_time = 0;
-      } else {
-        const prevCue = selectedTimeline.tracks[trackIndex].cues[idx - 1];
-        cue.start_time = prevCue.start_time + prevCue.duration;
-      }
-      cue.cue_order = idx + 1;
-    });
+    if (!selectedTimeline) return;
+    const cue = selectedTimeline.tracks[trackIndex].cues[cueIndex];
+
+    if (edge) {
+      // Start resizing
+      setResizingCue({ trackIndex, cueIndex, edge });
+      setDragStartX(e.clientX);
+      setDragStartTime(edge === 'left' ? cue.start_time : cue.start_time + cue.duration);
+    } else {
+      // Start dragging
+      setDraggingCue({ trackIndex, cueIndex });
+      setDragStartX(e.clientX);
+      setDragStartTime(cue.start_time);
+    }
+  };
+
+  const handleCueDrag = (e: MouseEvent) => {
+    if (!draggingCue || !selectedTimeline) return;
+
+    const deltaX = e.clientX - dragStartX;
+    const deltaTime = deltaX / PIXELS_PER_SECOND;
+    let newStartTime = Math.max(0, dragStartTime + deltaTime);
+
+    // Snap to grid (0.5 second intervals)
+    newStartTime = Math.round(newStartTime * 2) / 2;
+
+    const cue = selectedTimeline.tracks[draggingCue.trackIndex].cues[draggingCue.cueIndex];
+    cue.start_time = newStartTime;
     
+    setSelectedTimeline({ ...selectedTimeline });
+  };
+
+  const handleCueResize = (e: MouseEvent) => {
+    if (!resizingCue || !selectedTimeline) return;
+
+    const deltaX = e.clientX - dragStartX;
+    const deltaTime = deltaX / PIXELS_PER_SECOND;
+    const cue = selectedTimeline.tracks[resizingCue.trackIndex].cues[resizingCue.cueIndex];
+
+    if (resizingCue.edge === 'left') {
+      // Resize from left (change start_time and duration)
+      let newStartTime = Math.max(0, dragStartTime + deltaTime);
+      newStartTime = Math.round(newStartTime * 2) / 2;
+      const endTime = cue.start_time + cue.duration;
+      cue.start_time = newStartTime;
+      cue.duration = Math.max(1, endTime - newStartTime);
+    } else {
+      // Resize from right (change duration)
+      let newDuration = cue.duration + deltaTime;
+      newDuration = Math.round(newDuration * 2) / 2;
+      cue.duration = Math.max(1, newDuration);
+    }
+
+    setSelectedTimeline({ ...selectedTimeline });
+  };
+
+  const addTrack = (trackType: 'video' | 'overlay' | 'audio') => {
+    if (!selectedTimeline) return;
+
+    const newTrack: Track = {
+      track_type: trackType,
+      layer: selectedTimeline.tracks.length,
+      is_enabled: true,
+      cues: []
+    };
+
+    selectedTimeline.tracks.push(newTrack);
+    setSelectedTimeline({ ...selectedTimeline });
+  };
+
+  const removeTrack = (trackIndex: number) => {
+    if (!selectedTimeline) return;
+    if (selectedTimeline.tracks.length === 1) {
+      alert('Cannot remove the last track!');
+      return;
+    }
+    selectedTimeline.tracks.splice(trackIndex, 1);
     setSelectedTimeline({ ...selectedTimeline });
   };
 
@@ -277,7 +366,8 @@ const TimelineEditor: React.FC = () => {
       });
       setIsRunning(true);
       const destNames = response.data.destinations.join(', ');
-      alert(`🎉 Timeline started!\n\n📡 Streaming to: ${destNames}\n🎬 ${selectedTimeline.tracks[0].cues.length} cues will execute`);
+      const totalCues = selectedTimeline.tracks.reduce((sum, t) => sum + t.cues.length, 0);
+      alert(`🎉 Timeline started!\n\n📡 Streaming to: ${destNames}\n🎬 ${totalCues} cues will execute`);
     } catch (error: any) {
       console.error('Failed to start timeline:', error);
       alert(`❌ Failed to start timeline:\n${error.response?.data?.detail || error.message || 'Unknown error'}`);
@@ -292,51 +382,150 @@ const TimelineEditor: React.FC = () => {
     try {
       await axios.post(`/api/timeline-execution/stop/${selectedTimeline.id}`);
       setIsRunning(false);
-      alert('Timeline stopped!');
+      alert('Timeline stopped');
     } catch (error) {
       console.error('Failed to stop timeline:', error);
       alert('Failed to stop timeline');
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const getCameraName = (cameraId: number) => {
-    const camera = cameras.find(c => c.id === cameraId);
-    return camera ? camera.name : `Camera ${cameraId}`;
-  };
-
-  const getPresetName = (presetId: number) => {
-    const preset = presets.find(p => p.id === presetId);
-    return preset ? preset.name : `Preset ${presetId}`;
-  };
-
-  // Drag and drop handlers
-  const handleDragStart = (e: React.DragEvent, camera: Camera, preset?: Preset) => {
-    e.dataTransfer.setData('camera', JSON.stringify(camera));
-    if (preset) {
-      e.dataTransfer.setData('preset', JSON.stringify(preset));
+  const createNewTimeline = async () => {
+    try {
+      const response = await axios.post('/api/timelines/', newTimeline);
+      setTimelines([...timelines, response.data]);
+      setSelectedTimeline(response.data);
+      setShowNewTimelineModal(false);
+      setNewTimeline({
+        name: '',
+        description: '',
+        duration: 120,
+        fps: 30,
+        resolution: '1920x1080',
+        loop: true,
+        tracks: [{
+          track_type: 'video',
+          layer: 0,
+          is_enabled: true,
+          cues: []
+        }]
+      });
+    } catch (error) {
+      console.error('Failed to create timeline:', error);
+      alert('Failed to create timeline');
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent, trackIndex: number) => {
     e.preventDefault();
-    const cameraData = e.dataTransfer.getData('camera');
-    const presetData = e.dataTransfer.getData('preset');
+    const data = JSON.parse(e.dataTransfer.getData('application/json'));
     
-    if (cameraData) {
-      const camera = JSON.parse(cameraData);
-      const preset = presetData ? JSON.parse(presetData) : undefined;
-      addCueToTimeline(camera, preset);
+    if (data.type === 'camera') {
+      const camera = cameras.find(c => c.id === data.cameraId);
+      if (camera) {
+        addCueToTimeline(trackIndex, camera);
+      }
+    } else if (data.type === 'preset') {
+      const preset = presets.find(p => p.id === data.presetId);
+      const camera = cameras.find(c => c.id === data.cameraId);
+      if (camera && preset) {
+        addCueToTimeline(trackIndex, camera, preset);
+      }
     }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+  };
+
+  const handleTrackDrop = (e: React.DragEvent, trackIndex: number, dropTime: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const data = JSON.parse(e.dataTransfer.getData('application/json'));
+    
+    if (!selectedTimeline) return;
+
+    const track = selectedTimeline.tracks[trackIndex];
+    
+    if (data.type === 'camera') {
+      const camera = cameras.find(c => c.id === data.cameraId);
+      if (camera) {
+        const newCue: Cue = {
+          cue_order: track.cues.length,
+          start_time: Math.max(0, Math.round(dropTime * 2) / 2),
+          duration: 10,
+          action_type: 'camera_switch',
+          action_params: {
+            camera_id: camera.id,
+            transition: 'cut'
+          },
+          transition_type: 'cut',
+          transition_duration: 0
+        };
+        track.cues.push(newCue);
+        setSelectedTimeline({ ...selectedTimeline });
+      }
+    } else if (data.type === 'preset') {
+      const preset = presets.find(p => p.id === data.presetId);
+      const camera = cameras.find(c => c.id === data.cameraId);
+      if (camera && preset) {
+        const newCue: Cue = {
+          cue_order: track.cues.length,
+          start_time: Math.max(0, Math.round(dropTime * 2) / 2),
+          duration: 10,
+          action_type: 'camera_switch',
+          action_params: {
+            camera_id: camera.id,
+            preset_id: preset.id,
+            transition: 'cut'
+          },
+          transition_type: 'cut',
+          transition_duration: 0
+        };
+        track.cues.push(newCue);
+        setSelectedTimeline({ ...selectedTimeline });
+      }
+    }
+  };
+
+  const getTrackColor = (trackType: string) => {
+    switch (trackType) {
+      case 'video': return 'bg-blue-600';
+      case 'overlay': return 'bg-purple-600';
+      case 'audio': return 'bg-green-600';
+      default: return 'bg-gray-600';
+    }
+  };
+
+  const getTrackIcon = (trackType: string) => {
+    switch (trackType) {
+      case 'video': return '🎥';
+      case 'overlay': return '🎨';
+      case 'audio': return '🔊';
+      default: return '📹';
+    }
+  };
+
+  const renderTimeRuler = () => {
+    if (!selectedTimeline) return null;
+
+    const marks = [];
+    const duration = selectedTimeline.duration;
+    
+    for (let i = 0; i <= duration; i += 5) {
+      marks.push(
+        <div key={i} className="absolute flex flex-col items-center" style={{ left: `${i * PIXELS_PER_SECOND}px` }}>
+          <div className="w-px h-3 bg-gray-500"></div>
+          <span className="text-xs text-gray-400 mt-1">{i}s</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative h-8 bg-dark-800 border-b border-dark-700" style={{ width: `${duration * PIXELS_PER_SECOND}px` }}>
+        {marks}
+      </div>
+    );
   };
 
   if (loading) {
@@ -357,17 +546,16 @@ const TimelineEditor: React.FC = () => {
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-white">🎬 Timeline Editor</h1>
           {selectedTimeline && (
-            <span className="text-gray-400">→ {selectedTimeline.name}</span>
+            <span className="text-gray-400">| {selectedTimeline.name} • {selectedTimeline.resolution} • {selectedTimeline.fps}fps {selectedTimeline.loop && '• Loop'}</span>
           )}
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => setShowNewTimelineModal(true)}
-            className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md flex items-center gap-2"
+            className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors"
           >
-            <PlusIcon className="h-4 w-4" />
-            New Timeline
+            + New Timeline
           </button>
           
           {selectedTimeline && (
@@ -388,18 +576,16 @@ const TimelineEditor: React.FC = () => {
                 <select
                   multiple
                   value={selectedDestinations.map(String)}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, option => parseInt(option.value));
-                    setSelectedDestinations(selected);
-                  }}
-                  className="bg-dark-700 text-white px-3 py-2 rounded h-20 w-48"
+                  onChange={(e) => setSelectedDestinations(Array.from(e.target.selectedOptions, option => Number(option.value)))}
+                  className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm"
+                  style={{ minWidth: '200px', height: '42px' }}
                 >
                   {destinations.map((dest) => (
                     <option key={dest.id} value={dest.id}>
                       {dest.platform === 'youtube' && '📺'}
                       {dest.platform === 'facebook' && '👥'}
-                      {dest.platform === 'twitch' && '🎮'}
-                      {dest.platform === 'custom' && '🔧'}
+                      {dest.platform === 'twitch' && '🟣'}
+                      {dest.platform === 'custom' && '🔗'}
                       {' '}{dest.name}
                     </option>
                   ))}
@@ -435,270 +621,292 @@ const TimelineEditor: React.FC = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - VistterStudio Style */}
-        <div className="w-80 bg-dark-800 border-r border-dark-700 flex flex-col overflow-hidden">
-          {/* Studio Label */}
-          <div className="px-4 py-3 bg-dark-900 border-b border-dark-700">
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Studio</h2>
-          </div>
+        {/* Left Sidebar - Asset Palette */}
+        <div className="w-80 bg-dark-800 border-r border-dark-700 flex flex-col">
+          {/* Cameras Section */}
+          <div className="border-b border-dark-700">
+            <button
+              onClick={() => setCamerasExpanded(!camerasExpanded)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-dark-700 transition-colors"
+            >
+              <div className="flex items-center gap-2 text-white font-semibold">
+                {camerasExpanded ? <ChevronDownIcon className="h-5 w-5" /> : <ChevronRightIcon className="h-5 w-5" />}
+                <span>📷 Cameras ({cameras.length})</span>
+              </div>
+            </button>
+            
+            {camerasExpanded && (
+              <div className="px-2 pb-2 space-y-1 max-h-96 overflow-y-auto">
+                {cameras.map((camera) => {
+                  const isPTZ = camera.type === 'ptz';
+                  const cameraPresets = isPTZ ? getPresetsForCamera(camera.id) : [];
+                  const isExpanded = expandedCameras.has(camera.id);
 
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto">
-            {/* Cameras Section */}
-            <div className="border-b border-dark-700">
-              <button
-                onClick={() => setCamerasExpanded(!camerasExpanded)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-dark-700 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  {camerasExpanded ? (
-                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <ChevronRightIcon className="h-4 w-4 text-gray-400" />
-                  )}
-                  <span className="text-white font-medium">📷 Cameras</span>
-                </div>
-                <span className="text-xs text-gray-500">{cameras.length} cameras</span>
-              </button>
-
-              {camerasExpanded && (
-                <div className="bg-dark-900 px-2 py-2">
-                  {cameras.map((camera) => {
-                    const cameraPresets = getPresetsForCamera(camera.id);
-                    const isPTZ = camera.type === 'ptz';
-                    const cameraExpanded = expandedCameras.has(camera.id);
-
-                    return (
-                      <div key={camera.id} className="mb-1">
+                  return (
+                    <div key={camera.id} className="space-y-1">
+                      {/* Camera Card */}
+                      <div className="bg-dark-700 rounded-lg overflow-hidden">
                         <div
                           draggable
-                          onDragStart={(e) => handleDragStart(e, camera)}
-                          className="flex items-center justify-between px-3 py-2 bg-dark-800 hover:bg-dark-700 rounded cursor-move transition-colors group"
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('application/json', JSON.stringify({ type: 'camera', cameraId: camera.id }));
+                          }}
+                          className="flex items-center justify-between p-3 hover:bg-dark-600 cursor-move transition-colors"
                         >
-                          <div className="flex items-center gap-2 flex-1">
-                            {isPTZ && cameraPresets.length > 0 && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const newExpanded = new Set(expandedCameras);
-                                  if (cameraExpanded) {
-                                    newExpanded.delete(camera.id);
-                                  } else {
-                                    newExpanded.add(camera.id);
-                                  }
-                                  setExpandedCameras(newExpanded);
-                                }}
-                                className="hover:bg-dark-600 rounded p-0.5"
-                              >
-                                {cameraExpanded ? (
-                                  <ChevronDownIcon className="h-3 w-3 text-gray-400" />
-                                ) : (
-                                  <ChevronRightIcon className="h-3 w-3 text-gray-400" />
-                                )}
-                              </button>
-                            )}
-                            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white text-xs">
-                              📹
-                            </div>
-                            <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl">📹</span>
+                            <div>
                               <div className="text-white text-sm font-medium">{camera.name}</div>
-                              <div className="text-xs text-gray-500 capitalize">{camera.type}</div>
+                              <div className="text-gray-400 text-xs">{isPTZ ? 'PTZ' : 'Fixed'}</div>
                             </div>
                           </div>
+                          
                           {isPTZ && cameraPresets.length > 0 && (
-                            <span className="text-xs text-gray-500">{cameraPresets.length} presets</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCameraExpand(camera.id);
+                              }}
+                              className="text-gray-400 hover:text-white p-1"
+                            >
+                              {isExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+                            </button>
                           )}
                         </div>
 
-                        {/* Presets under camera */}
-                        {isPTZ && cameraExpanded && cameraPresets.length > 0 && (
-                          <div className="ml-6 mt-1 space-y-1">
+                        {/* Presets List */}
+                        {isPTZ && isExpanded && cameraPresets.length > 0 && (
+                          <div className="pl-10 pr-2 pb-2 space-y-1">
                             {cameraPresets.map((preset) => (
                               <div
                                 key={preset.id}
                                 draggable
-                                onDragStart={(e) => handleDragStart(e, camera, preset)}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-dark-700 hover:bg-blue-600 rounded cursor-move transition-colors text-sm"
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData('application/json', JSON.stringify({ 
+                                    type: 'preset', 
+                                    cameraId: camera.id, 
+                                    presetId: preset.id 
+                                  }));
+                                }}
+                                className="flex items-center gap-2 px-2 py-1.5 bg-dark-800 hover:bg-dark-600 rounded cursor-move text-sm text-gray-300"
                               >
-                                <span className="text-gray-400">🎯</span>
-                                <span className="text-white">{preset.name}</span>
+                                <span>🎯</span>
+                                <span>{preset.name}</span>
                               </div>
                             ))}
                           </div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Assets Section (Placeholder) */}
-            <div className="border-b border-dark-700">
-              <button
-                onClick={() => setAssetsExpanded(!assetsExpanded)}
-                className="w-full px-4 py-3 flex items-center justify-between hover:bg-dark-700 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  {assetsExpanded ? (
-                    <ChevronDownIcon className="h-4 w-4 text-gray-400" />
-                  ) : (
-                    <ChevronRightIcon className="h-4 w-4 text-gray-400" />
-                  )}
-                  <span className="text-white font-medium">🖼️ Assets</span>
-                </div>
-                <span className="text-xs text-gray-500">Coming soon</span>
-              </button>
-
-              {assetsExpanded && (
-                <div className="bg-dark-900 px-4 py-3">
-                  <p className="text-sm text-gray-500">Overlay assets and media files</p>
-                </div>
-              )}
-            </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Timeline List at Bottom */}
-          <div className="border-t border-dark-700 bg-dark-900 max-h-64 overflow-y-auto">
-            <div className="px-4 py-2 border-b border-dark-700">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase">Timelines</h3>
-            </div>
-            {timelines.map((timeline) => (
-              <div
-                key={timeline.id}
-                onClick={() => setSelectedTimeline(timeline)}
-                className={`px-4 py-2 cursor-pointer transition-colors ${
-                  selectedTimeline?.id === timeline.id
-                    ? 'bg-primary-600 text-white'
-                    : 'hover:bg-dark-700 text-gray-300'
-                }`}
-              >
-                <div className="text-sm font-medium">{timeline.name}</div>
-                <div className="text-xs text-gray-500">{timeline.tracks[0]?.cues.length || 0} cues</div>
+          {/* Assets Section (Placeholder) */}
+          <div className="border-b border-dark-700">
+            <button
+              onClick={() => setAssetsExpanded(!assetsExpanded)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-dark-700 transition-colors"
+            >
+              <div className="flex items-center gap-2 text-white font-semibold">
+                {assetsExpanded ? <ChevronDownIcon className="h-5 w-5" /> : <ChevronRightIcon className="h-5 w-5" />}
+                <span>🖼️ Assets (0)</span>
               </div>
-            ))}
+            </button>
+            
+            {assetsExpanded && (
+              <div className="px-4 py-3 text-gray-400 text-sm">
+                Image and graphic overlays coming soon...
+              </div>
+            )}
+          </div>
+
+          {/* Timeline List */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-4 py-3 border-b border-dark-700">
+              <h3 className="text-white font-semibold">Timelines</h3>
+            </div>
+            <div className="p-2 space-y-1">
+              {timelines.map((timeline) => (
+                <button
+                  key={timeline.id}
+                  onClick={() => setSelectedTimeline(timeline)}
+                  className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                    selectedTimeline?.id === timeline.id
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-300 hover:bg-dark-700'
+                  }`}
+                >
+                  {timeline.name}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Main Timeline Area */}
+        {/* Timeline Tracks Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedTimeline ? (
             <>
-              {/* Timeline Header */}
-              <div className="px-6 py-4 bg-dark-800 border-b border-dark-700">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-white">{selectedTimeline.name}</h2>
-                    <p className="text-sm text-gray-400">{selectedTimeline.description || 'No description'}</p>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-gray-400">
-                      <span className="font-semibold">{selectedTimeline.resolution}</span> • {selectedTimeline.fps}fps
-                    </span>
-                    <label className="flex items-center gap-2 text-gray-300">
-                      <input
-                        type="checkbox"
-                        checked={selectedTimeline.loop}
-                        onChange={(e) => {
-                          selectedTimeline.loop = e.target.checked;
-                          setSelectedTimeline({ ...selectedTimeline });
-                        }}
-                        className="rounded bg-dark-700 border-dark-600 text-primary-600 focus:ring-primary-500"
-                      />
-                      Loop
-                    </label>
-                  </div>
-                </div>
+              {/* Track Controls */}
+              <div className="flex items-center gap-2 px-4 py-3 bg-dark-800 border-b border-dark-700">
+                <span className="text-gray-400 text-sm font-medium">Add Track:</span>
+                <button
+                  onClick={() => addTrack('video')}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                >
+                  🎥 Video
+                </button>
+                <button
+                  onClick={() => addTrack('overlay')}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors"
+                >
+                  🎨 Overlay
+                </button>
+                <button
+                  onClick={() => addTrack('audio')}
+                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                >
+                  🔊 Audio
+                </button>
               </div>
 
-              {/* Timeline Tracks */}
-              <div 
-                className="flex-1 overflow-auto p-6 bg-dark-900"
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-              >
-                {selectedTimeline.tracks.map((track, trackIdx) => (
-                  <div key={trackIdx} className="mb-6">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-32 flex items-center gap-2">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <span className="text-white font-medium text-sm uppercase">{track.track_type}</span>
+              {/* Timeline Container */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Track Labels */}
+                <div className="w-40 bg-dark-800 border-r border-dark-700 flex flex-col">
+                  <div className="h-8 border-b border-dark-700 flex items-center px-3 text-xs text-gray-400 font-semibold">
+                    TRACKS
+                  </div>
+                  {selectedTimeline.tracks.map((track, trackIndex) => (
+                    <div
+                      key={trackIndex}
+                      className="border-b border-dark-700 flex items-center justify-between px-3 py-2"
+                      style={{ height: `${TRACK_HEIGHT}px` }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{getTrackIcon(track.track_type)}</span>
+                        <span className="text-white text-sm font-medium capitalize">{track.track_type}</span>
                       </div>
-                      <div className="text-xs text-gray-500">{track.cues.length} elements</div>
+                      {selectedTimeline.tracks.length > 1 && (
+                        <button
+                          onClick={() => removeTrack(trackIndex)}
+                          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                          title="Remove track"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
+                  ))}
+                </div>
 
-                    {/* Cues in horizontal timeline */}
-                    <div className="flex flex-wrap gap-2 min-h-[100px] bg-dark-800 rounded-lg p-4 border-2 border-dashed border-dark-700">
-                      {track.cues.length === 0 ? (
-                        <div className="w-full text-center py-8 text-gray-500">
-                          <p className="text-sm">Drag cameras or presets here to add cues</p>
-                          <p className="text-xs mt-1">Or click cameras in the sidebar</p>
-                        </div>
-                      ) : (
-                        track.cues.map((cue, cueIdx) => (
-                          <div
-                            key={cueIdx}
-                            className="bg-blue-600 rounded-lg p-3 text-white shadow-lg hover:bg-blue-700 transition-colors group relative"
-                            style={{ minWidth: `${Math.max(150, cue.duration * 2)}px` }}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1">
-                                <div className="font-semibold text-sm mb-1">
-                                  {getCameraName(cue.action_params.camera_id!)}
+                {/* Timeline Grid */}
+                <div className="flex-1 overflow-auto" ref={timelineRef}>
+                  <div className="min-w-full">
+                    {/* Time Ruler */}
+                    {renderTimeRuler()}
+                    
+                    {/* Tracks */}
+                    {selectedTimeline.tracks.map((track, trackIndex) => (
+                      <div
+                        key={trackIndex}
+                        className="relative border-b border-dark-700"
+                        style={{ 
+                          height: `${TRACK_HEIGHT}px`,
+                          width: `${selectedTimeline.duration * PIXELS_PER_SECOND}px`,
+                          backgroundImage: 'repeating-linear-gradient(to right, transparent, transparent 39px, rgba(75, 85, 99, 0.2) 39px, rgba(75, 85, 99, 0.2) 40px)',
+                          backgroundSize: `${PIXELS_PER_SECOND}px 100%`
+                        }}
+                        onDrop={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const dropX = e.clientX - rect.left;
+                          const dropTime = dropX / PIXELS_PER_SECOND;
+                          handleTrackDrop(e, trackIndex, dropTime);
+                        }}
+                        onDragOver={handleDragOver}
+                      >
+                        {track.cues.length === 0 && (
+                          <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm pointer-events-none">
+                            Drag cameras or presets here
+                          </div>
+                        )}
+                        
+                        {/* Cues */}
+                        {track.cues.map((cue, cueIndex) => {
+                          const camera = getCameraById(cue.action_params.camera_id || 0);
+                          const preset = cue.action_params.preset_id ? getPresetById(cue.action_params.preset_id) : null;
+                          const cueColor = getTrackColor(track.track_type);
+
+                          return (
+                            <div
+                              key={cueIndex}
+                              className={`absolute ${cueColor} text-white rounded border-2 border-white/20 hover:border-white/40 transition-all cursor-move select-none`}
+                              style={{
+                                left: `${cue.start_time * PIXELS_PER_SECOND}px`,
+                                width: `${cue.duration * PIXELS_PER_SECOND}px`,
+                                top: '4px',
+                                bottom: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                padding: '0 8px'
+                              }}
+                              onMouseDown={(e) => handleCueMouseDown(e, trackIndex, cueIndex)}
+                            >
+                              {/* Left Resize Handle */}
+                              <div
+                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20"
+                                onMouseDown={(e) => handleCueMouseDown(e, trackIndex, cueIndex, 'left')}
+                              />
+                              
+                              {/* Cue Content */}
+                              <div className="flex-1 overflow-hidden">
+                                <div className="text-xs font-semibold truncate">
+                                  {camera?.name || 'Camera'}
                                 </div>
-                                {cue.action_params.preset_id && (
-                                  <div className="text-xs text-blue-200 mb-1">
-                                    🎯 {getPresetName(cue.action_params.preset_id)}
+                                {preset && (
+                                  <div className="text-xs opacity-75 truncate">
+                                    🎯 {preset.name}
                                   </div>
                                 )}
-                                <div className="text-xs text-blue-200">
+                                <div className="text-xs opacity-50">
                                   {cue.duration}s
                                 </div>
                               </div>
+
+                              {/* Delete Button */}
                               <button
-                                onClick={() => removeCue(trackIdx, cueIdx)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity bg-red-600 hover:bg-red-700 rounded p-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeCue(trackIndex, cueIndex);
+                                }}
+                                className="ml-2 p-1 hover:bg-white/20 rounded transition-colors"
+                                title="Delete cue"
                               >
                                 <TrashIcon className="h-3 w-3" />
                               </button>
-                            </div>
 
-                            {/* Duration Editor */}
-                            <div className="mt-2">
-                              <input
-                                type="number"
-                                value={cue.duration}
-                                onChange={(e) => {
-                                  cue.duration = parseFloat(e.target.value);
-                                  setSelectedTimeline({ ...selectedTimeline });
-                                }}
-                                className="w-20 px-2 py-1 bg-blue-700 border border-blue-500 rounded text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                                min="1"
-                                step="1"
+                              {/* Right Resize Handle */}
+                              <div
+                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20"
+                                onMouseDown={(e) => handleCueMouseDown(e, trackIndex, cueIndex, 'right')}
                               />
-                              <span className="text-xs text-blue-200 ml-1">seconds</span>
                             </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex-1 flex items-center justify-center text-gray-400">
               <div className="text-center">
-                <div className="text-6xl mb-4">🎬</div>
-                <h3 className="text-xl font-semibold text-white mb-2">No Timeline Selected</h3>
-                <p className="text-gray-400 mb-4">Select a timeline from the list or create a new one</p>
-                <button
-                  onClick={() => setShowNewTimelineModal(true)}
-                  className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium"
-                >
-                  <PlusIcon className="h-5 w-5 inline mr-2" />
-                  Create New Timeline
-                </button>
+                <p className="text-xl mb-2">No timeline selected</p>
+                <p className="text-sm">Select a timeline from the list or create a new one</p>
               </div>
             </div>
           )}
@@ -707,91 +915,84 @@ const TimelineEditor: React.FC = () => {
 
       {/* New Timeline Modal */}
       {showNewTimelineModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-dark-800 rounded-lg p-6 w-full max-w-md border border-dark-700">
             <h2 className="text-xl font-bold text-white mb-4">Create New Timeline</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Timeline Name *
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
                 <input
                   type="text"
                   value={newTimeline.name}
                   onChange={(e) => setNewTimeline({ ...newTimeline, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Multi-Angle Show"
-                  autoFocus
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                  placeholder="My Timeline"
                 />
               </div>
-
+              
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={newTimeline.description}
-                  onChange={(e) => setNewTimeline({ ...newTimeline, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Automated camera switching..."
-                  rows={3}
+                <label className="block text-sm font-medium text-gray-300 mb-2">Duration (seconds)</label>
+                <input
+                  type="number"
+                  value={newTimeline.duration}
+                  onChange={(e) => setNewTimeline({ ...newTimeline, duration: Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Resolution
-                  </label>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Resolution</label>
                   <select
                     value={newTimeline.resolution}
                     onChange={(e) => setNewTimeline({ ...newTimeline, resolution: e.target.value })}
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
                   >
-                    <option value="1920x1080">1080p</option>
-                    <option value="1280x720">720p</option>
+                    <option value="1920x1080">1920x1080</option>
+                    <option value="1280x720">1280x720</option>
+                    <option value="3840x2160">3840x2160</option>
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Frame Rate
-                  </label>
+                
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">FPS</label>
                   <select
                     value={newTimeline.fps}
-                    onChange={(e) => setNewTimeline({ ...newTimeline, fps: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    onChange={(e) => setNewTimeline({ ...newTimeline, fps: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
                   >
-                    <option value="30">30 fps</option>
-                    <option value="60">60 fps</option>
+                    <option value={24}>24</option>
+                    <option value={30}>30</option>
+                    <option value={60}>60</option>
                   </select>
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-gray-300">
+              <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={newTimeline.loop}
                   onChange={(e) => setNewTimeline({ ...newTimeline, loop: e.target.checked })}
-                  className="rounded bg-dark-700 border-dark-600 text-primary-600 focus:ring-primary-500"
+                  className="w-4 h-4"
                 />
-                Loop timeline infinitely
-              </label>
+                <label className="text-sm text-gray-300">Loop timeline</label>
+              </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-3 mt-6">
+            <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowNewTimelineModal(false)}
-                className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md"
+                className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={createTimeline}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md"
+                onClick={createNewTimeline}
+                disabled={!newTimeline.name}
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Timeline
+                Create
               </button>
             </div>
           </div>
