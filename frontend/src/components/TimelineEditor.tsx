@@ -61,8 +61,9 @@ interface Destination {
   is_active: boolean;
 }
 
-const PIXELS_PER_SECOND = 40; // How many pixels = 1 second
 const TRACK_HEIGHT = 80; // Height of each track in pixels
+const MIN_ZOOM = 10; // Minimum pixels per second
+const MAX_ZOOM = 200; // Maximum pixels per second
 
 const TimelineEditor: React.FC = () => {
   const [timelines, setTimelines] = useState<Timeline[]>([]);
@@ -88,6 +89,12 @@ const TimelineEditor: React.FC = () => {
   const [camerasExpanded, setCamerasExpanded] = useState(true);
   const [assetsExpanded, setAssetsExpanded] = useState(false);
   const [expandedCameras, setExpandedCameras] = useState<Set<number>>(new Set());
+
+  // Playhead and zoom controls
+  const [playheadTime, setPlayheadTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(40); // pixels per second (default 40)
+  const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // New timeline form
   const [newTimeline, setNewTimeline] = useState<Timeline>({
@@ -118,6 +125,37 @@ const TimelineEditor: React.FC = () => {
     };
     loadAllData();
   }, []);
+
+  // Playback preview
+  useEffect(() => {
+    if (isPlaying && selectedTimeline) {
+      playIntervalRef.current = setInterval(() => {
+        setPlayheadTime((prev) => {
+          const next = prev + 0.1;
+          if (next >= selectedTimeline.duration) {
+            if (selectedTimeline.loop) {
+              return 0;
+            } else {
+              setIsPlaying(false);
+              return selectedTimeline.duration;
+            }
+          }
+          return next;
+        });
+      }, 100); // Update every 100ms for smooth playback
+    } else {
+      if (playIntervalRef.current) {
+        clearInterval(playIntervalRef.current);
+        playIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (playIntervalRef.current) {
+        clearInterval(playIntervalRef.current);
+      }
+    };
+  }, [isPlaying, selectedTimeline]);
 
   useEffect(() => {
     // Add global mouse move and mouse up listeners for drag/resize
@@ -258,7 +296,7 @@ const TimelineEditor: React.FC = () => {
     if (!draggingCue || !selectedTimeline) return;
 
     const deltaX = e.clientX - dragStartX;
-    const deltaTime = deltaX / PIXELS_PER_SECOND;
+    const deltaTime = deltaX / zoomLevel;
     let newStartTime = Math.max(0, dragStartTime + deltaTime);
 
     // Snap to grid (0.5 second intervals)
@@ -274,7 +312,7 @@ const TimelineEditor: React.FC = () => {
     if (!resizingCue || !selectedTimeline) return;
 
     const deltaX = e.clientX - dragStartX;
-    const deltaTime = deltaX / PIXELS_PER_SECOND;
+    const deltaTime = deltaX / zoomLevel;
     const cue = selectedTimeline.tracks[resizingCue.trackIndex].cues[resizingCue.cueIndex];
 
     if (resizingCue.edge === 'left') {
@@ -292,6 +330,33 @@ const TimelineEditor: React.FC = () => {
     }
 
     setSelectedTimeline({ ...selectedTimeline });
+  };
+
+  const handleZoomIn = () => {
+    setZoomLevel((prev) => Math.min(MAX_ZOOM, prev + 10));
+  };
+
+  const handleZoomOut = () => {
+    setZoomLevel((prev) => Math.max(MIN_ZOOM, prev - 10));
+  };
+
+  const togglePlayback = () => {
+    setIsPlaying(!isPlaying);
+  };
+
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    setPlayheadTime(0);
+  };
+
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (draggingCue || resizingCue) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickTime = clickX / zoomLevel;
+    
+    setPlayheadTime(Math.max(0, Math.min(selectedTimeline?.duration || 0, clickTime)));
   };
 
   const addTrack = (trackType: 'video' | 'overlay' | 'audio') => {
@@ -488,6 +553,13 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.floor((seconds % 1) * 10);
+    return `${mins}:${secs.toString().padStart(2, '0')}.${ms}`;
+  };
+
   const getTrackColor = (trackType: string) => {
     switch (trackType) {
       case 'video': return 'bg-blue-600';
@@ -511,10 +583,11 @@ const TimelineEditor: React.FC = () => {
 
     const marks = [];
     const duration = selectedTimeline.duration;
+    const interval = zoomLevel < 20 ? 10 : zoomLevel < 40 ? 5 : 1;
     
-    for (let i = 0; i <= duration; i += 5) {
+    for (let i = 0; i <= duration; i += interval) {
       marks.push(
-        <div key={i} className="absolute flex flex-col items-center" style={{ left: `${i * PIXELS_PER_SECOND}px` }}>
+        <div key={i} className="absolute flex flex-col items-center" style={{ left: `${i * zoomLevel}px` }}>
           <div className="w-px h-3 bg-gray-500"></div>
           <span className="text-xs text-gray-400 mt-1">{i}s</span>
         </div>
@@ -522,7 +595,11 @@ const TimelineEditor: React.FC = () => {
     }
 
     return (
-      <div className="relative h-8 bg-dark-800 border-b border-dark-700" style={{ width: `${duration * PIXELS_PER_SECOND}px` }}>
+      <div 
+        className="relative h-8 bg-dark-800 border-b border-dark-700 cursor-pointer" 
+        style={{ width: `${duration * zoomLevel}px` }}
+        onClick={handleTimelineClick}
+      >
         {marks}
       </div>
     );
@@ -751,26 +828,79 @@ const TimelineEditor: React.FC = () => {
           {selectedTimeline ? (
             <>
               {/* Track Controls */}
-              <div className="flex items-center gap-2 px-4 py-3 bg-dark-800 border-b border-dark-700">
-                <span className="text-gray-400 text-sm font-medium">Add Track:</span>
-                <button
-                  onClick={() => addTrack('video')}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
-                >
-                  🎥 Video
-                </button>
-                <button
-                  onClick={() => addTrack('overlay')}
-                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors"
-                >
-                  🎨 Overlay
-                </button>
-                <button
-                  onClick={() => addTrack('audio')}
-                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
-                >
-                  🔊 Audio
-                </button>
+              <div className="flex items-center justify-between gap-2 px-4 py-3 bg-dark-800 border-b border-dark-700">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm font-medium">Add Track:</span>
+                  <button
+                    onClick={() => addTrack('video')}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                  >
+                    🎥 Video
+                  </button>
+                  <button
+                    onClick={() => addTrack('overlay')}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors"
+                  >
+                    🎨 Overlay
+                  </button>
+                  <button
+                    onClick={() => addTrack('audio')}
+                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                  >
+                    🔊 Audio
+                  </button>
+                </div>
+
+                {/* Playback Controls */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 border-r border-dark-700 pr-3">
+                    <button
+                      onClick={togglePlayback}
+                      className={`px-3 py-1.5 rounded transition-colors ${
+                        isPlaying 
+                          ? 'bg-yellow-600 hover:bg-yellow-700' 
+                          : 'bg-gray-600 hover:bg-gray-700'
+                      } text-white text-sm font-medium`}
+                      title="Preview playback (Space)"
+                    >
+                      {isPlaying ? '⏸️ Pause' : '▶️ Preview'}
+                    </button>
+                    <button
+                      onClick={stopPlayback}
+                      className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+                      title="Stop and reset"
+                    >
+                      ⏹️
+                    </button>
+                    <span className="text-gray-300 text-sm font-mono">
+                      {formatTime(playheadTime)} / {formatTime(selectedTimeline.duration)}
+                    </span>
+                  </div>
+
+                  {/* Zoom Controls */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 text-sm font-medium">Zoom:</span>
+                    <button
+                      onClick={handleZoomOut}
+                      disabled={zoomLevel <= MIN_ZOOM}
+                      className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom out (Ctrl + -)"
+                    >
+                      −
+                    </button>
+                    <span className="text-gray-300 text-sm font-mono w-16 text-center">
+                      {Math.round((zoomLevel / 40) * 100)}%
+                    </span>
+                    <button
+                      onClick={handleZoomIn}
+                      disabled={zoomLevel >= MAX_ZOOM}
+                      className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Zoom in (Ctrl + +)"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Timeline Container */}
@@ -805,9 +935,20 @@ const TimelineEditor: React.FC = () => {
 
                 {/* Timeline Grid */}
                 <div className="flex-1 overflow-auto" ref={timelineRef}>
-                  <div className="min-w-full">
+                  <div className="min-w-full relative">
                     {/* Time Ruler */}
                     {renderTimeRuler()}
+                    
+                    {/* Playhead */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none"
+                      style={{ left: `${playheadTime * zoomLevel}px` }}
+                    >
+                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-red-500" style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }}></div>
+                      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs px-1 py-0.5 rounded whitespace-nowrap">
+                        {formatTime(playheadTime)}
+                      </div>
+                    </div>
                     
                     {/* Tracks */}
                     {selectedTimeline.tracks.map((track, trackIndex) => (
@@ -816,14 +957,14 @@ const TimelineEditor: React.FC = () => {
                         className="relative border-b border-dark-700"
                         style={{ 
                           height: `${TRACK_HEIGHT}px`,
-                          width: `${selectedTimeline.duration * PIXELS_PER_SECOND}px`,
-                          backgroundImage: 'repeating-linear-gradient(to right, transparent, transparent 39px, rgba(75, 85, 99, 0.2) 39px, rgba(75, 85, 99, 0.2) 40px)',
-                          backgroundSize: `${PIXELS_PER_SECOND}px 100%`
+                          width: `${selectedTimeline.duration * zoomLevel}px`,
+                          backgroundImage: `repeating-linear-gradient(to right, transparent, transparent ${zoomLevel - 1}px, rgba(75, 85, 99, 0.2) ${zoomLevel - 1}px, rgba(75, 85, 99, 0.2) ${zoomLevel}px)`,
+                          backgroundSize: `${zoomLevel}px 100%`
                         }}
                         onDrop={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
                           const dropX = e.clientX - rect.left;
-                          const dropTime = dropX / PIXELS_PER_SECOND;
+                          const dropTime = dropX / zoomLevel;
                           handleTrackDrop(e, trackIndex, dropTime);
                         }}
                         onDragOver={handleDragOver}
@@ -845,8 +986,8 @@ const TimelineEditor: React.FC = () => {
                               key={cueIndex}
                               className={`absolute ${cueColor} text-white rounded border-2 border-white/20 hover:border-white/40 transition-all cursor-move select-none`}
                               style={{
-                                left: `${cue.start_time * PIXELS_PER_SECOND}px`,
-                                width: `${cue.duration * PIXELS_PER_SECOND}px`,
+                                left: `${cue.start_time * zoomLevel}px`,
+                                width: `${cue.duration * zoomLevel}px`,
                                 top: '4px',
                                 bottom: '4px',
                                 display: 'flex',
