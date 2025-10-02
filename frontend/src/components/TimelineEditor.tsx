@@ -70,6 +70,9 @@ const TimelineEditor: React.FC = () => {
   const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showNewTimelineModal, setShowNewTimelineModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   // Sidebar collapse states
   const [camerasExpanded, setCamerasExpanded] = useState(true);
@@ -93,10 +96,17 @@ const TimelineEditor: React.FC = () => {
   });
 
   useEffect(() => {
-    loadTimelines();
-    loadCameras();
-    loadPresets();
-    loadDestinations();
+    const loadAllData = async () => {
+      setLoading(true);
+      await Promise.all([
+        loadTimelines(),
+        loadCameras(),
+        loadPresets(),
+        loadDestinations()
+      ]);
+      setLoading(false);
+    };
+    loadAllData();
   }, []);
 
   const loadTimelines = async () => {
@@ -222,27 +232,38 @@ const TimelineEditor: React.FC = () => {
   const saveTimeline = async () => {
     if (!selectedTimeline || !selectedTimeline.id) return;
 
+    setSaving(true);
     try {
       await axios.put(`/api/timelines/${selectedTimeline.id}`, selectedTimeline);
-      alert('Timeline saved successfully!');
+      alert('✅ Timeline saved successfully!');
       loadTimelines();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save timeline:', error);
-      alert('Failed to save timeline');
+      alert(`❌ Failed to save timeline:\n${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
   };
 
   const startTimeline = async () => {
     if (!selectedTimeline || !selectedTimeline.id || selectedDestinations.length === 0) {
-      alert('Please select a timeline and at least one destination');
+      alert('⚠️  Please select a timeline and at least one destination');
       return;
     }
 
+    // Check if timeline has cues
+    const hasCues = selectedTimeline.tracks.some(t => t.cues.length > 0);
+    if (!hasCues) {
+      alert('⚠️  Timeline has no cues!\n\nDrag cameras or presets from the sidebar to add cues to your timeline.');
+      return;
+    }
+
+    setStarting(true);
     try {
       // First, try to stop the timeline if it's already running
       try {
         await axios.post(`/api/timeline-execution/stop/${selectedTimeline.id}`);
-        console.log('Stopped existing timeline instance');
+        console.log('🛑 Stopped existing timeline instance');
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
       } catch (stopError) {
         // Timeline wasn't running, that's fine
@@ -255,10 +276,13 @@ const TimelineEditor: React.FC = () => {
         destination_ids: selectedDestinations
       });
       setIsRunning(true);
-      alert(`Timeline started!\nStreaming to: ${response.data.destinations.join(', ')}`);
-    } catch (error) {
+      const destNames = response.data.destinations.join(', ');
+      alert(`🎉 Timeline started!\n\n📡 Streaming to: ${destNames}\n🎬 ${selectedTimeline.tracks[0].cues.length} cues will execute`);
+    } catch (error: any) {
       console.error('Failed to start timeline:', error);
-      alert('Failed to start timeline');
+      alert(`❌ Failed to start timeline:\n${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -315,6 +339,17 @@ const TimelineEditor: React.FC = () => {
     e.preventDefault();
   };
 
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-dark-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary-500 mb-4 mx-auto"></div>
+          <p className="text-gray-400">Loading timeline editor...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen flex flex-col bg-dark-900">
       {/* Top Bar */}
@@ -339,9 +374,14 @@ const TimelineEditor: React.FC = () => {
             <>
               <button
                 onClick={saveTimeline}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
+                disabled={saving}
+                className={`px-4 py-2 rounded-md text-white font-medium transition-colors ${
+                  saving
+                    ? 'bg-gray-600 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
-                💾 Save
+                {saving ? '💾 Saving...' : '💾 Save'}
               </button>
               
               <div className="flex items-center gap-2">
@@ -368,14 +408,21 @@ const TimelineEditor: React.FC = () => {
                 {!isRunning ? (
                   <button
                     onClick={startTimeline}
-                    className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold"
+                    disabled={starting || selectedDestinations.length === 0}
+                    className={`px-6 py-2 rounded-md font-semibold transition-colors ${
+                      starting || selectedDestinations.length === 0
+                        ? 'bg-gray-600 cursor-not-allowed text-gray-400'
+                        : 'bg-green-600 hover:bg-green-700 text-white'
+                    }`}
+                    title={selectedDestinations.length === 0 ? 'Select a destination first' : 'Start timeline playback'}
                   >
-                    ▶️ Start
+                    {starting ? '⏳ Starting...' : '▶️ Start'}
                   </button>
                 ) : (
                   <button
                     onClick={stopTimeline}
-                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold"
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold animate-pulse"
+                    title="Stop timeline playback"
                   >
                     ⏹️ Stop
                   </button>
