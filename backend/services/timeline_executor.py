@@ -228,13 +228,12 @@ class TimelineExecutor:
                                 logger.error(f"Failed to decode camera password: {e}")
                         
                         if password:
-                            # ONVIF port detection (Sunba cameras use 8899)
-                            onvif_port = 8899 if camera.port == 554 else camera.port
+                            # Use configured ONVIF port for PTZ control
                             ptz_service = get_ptz_service()
                             try:
                                 success = await ptz_service.move_to_preset(
                                     address=camera.address,
-                                    port=onvif_port,
+                                    port=camera.onvif_port,
                                     username=camera.username,
                                     password=password,
                                     preset_token=str(preset_id)

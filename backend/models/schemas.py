@@ -35,6 +35,7 @@ class CameraBase(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     port: int = Field(default=554, ge=1, le=65535)
+    onvif_port: int = Field(default=80, ge=1, le=65535)  # ONVIF port for PTZ (8899 for Sunba, 80 default)
     stream_path: str = Field(default="/stream1")
     snapshot_url: Optional[str] = None
 
@@ -49,6 +50,7 @@ class CameraUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
     port: Optional[int] = Field(None, ge=1, le=65535)
+    onvif_port: Optional[int] = Field(None, ge=1, le=65535)
     stream_path: Optional[str] = None
     snapshot_url: Optional[str] = None
 

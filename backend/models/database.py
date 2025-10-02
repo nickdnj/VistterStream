@@ -41,6 +41,7 @@ class Camera(Base):
     username = Column(String)
     password_enc = Column(String)
     port = Column(Integer, default=554)
+    onvif_port = Column(Integer, default=80)  # ONVIF port for PTZ control (8899 for Sunba, 80 default)
     stream_path = Column(String, default="/stream1")
     snapshot_url = Column(String)
     is_active = Column(Boolean, default=True)
