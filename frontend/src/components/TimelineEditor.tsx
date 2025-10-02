@@ -986,23 +986,62 @@ const TimelineEditor: React.FC = () => {
 
                           return (
                             <>
-                              {/* Base Video Layer */}
+                              {/* Base Video Layer - Camera Snapshot Preview */}
                               <div 
                                 style={{
                                   position: 'absolute',
                                   inset: '0',
-                                  background: 'linear-gradient(to bottom right, rgba(30, 58, 138, 0.3), rgba(37, 99, 235, 0.2))'
+                                  background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 25%, #2563eb 50%, #1e40af 75%, #1e3a8a 100%)',
+                                  backgroundSize: '400% 400%'
                                 }}
                               >
-                                <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <div style={{ textAlign: 'center' }}>
-                                    <div style={{ fontSize: '72px', marginBottom: '12px' }}>🎥</div>
-                                    <div style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 'bold' }}>{camera?.name || 'Camera'}</div>
-                                    {preset && <div style={{ color: '#60A5FA', fontSize: '18px', marginTop: '8px' }}>🎯 {preset.name}</div>}
-                                    <div style={{ color: '#9CA3AF', fontSize: '14px', marginTop: '16px', padding: '0 16px' }}>
-                                      Live camera feed will appear here when streaming
+                                {/* Video Frame Simulation */}
+                                <div style={{ 
+                                  position: 'absolute', 
+                                  inset: '0',
+                                  backgroundImage: `
+                                    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px),
+                                    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)
+                                  `
+                                }}>
+                                  <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div style={{ textAlign: 'center' }}>
+                                      <div style={{ fontSize: '72px', marginBottom: '12px' }}>🎥</div>
+                                      <div style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                                        {camera?.name || 'Camera'}
+                                      </div>
+                                      {preset && <div style={{ color: '#60A5FA', fontSize: '18px', marginTop: '8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>🎯 {preset.name}</div>}
+                                      <div style={{ 
+                                        color: '#E5E7EB', 
+                                        fontSize: '13px', 
+                                        marginTop: '16px', 
+                                        padding: '8px 16px',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                                        borderRadius: '6px',
+                                        display: 'inline-block',
+                                        textShadow: 'none'
+                                      }}>
+                                        📸 Static Frame Preview - For Overlay Positioning
+                                      </div>
                                     </div>
                                   </div>
+                                </div>
+
+                                {/* "PREVIEW FRAME" Watermark */}
+                                <div style={{
+                                  position: 'absolute',
+                                  bottom: '20px',
+                                  right: '20px',
+                                  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                  color: '#60A5FA',
+                                  fontSize: '11px',
+                                  fontWeight: '600',
+                                  padding: '6px 12px',
+                                  borderRadius: '4px',
+                                  border: '1px solid rgba(96, 165, 250, 0.3)',
+                                  letterSpacing: '0.5px'
+                                }}>
+                                  STATIC PREVIEW FRAME
                                 </div>
                               </div>
 
@@ -1082,22 +1121,46 @@ const TimelineEditor: React.FC = () => {
                         })()}
                       </div>
 
-                      {/* Warning Message */}
-                      <div style={{
-                        marginTop: '16px',
-                        padding: '16px',
-                        backgroundColor: 'rgba(113, 63, 18, 0.2)',
-                        border: '1px solid rgba(234, 179, 8, 0.3)',
-                        borderRadius: '8px'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                          <span style={{ fontSize: '20px', color: '#EAB308' }}>⚠️</span>
-                          <div style={{ flex: '1' }}>
-                            <div style={{ color: '#EAB308', fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
-                              Setup Preview Only
+                      {/* Info Messages */}
+                      <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
+                        {/* Static Preview Notice */}
+                        <div style={{
+                          flex: '1',
+                          padding: '16px',
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                          border: '1px solid rgba(59, 130, 246, 0.3)',
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                            <span style={{ fontSize: '20px', color: '#3B82F6' }}>📸</span>
+                            <div style={{ flex: '1' }}>
+                              <div style={{ color: '#3B82F6', fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
+                                Static Frame Preview
+                              </div>
+                              <div style={{ color: 'rgba(59, 130, 246, 0.8)', fontSize: '13px' }}>
+                                This shows a simulated camera frame with your overlays for positioning and evaluation. The actual live video feed will stream when you click <strong style={{ color: '#FFFFFF' }}>Start</strong>.
+                              </div>
                             </div>
-                            <div style={{ color: 'rgba(234, 179, 8, 0.8)', fontSize: '14px' }}>
-                              This is a visual preview for timeline configuration. Click the <strong style={{ color: '#FFFFFF' }}>Start</strong> button in the top bar to begin actual streaming to your selected destinations.
+                          </div>
+                        </div>
+
+                        {/* Streaming Notice */}
+                        <div style={{
+                          flex: '1',
+                          padding: '16px',
+                          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                          border: '1px solid rgba(34, 197, 94, 0.3)',
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                            <span style={{ fontSize: '20px', color: '#22C55E' }}>🎬</span>
+                            <div style={{ flex: '1' }}>
+                              <div style={{ color: '#22C55E', fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
+                                Ready to Stream
+                              </div>
+                              <div style={{ color: 'rgba(34, 197, 94, 0.8)', fontSize: '13px' }}>
+                                Once your timeline looks good, click the <strong style={{ color: '#FFFFFF' }}>Start</strong> button to begin live streaming with camera switching and overlays to your selected destinations.
+                              </div>
                             </div>
                           </div>
                         </div>
