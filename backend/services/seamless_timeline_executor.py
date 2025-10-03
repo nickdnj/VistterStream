@@ -357,40 +357,59 @@ class SeamlessTimelineExecutor:
         """
         filters = []
         
-        # Scale all camera inputs to 1920x1080
-        for camera_id, cam_data in camera_map.items():
-            input_idx = cam_data['input_index']
-            filters.append(f"[{input_idx}:v]scale=1920:1080,setpts=PTS-STARTPTS[cam{input_idx}]")
+        # For RTSP live streams, we can't use trim with start/end times
+        # Instead, we'll use a simpler approach: scale each input and concat
+        # FFmpeg will read duration seconds from each before moving to next
         
-        # Build timeline segments for each cue
         segments = []
-        for cue in video_cues:
+        
+        for idx, cue in enumerate(video_cues):
             camera_id = cue.action_params.get('camera_id')
-            if camera_id in camera_map:
-                input_idx = camera_map[camera_id]['input_index']
-                start = cue.start_time
-                end = cue.start_time + cue.duration
-                
-                # Select this camera for this time range
-                segments.append(f"[cam{input_idx}]trim=start={start}:end={end},setpts=PTS-STARTPTS[seg{len(segments)}]")
+            if camera_id not in camera_map:
+                continue
+            
+            input_idx = camera_map[camera_id]['input_index']
+            
+            # Each segment: scale to 1920x1080, normalize fps
+            segment_filter = (
+                f"[{input_idx}:v]"
+                f"scale=1920:1080:force_original_aspect_ratio=decrease,"
+                f"pad=1920:1080:(ow-iw)/2:(oh-ih)/2,"
+                f"fps=30,"
+                f"setpts=PTS-STARTPTS"
+                f"[seg{idx}]"
+            )
+            filters.append(segment_filter)
+            segments.append(f"[seg{idx}]")
         
-        filters.extend(segments)
-        
-        # Concatenate all segments into one continuous stream
+        # Concatenate all segments
         if len(segments) > 1:
-            segment_labels = ''.join([f'[seg{i}]' for i in range(len(segments))])
+            segment_labels = ''.join(segments)
             filters.append(f"{segment_labels}concat=n={len(segments)}:v=1:a=0[video]")
-        else:
+        elif len(segments) == 1:
             filters.append(f"[seg0]copy[video]")
+        else:
+            # Fallback - just use first camera scaled
+            filters.append(f"[0:v]scale=1920:1080,fps=30[video]")
         
-        # Add overlays if any (for now, simplified - will enhance later)
+        # Add overlays if any (simplified for now - full time-based later)
         if overlay_images:
-            # TODO: Add time-based overlay compositing
-            filters.append(f"[video]copy[outv]")
+            # For now, just overlay first image on entire video
+            overlay_idx = overlay_input_start
+            overlay = overlay_images[0]
+            x = overlay['x']
+            y = overlay['y']
+            opacity = overlay['opacity']
+            
+            filters.append(
+                f"[video][{overlay_idx}:v]overlay=x={x}:y={y}:format=auto[outv]"
+            )
         else:
             filters.append(f"[video]copy[outv]")
         
-        return ';'.join(filters)
+        filter_str = ';'.join(filters)
+        logger.debug(f"Filter complex: {filter_str}")
+        return filter_str
     
     async def _prepare_overlay_images(
         self,
@@ -446,8 +465,13 @@ class SeamlessTimelineExecutor:
                             tmp.write(response.content)
                             return tmp.name
             elif asset.type == 'static_image' and asset.file_path:
-                # For SVG and other static images, return the path
-                # FFmpeg can read from public folder if we use correct path
+                # Skip SVG files for now - FFmpeg can't read them directly
+                # TODO: Convert SVG to PNG using librsvg or similar
+                if asset.file_path.endswith('.svg'):
+                    logger.warning(f"Skipping SVG asset {asset.name} - not supported in FFmpeg yet")
+                    return None
+                
+                # For other static images
                 if asset.file_path.startswith('/'):
                     return f"/Users/nickd/Workspaces/VistterStream/frontend/public{asset.file_path}"
                 return asset.file_path
