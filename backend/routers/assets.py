@@ -2,10 +2,15 @@
 Assets API Router - Manage overlay assets (images, graphics, dynamic API content)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
+import os
+import uuid
+import shutil
+from pathlib import Path
 
 from models.database import get_db, Asset
 from models.schemas import AssetCreate, AssetUpdate, Asset as AssetSchema
@@ -14,6 +19,10 @@ router = APIRouter(
     prefix="/api/assets",
     tags=["assets"]
 )
+
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = Path("uploads/assets")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.get("/", response_model=List[AssetSchema])
 def get_assets(
@@ -98,6 +107,78 @@ def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     db.commit()
     
     return {"message": "Asset deleted successfully", "id": asset_id}
+
+@router.post("/upload")
+async def upload_asset_file(
+    file: UploadFile = File(...),
+    asset_type: str = Form(...)
+):
+    """Upload an asset file (image or video)"""
+    
+    # Validate file type
+    allowed_image_types = {"image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"}
+    allowed_video_types = {"video/mp4", "video/mpeg", "video/quicktime", "video/webm"}
+    
+    if asset_type == "static_image":
+        if file.content_type not in allowed_image_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid image type: {file.content_type}. Allowed: PNG, JPEG, GIF, WebP"
+            )
+    elif asset_type == "video":
+        if file.content_type not in allowed_video_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid video type: {file.content_type}. Allowed: MP4, MOV, WebM"
+            )
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid asset type: {asset_type}")
+    
+    # Validate file size (50MB max)
+    MAX_SIZE = 50 * 1024 * 1024  # 50MB
+    file_size = 0
+    
+    # Generate unique filename
+    file_extension = Path(file.filename or "file").suffix
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = UPLOAD_DIR / unique_filename
+    
+    try:
+        # Save file with size check
+        with open(file_path, "wb") as buffer:
+            while True:
+                chunk = await file.read(8192)  # 8KB chunks
+                if not chunk:
+                    break
+                file_size += len(chunk)
+                if file_size > MAX_SIZE:
+                    # Clean up partial file
+                    buffer.close()
+                    os.unlink(file_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large. Maximum size is 50MB"
+                    )
+                buffer.write(chunk)
+        
+        # Return relative path that can be served
+        relative_path = f"/uploads/assets/{unique_filename}"
+        
+        return {
+            "file_path": relative_path,
+            "filename": unique_filename,
+            "original_filename": file.filename,
+            "size": file_size,
+            "content_type": file.content_type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up file on error
+        if file_path.exists():
+            os.unlink(file_path)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @router.post("/{asset_id}/test")
 def test_asset(asset_id: int, db: Session = Depends(get_db)):

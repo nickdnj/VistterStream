@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface Asset {
   id: number;
@@ -24,6 +25,13 @@ const AssetManagement: React.FC = () => {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     name: '',
     type: 'api_image' as 'static_image' | 'api_image' | 'video' | 'graphic',
@@ -54,6 +62,8 @@ const AssetManagement: React.FC = () => {
 
   const handleAddAsset = () => {
     setSelectedAsset(null);
+    setSelectedFile(null);
+    setPreviewUrl(null);
     setFormData({
       name: '',
       type: 'api_image',
@@ -72,6 +82,8 @@ const AssetManagement: React.FC = () => {
 
   const handleEditAsset = (asset: Asset) => {
     setSelectedAsset(asset);
+    setSelectedFile(null);
+    setPreviewUrl(null);
     setFormData({
       name: asset.name,
       type: asset.type,
@@ -88,8 +100,99 @@ const AssetManagement: React.FC = () => {
     setShowModal(true);
   };
 
+  const handleFileSelect = (file: File) => {
+    // Validate file type
+    const validImageTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    const validVideoTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm'];
+    
+    if (formData.type === 'static_image' && !validImageTypes.includes(file.type)) {
+      alert('❌ Invalid file type! Please select an image file (PNG, JPEG, GIF, WebP)');
+      return;
+    }
+    
+    if (formData.type === 'video' && !validVideoTypes.includes(file.type)) {
+      alert('❌ Invalid file type! Please select a video file (MP4, MOV, WebM)');
+      return;
+    }
+
+    // Validate file size (50MB max)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      alert('❌ File too large! Maximum size is 50MB');
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Generate preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setPreviewUrl(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Auto-fill name if empty
+    if (!formData.name) {
+      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+      setFormData({ ...formData, name: nameWithoutExt });
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // For file-based assets, upload file first
+    if ((formData.type === 'static_image' || formData.type === 'video') && selectedFile) {
+      setUploading(true);
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', selectedFile);
+        uploadFormData.append('asset_type', formData.type);
+
+        const uploadResponse = await axios.post('/api/assets/upload', uploadFormData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          onUploadProgress: (progressEvent) => {
+            const progress = progressEvent.total 
+              ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
+              : 0;
+            setUploadProgress(progress);
+          },
+        });
+
+        // Use uploaded file path
+        formData.file_path = uploadResponse.data.file_path;
+      } catch (error: any) {
+        console.error('Upload failed:', error);
+        alert(`❌ Upload failed:\n${error.response?.data?.detail || error.message}`);
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+        setUploadProgress(0);
+      }
+    }
 
     const payload = {
       ...formData,
@@ -107,6 +210,8 @@ const AssetManagement: React.FC = () => {
         alert('✅ Asset created successfully!');
       }
       setShowModal(false);
+      setSelectedFile(null);
+      setPreviewUrl(null);
       loadAssets();
     } catch (error: any) {
       console.error('Failed to save asset:', error);
@@ -115,7 +220,7 @@ const AssetManagement: React.FC = () => {
   };
 
   const handleDeleteAsset = async (assetId: number) => {
-    if (!window.confirm('Are you sure you want to delete this asset?')) {
+    if (!window.confirm('⚠️  Are you sure you want to delete this asset?')) {
       return;
     }
 
@@ -173,13 +278,14 @@ const AssetManagement: React.FC = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white">Assets</h2>
-          <p className="text-gray-400 mt-1">Manage overlay graphics, images, and dynamic content</p>
+          <p className="text-gray-400 mt-1">Manage overlay graphics, images, videos, and dynamic content</p>
         </div>
         <button
           onClick={handleAddAsset}
-          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors"
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors font-medium flex items-center gap-2"
         >
-          + Add Asset
+          <span className="text-xl">+</span>
+          Add Asset
         </button>
       </div>
 
@@ -188,11 +294,11 @@ const AssetManagement: React.FC = () => {
           <div className="text-6xl mb-4">🎨</div>
           <h3 className="text-xl font-semibold text-white mb-2">No Assets Yet</h3>
           <p className="text-gray-400 mb-6">
-            Create assets to overlay on your streams - images, graphics, weather data, and more!
+            Create assets to overlay on your streams - images, videos, graphics, weather data, and more!
           </p>
           <button
             onClick={handleAddAsset}
-            className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors"
+            className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors font-medium"
           >
             Create First Asset
           </button>
@@ -200,7 +306,7 @@ const AssetManagement: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {assets.map((asset) => (
-            <div key={asset.id} className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
+            <div key={asset.id} className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden hover:border-dark-600 transition-colors">
               {/* Preview/Icon */}
               <div className="aspect-video bg-dark-700 flex items-center justify-center relative">
                 {asset.type === 'api_image' && asset.api_url ? (
@@ -210,21 +316,43 @@ const AssetManagement: React.FC = () => {
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
+                      (e.target as HTMLImageElement).parentElement!.innerHTML = `<div class="text-6xl">${getAssetTypeIcon(asset.type)}</div>`;
+                    }}
+                  />
+                ) : asset.type === 'static_image' && asset.file_path ? (
+                  <img 
+                    src={asset.file_path} 
+                    alt={asset.name}
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      (e.target as HTMLImageElement).parentElement!.innerHTML = `<div class="text-6xl">${getAssetTypeIcon(asset.type)}</div>`;
+                    }}
+                  />
+                ) : asset.type === 'video' && asset.file_path ? (
+                  <video 
+                    src={asset.file_path} 
+                    className="w-full h-full object-contain"
+                    muted
+                    preload="metadata"
+                    onError={(e) => {
+                      (e.target as HTMLVideoElement).style.display = 'none';
+                      (e.target as HTMLVideoElement).parentElement!.innerHTML = `<div class="text-6xl">${getAssetTypeIcon(asset.type)}</div>`;
                     }}
                   />
                 ) : (
                   <div className="text-6xl">{getAssetTypeIcon(asset.type)}</div>
                 )}
-                <div className="absolute top-2 right-2 px-2 py-1 bg-black/70 rounded text-xs text-white">
+                <div className="absolute top-2 right-2 px-2 py-1 bg-black/70 rounded text-xs text-white font-semibold">
                   {asset.type.replace('_', ' ').toUpperCase()}
                 </div>
               </div>
 
               {/* Details */}
               <div className="p-4">
-                <h3 className="text-lg font-semibold text-white mb-2">{asset.name}</h3>
+                <h3 className="text-lg font-semibold text-white mb-2 truncate">{asset.name}</h3>
                 {asset.description && (
-                  <p className="text-sm text-gray-400 mb-3">{asset.description}</p>
+                  <p className="text-sm text-gray-400 mb-3 line-clamp-2">{asset.description}</p>
                 )}
 
                 <div className="space-y-2 text-sm text-gray-400 mb-4">
@@ -248,7 +376,7 @@ const AssetManagement: React.FC = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEditAsset(asset)}
-                    className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                    className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors font-medium"
                   >
                     ✏️ Edit
                   </button>
@@ -256,7 +384,7 @@ const AssetManagement: React.FC = () => {
                     <button
                       onClick={() => handleTestAsset(asset.id)}
                       disabled={testing}
-                      className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50"
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 font-medium"
                       title="Test API connection"
                     >
                       🔍
@@ -264,7 +392,8 @@ const AssetManagement: React.FC = () => {
                   )}
                   <button
                     onClick={() => handleDeleteAsset(asset.id)}
-                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors font-medium"
+                    title="Delete asset"
                   >
                     🗑️
                   </button>
@@ -277,15 +406,21 @@ const AssetManagement: React.FC = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-dark-700">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
               <h3 className="text-xl font-bold text-white">
                 {selectedAsset ? 'Edit Asset' : 'Add New Asset'}
               </h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -295,7 +430,7 @@ const AssetManagement: React.FC = () => {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                   required
                   placeholder="e.g., Weather & Tides"
                 />
@@ -306,22 +441,40 @@ const AssetManagement: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Asset Type *
                 </label>
-                <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
-                  required
-                >
-                  <option value="api_image">API Image (Dynamic)</option>
-                  <option value="static_image">Static Image</option>
-                  <option value="video">Video</option>
-                  <option value="graphic">Graphic</option>
-                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: 'api_image', label: 'API Image', icon: '🌐', desc: 'Dynamic content from API' },
+                    { value: 'static_image', label: 'Static Image', icon: '🖼️', desc: 'Upload PNG, JPEG, etc.' },
+                    { value: 'video', label: 'Video', icon: '🎥', desc: 'Upload MP4, MOV, etc.' },
+                    { value: 'graphic', label: 'Graphic', icon: '🎨', desc: 'Custom graphic overlay' },
+                  ].map((type) => (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, type: type.value as any });
+                        setSelectedFile(null);
+                        setPreviewUrl(null);
+                      }}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        formData.type === type.value
+                          ? 'border-primary-500 bg-primary-500/10'
+                          : 'border-dark-600 bg-dark-700 hover:border-dark-500'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-2xl">{type.icon}</span>
+                        <span className="font-semibold text-white">{type.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-400">{type.desc}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* API URL (for api_image) */}
+              {/* API Configuration */}
               {formData.type === 'api_image' && (
-                <>
+                <div className="space-y-4 p-4 bg-dark-700/50 rounded-lg border border-dark-600">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
                       API URL *
@@ -330,7 +483,7 @@ const AssetManagement: React.FC = () => {
                       type="url"
                       value={formData.api_url}
                       onChange={(e) => setFormData({ ...formData, api_url: e.target.value })}
-                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white font-mono text-sm"
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                       required
                       placeholder="https://api.example.com/weather.png"
                     />
@@ -344,28 +497,97 @@ const AssetManagement: React.FC = () => {
                       type="number"
                       value={formData.api_refresh_interval}
                       onChange={(e) => setFormData({ ...formData, api_refresh_interval: Number(e.target.value) })}
-                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       min="1"
                       max="3600"
                     />
+                    <p className="mt-1 text-xs text-gray-400">How often to fetch updated content (1-3600 seconds)</p>
                   </div>
-                </>
+                </div>
               )}
 
-              {/* File Path (for static_image/video) */}
+              {/* File Upload */}
               {(formData.type === 'static_image' || formData.type === 'video' || formData.type === 'graphic') && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    File Path or URL *
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.file_path}
-                    onChange={(e) => setFormData({ ...formData, file_path: e.target.value })}
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white font-mono text-sm"
-                    required
-                    placeholder="/path/to/file.png or https://example.com/image.png"
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Upload File *
+                    </label>
+                    <div
+                      className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                        dragActive
+                          ? 'border-primary-500 bg-primary-500/10'
+                          : 'border-dark-600 bg-dark-700 hover:border-dark-500'
+                      }`}
+                      onDragEnter={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDragOver={handleDrag}
+                      onDrop={handleDrop}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                        accept={formData.type === 'static_image' ? 'image/*' : 'video/*'}
+                        className="hidden"
+                      />
+                      
+                      {previewUrl ? (
+                        <div className="space-y-3">
+                          {formData.type === 'static_image' ? (
+                            <img src={previewUrl} alt="Preview" className="max-h-48 mx-auto rounded" />
+                          ) : (
+                            <video src={previewUrl} controls className="max-h-48 mx-auto rounded" />
+                          )}
+                          <p className="text-sm text-green-400 font-medium">✓ {selectedFile?.name}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedFile(null);
+                              setPreviewUrl(null);
+                            }}
+                            className="text-sm text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <CloudArrowUpIcon className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+                          <p className="text-gray-300 mb-2">
+                            Drop your {formData.type === 'static_image' ? 'image' : 'video'} here or{' '}
+                            <button
+                              type="button"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="text-primary-500 hover:text-primary-400 font-medium"
+                            >
+                              browse
+                            </button>
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {formData.type === 'static_image'
+                              ? 'PNG, JPEG, GIF, WebP (max 50MB)'
+                              : 'MP4, MOV, WebM (max 50MB)'}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Optional: Manual URL input as fallback */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Or enter URL
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.file_path}
+                      onChange={(e) => setFormData({ ...formData, file_path: e.target.value })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="https://example.com/image.png (optional if uploading)"
+                      disabled={!!selectedFile}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -377,74 +599,103 @@ const AssetManagement: React.FC = () => {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                   rows={2}
                   placeholder="Optional description..."
                 />
               </div>
 
               {/* Position */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Position X (0=Left, 1=Right)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.position_x}
-                    onChange={(e) => setFormData({ ...formData, position_x: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                  />
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Overlay Position
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Horizontal (0=Left, 1=Right)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.position_x}
+                      onChange={(e) => setFormData({ ...formData, position_x: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Vertical (0=Top, 1=Bottom)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.position_y}
+                      onChange={(e) => setFormData({ ...formData, position_y: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Position Y (0=Top, 1=Bottom)
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.position_y}
-                    onChange={(e) => setFormData({ ...formData, position_y: Number(e.target.value) })}
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                  />
-                </div>
+                <p className="mt-2 text-xs text-gray-400">
+                  Current: {getPositionLabel(formData.position_x, formData.position_y)}
+                </p>
               </div>
 
               {/* Opacity */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Opacity ({Math.round(formData.opacity * 100)}%)
+                  Opacity: {Math.round(formData.opacity * 100)}%
                 </label>
                 <input
                   type="range"
                   value={formData.opacity}
                   onChange={(e) => setFormData({ ...formData, opacity: Number(e.target.value) })}
-                  className="w-full"
+                  className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer"
                   min="0"
                   max="1"
                   step="0.05"
+                  style={{
+                    background: `linear-gradient(to right, #3B82F6 0%, #3B82F6 ${formData.opacity * 100}%, #374151 ${formData.opacity * 100}%, #374151 100%)`
+                  }}
                 />
               </div>
 
+              {/* Upload Progress */}
+              {uploading && (
+                <div className="bg-dark-700 p-4 rounded-lg border border-dark-600">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-white font-medium">Uploading...</span>
+                    <span className="text-sm text-white font-medium">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-dark-600 rounded-full h-2">
+                    <div
+                      className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
               {/* Buttons */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-4 border-t border-dark-700">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors"
+                  className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors font-medium"
+                  disabled={uploading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors"
+                  className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={uploading || (formData.type === 'api_image' && !formData.api_url) || ((formData.type === 'static_image' || formData.type === 'video') && !selectedFile && !formData.file_path)}
                 >
-                  {selectedAsset ? 'Update Asset' : 'Create Asset'}
+                  {uploading ? 'Uploading...' : selectedAsset ? 'Update Asset' : 'Create Asset'}
                 </button>
               </div>
             </form>
@@ -456,4 +707,3 @@ const AssetManagement: React.FC = () => {
 };
 
 export default AssetManagement;
-

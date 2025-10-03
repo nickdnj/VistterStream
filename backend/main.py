@@ -39,6 +39,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount uploads directory for serving uploaded assets
+uploads_path = Path(__file__).parent / "uploads"
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
+
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
