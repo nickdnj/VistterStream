@@ -94,25 +94,38 @@ class CameraRelay:
     
     async def _monitor(self):
         """Monitor relay process and auto-restart on failure"""
+        last_10_lines = []
+        
         while True:
             try:
                 line = await self.process.stderr.readline()
                 if not line:
                     # Process ended
                     returncode = await self.process.wait()
-                    logger.warning(f"⚠️  Relay {self.camera_name} ended (code: {returncode})")
+                    logger.error(f"❌ Relay {self.camera_name} DIED (exit code: {returncode})")
                     
-                    # Auto-restart after 2 seconds
-                    await asyncio.sleep(2)
+                    # Log the last 10 lines before death
+                    if last_10_lines:
+                        logger.error(f"Last FFmpeg output before death:")
+                        for log_line in last_10_lines:
+                            logger.error(f"  {log_line}")
+                    
+                    # Auto-restart after 5 seconds
+                    await asyncio.sleep(5)
                     logger.info(f"🔄 Auto-restarting relay for {self.camera_name}")
                     self.process = None
+                    last_10_lines = []
                     await self.start()
                     return
                 
-                # Log errors only
+                # Decode and log all output (temporarily for debugging)
                 line_str = line.decode().strip()
-                if 'error' in line_str.lower() or 'warning' in line_str.lower():
-                    logger.warning(f"Relay {self.camera_name}: {line_str}")
+                last_10_lines.append(line_str)
+                if len(last_10_lines) > 10:
+                    last_10_lines.pop(0)
+                
+                # Log everything for now (debugging mode)
+                logger.info(f"FFmpeg [{self.camera_name}]: {line_str}")
                     
             except asyncio.CancelledError:
                 break
@@ -223,4 +236,5 @@ def get_rtmp_relay_service() -> RTMPRelayService:
     if _rtmp_relay_service is None:
         _rtmp_relay_service = RTMPRelayService()
     return _rtmp_relay_service
+
 
