@@ -16,6 +16,7 @@ from models.database import SessionLocal, Asset, Camera, Preset
 from models.timeline import Timeline, TimelineCue, TimelineExecution, TimelineTrack
 from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile
 from services.ptz_service import get_ptz_service
+from services.rtmp_relay_service import get_rtmp_relay_service
 import base64
 
 logger = logging.getLogger(__name__)
@@ -259,30 +260,37 @@ class SeamlessTimelineExecutor:
         temp_files = []
         
         # Get all unique cameras in timeline
+        relay_service = get_rtmp_relay_service()
         camera_map = {}
+        
         for cue in video_cues:
             camera_id = cue.action_params.get('camera_id')
             if camera_id and camera_id not in camera_map:
                 camera = db.query(Camera).filter(Camera.id == camera_id).first()
                 if camera:
+                    # Use LOCAL RTMP relay URL (instant switching!)
+                    rtmp_url = relay_service.get_relay_url(camera_id)
+                    if not rtmp_url:
+                        logger.warning(f"⚠️  No relay running for camera {camera.name}, skipping")
+                        continue
+                    
                     camera_map[camera_id] = {
                         'camera': camera,
                         'input_index': len(camera_map),
-                        'rtsp_url': self._build_rtsp_url(camera)
+                        'rtmp_url': rtmp_url  # LOCAL RTMP (not direct RTSP!)
                     }
         
-        logger.info(f"   📹 Found {len(camera_map)} unique cameras")
+        logger.info(f"   📹 Found {len(camera_map)} unique cameras with active relays")
         
         # Start building command
         cmd = ['ffmpeg', '-re']
         
-        # Add all camera inputs
+        # Add all camera inputs (FROM LOCAL RTMP - instant switching!)
         for camera_id, cam_data in camera_map.items():
             cmd.extend([
-                '-rtsp_transport', 'tcp',
-                '-i', cam_data['rtsp_url']
+                '-i', cam_data['rtmp_url']  # Read from local RTMP relay
             ])
-            logger.info(f"      Input {cam_data['input_index']}: {cam_data['camera'].name}")
+            logger.info(f"      Input {cam_data['input_index']}: {cam_data['camera'].name} (via relay)")
         
         # Download all overlay images
         overlay_images = await self._prepare_overlay_images(timeline, db, temp_files)

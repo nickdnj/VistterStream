@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  rtmp-relay:
+    build: ./nginx-rtmp
+    container_name: vistterstream-rtmp-relay
+    ports:
+      - "1935:1935"  # RTMP port
+      - "8080:8080"  # HTTP stats/HLS
+    restart: unless-stopped
+    networks:
+      - vistter-network
+
+networks:
+  vistter-network:
+    driver: bridge
+
