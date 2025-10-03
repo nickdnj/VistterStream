@@ -234,10 +234,19 @@ class TimelineExecutor:
                             logger.info(f"📥 Downloaded API image for asset '{asset.name}' to {tmp.name}")
                             return tmp.name
             elif asset.type == 'static_image' and asset.file_path:
-                # Use local file path
-                if os.path.exists(asset.file_path):
-                    logger.info(f"📁 Using local image for asset '{asset.name}': {asset.file_path}")
-                    return asset.file_path
+                # Convert URL path to filesystem path if needed
+                file_path = asset.file_path
+                if file_path.startswith('/uploads/'):
+                    # Convert URL path to filesystem path
+                    from pathlib import Path
+                    backend_dir = Path(__file__).parent.parent
+                    file_path = str(backend_dir / file_path.lstrip('/'))
+                
+                if os.path.exists(file_path):
+                    logger.info(f"📁 Using local image for asset '{asset.name}': {file_path}")
+                    return file_path
+                else:
+                    logger.warning(f"⚠️  File not found for asset '{asset.name}': {file_path}")
         except Exception as e:
             logger.error(f"Failed to download asset {asset.id}: {e}")
         
