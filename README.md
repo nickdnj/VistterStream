@@ -125,6 +125,42 @@ The project includes configuration for local test cameras:
 - **📡 Multi-Destination**: Stream timelines to multiple platforms simultaneously
 - **🔄 Auto-Restart**: Smart start button automatically restarts running timelines
 
+#### **Asset Management & Overlay System** ⭐ **NEW!** (Oct 3, 2025)
+- **🎨 Comprehensive Asset Management**: Full CRUD for overlay assets with beautiful UI
+  - **API Image Assets**: Dynamic content from API endpoints (e.g., weather/tides data)
+  - **Static Image Assets**: Upload PNG, JPEG, GIF, WebP with drag-and-drop or file picker
+  - **Video Assets**: Upload MP4, MOV, WebM for video overlays
+  - **Graphic Assets**: Custom graphic overlays with positioning controls
+- **📤 File Upload System**: Drag-and-drop or click to upload with validation
+  - File type validation (images, videos)
+  - Size limit enforcement (50MB max)
+  - Preview generation for all asset types
+  - Unique filename generation (UUID-based)
+- **📐 Asset Scaling Controls**: Precise dimension control for overlays
+  - Width/Height input fields (pixels)
+  - Proportional scaling (set one dimension, other auto-adjusts)
+  - "Auto" for original size preservation
+  - Real-time size display in asset cards
+- **🎯 Positioning System**: Coordinate-based overlay placement
+  - Horizontal (0=Left, 1=Right) and Vertical (0=Top, 1=Bottom) controls
+  - Position preview labels (e.g., "Bottom Left", "Top Right", "Center")
+  - Opacity control (0-100%)
+  - Layer management for multiple overlays
+- **🔄 API Asset Refresh**: Automatic content updates for dynamic overlays
+  - Configurable refresh intervals (1-3600 seconds)
+  - Live weather, tides, scores, news integration
+  - Background refresh without stream interruption
+- **📺 Program Monitor Integration**: Real-time preview of composed output
+  - Actual camera snapshots (not simulations)
+  - Overlays composited in preview
+  - Position and size verification before going live
+  - Multiple overlay support in preview
+- **🎬 FFmpeg Integration**: Professional overlay compositing in live streams
+  - Hardware-accelerated overlay rendering
+  - Dynamic overlay updates during stream
+  - Multiple simultaneous overlays supported
+  - Scaling, positioning, opacity all applied in real-time
+
 ### **Technical Architecture:**
 - **Backend**: FastAPI with SQLAlchemy ORM, Pydantic schemas, JWT authentication
 - **Frontend**: React 18 with TypeScript, Tailwind CSS, React Router, Axios
@@ -136,19 +172,31 @@ The project includes configuration for local test cameras:
 - **Security**: Bcrypt password hashing, JWT tokens, encrypted credentials
 - **UI/UX**: Professional dark theme, responsive design, beautiful animations, conditional preset UI
 
-## 🎯 Current Focus: Overlay System & Advanced Features
+## 🎯 Current Focus: Production-Ready Streaming!
 
-### **Just Completed:** ✅
-- **🎯 Complete PTZ Preset System**: ONVIF control, preset management, timeline integration
-- **📝 Timeline Save Fix**: Tracks and cues now properly persist to database
-- **🔄 Auto-Restart Timelines**: Smart start button handles running timelines gracefully
+### **Just Completed:** ✅ **(October 3, 2025)**
+- **🎨 Complete Asset Management System**: CRUD operations, file uploads, previews, multiple asset types
+- **📐 Asset Scaling System**: Control overlay dimensions with width/height controls, proportional scaling
+- **🎥 Multiple Overlay Support**: Static images + API overlays working together in streams
+- **📺 Program Monitor**: Real-time preview with actual camera snapshots and overlay composition
+- **🎬 Multi-Track Timeline Editor**: Drag, drop, resize cues with Premiere Pro-level UX
+- **🔄 Stream Status Sync**: Frontend polling keeps Start/Stop button accurate
+- **🐛 Path Resolution Fixes**: URL paths correctly converted to filesystem paths for uploads
+- **🔐 Robust Stop Functionality**: Handles database errors gracefully during cancellation
+
+### **Ready for Production:**
+- **🚀 YouTube Live Streaming**: ✅ Working with camera switching and overlays
+- **📡 RTMP Relay Architecture**: ✅ Seamless switching infrastructure deployed
+- **🎯 PTZ Preset System**: ✅ Automated multi-angle shows from single camera
+- **💾 Complete Database**: ✅ Assets, timelines, tracks, cues, executions, presets
+- **🎨 Beautiful UI**: ✅ Dark theme, responsive, professional-grade
 
 ### **Next Up:**
-- **🎥 Overlay System**: Text overlays, image overlays, lower thirds, fade transitions
+- **🎯 End-to-End Testing**: Full timeline → YouTube test with seamless switching
 - **📆 Timeline Scheduling**: Future execution, recurring schedules
 - **☁️ VistterStudio Integration**: Import/export timelines, cloud control
-- **📊 Advanced Metrics**: Real-time bitrate, FPS, dropped frames
-- **🔄 Multi-Destination Streaming**: Simultaneous streaming to 3+ platforms (architecture ready, needs testing)
+- **📊 Advanced Metrics**: Real-time bitrate graphs, FPS monitoring, dropped frames
+- **🔄 Multi-Destination Testing**: Simultaneous streaming to 3+ platforms (architecture ready)
 
 ## Documentation
 
