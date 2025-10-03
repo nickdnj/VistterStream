@@ -9,10 +9,9 @@ from httpx import BasicAuth, DigestAuth
 import asyncio
 import base64
 import subprocess
-import requests
-from requests.auth import HTTPDigestAuth
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote as urlquote
 
 from models.database import Camera, Preset
 from models.schemas import (
@@ -245,27 +244,23 @@ class CameraService:
         """Test snapshot URL accessibility"""
         try:
             # Decode password if encrypted
-            password = None
-            if password_enc:
-                password = base64.b64decode(password_enc).decode()
-            
+            password = self._decode_password(password_enc)
+
             # Try with Digest auth for Reolink cameras (they use HTTP Digest)
             if username and password and "reolink" in camera_name.lower():
                 print(f"DEBUG: Testing Reolink snapshot with Digest auth")
                 try:
-                    auth = HTTPDigestAuth(username, password)
-                    response = requests.get(snapshot_url, auth=auth, timeout=10)
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        response = await client.get(snapshot_url, auth=DigestAuth(username, password))
                     return response.status_code == 200
                 except Exception as e:
                     print(f"DEBUG: Digest auth test failed: {e}")
                     return False
-            
+
             # Build URL with credentials if provided (for other cameras)
             if username and password:
-                parsed_url = urlparse(snapshot_url)
-                if parsed_url.scheme in ['http', 'https']:
-                    snapshot_url = f"{parsed_url.scheme}://{username}:{password}@{parsed_url.netloc}{parsed_url.path}?{parsed_url.query}"
-            
+                snapshot_url = self._inject_credentials(snapshot_url, username, password)
+
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(snapshot_url)
                 return response.status_code == 200
@@ -276,17 +271,17 @@ class CameraService:
     def _build_rtsp_url(self, camera: Camera) -> str:
         """Build RTSP URL from camera configuration"""
         # Decode password if encrypted
-        password = None
-        if camera.password_enc:
-            password = base64.b64decode(camera.password_enc).decode()
-        
+        password = self._decode_password(camera.password_enc)
+
         print(f"DEBUG: Building RTSP URL for {camera.name}")
         print(f"DEBUG: Username: {camera.username}, Password available: {password is not None}")
         print(f"DEBUG: Address: {camera.address}, Port: {camera.port}, Path: {camera.stream_path}")
-        
+
         # Build URL
         if camera.username and password:
-            url = f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
+            safe_username = urlquote(camera.username, safe="")
+            safe_password = urlquote(password, safe="")
+            url = f"rtsp://{safe_username}:{safe_password}@{camera.address}:{camera.port}{camera.stream_path}"
         else:
             url = f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
         
@@ -317,12 +312,9 @@ class CameraService:
         if not camera.snapshot_url:
             return False, "No snapshot URL configured for quick probe"
 
-        password = None
-        if camera.password_enc:
-            try:
-                password = base64.b64decode(camera.password_enc).decode()
-            except Exception as exc:
-                return False, f"Failed to decode camera credentials: {exc}"
+        password = self._decode_password(camera.password_enc)
+        if camera.password_enc and password is None:
+            return False, "Failed to decode camera credentials"
 
         auth = None
         if camera.username and password:
@@ -369,42 +361,20 @@ class CameraService:
         
         try:
             # Decode password if encrypted
-            password = None
-            if camera.password_enc:
-                password = base64.b64decode(camera.password_enc).decode()
+            password = self._decode_password(camera.password_enc)
             
             # Build URL with credentials if provided
             snapshot_url = camera.snapshot_url
             if camera.username and password:
-                parsed_url = urlparse(snapshot_url)
-                if parsed_url.scheme in ['http', 'https']:
-                    snapshot_url = f"{parsed_url.scheme}://{camera.username}:{password}@{parsed_url.netloc}{parsed_url.path}?{parsed_url.query}"
-            
-            # Try with requests and Digest auth for Reolink cameras
+                snapshot_url = self._inject_credentials(snapshot_url, camera.username, password)
+
+            auth: Optional[DigestAuth] = None
             if camera.username and password and "reolink" in camera.name.lower():
                 print(f"DEBUG: Using Digest auth for Reolink camera")
-                try:
-                    # Use requests with Digest auth for Reolink
-                    auth = HTTPDigestAuth(camera.username, password)
-                    response = requests.get(snapshot_url, auth=auth, timeout=10)
-                    
-                    if response.status_code == 200:
-                        content_type = response.headers.get("content-type", "")
-                        print(f"DEBUG: Reolink snapshot content-type: {content_type}")
-                        
-                        if content_type.startswith("image/"):
-                            image_data = base64.b64encode(response.content).decode()
-                            return {
-                                "image_data": image_data,
-                                "content_type": content_type,
-                                "timestamp": datetime.utcnow().isoformat()
-                            }
-                except Exception as e:
-                    print(f"DEBUG: Digest auth failed: {e}")
-            
-            # Fallback to httpx for other cameras or if Digest auth fails
+                auth = DigestAuth(camera.username, password)
+
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(snapshot_url)
+                response = await client.get(snapshot_url, auth=auth)
                 if response.status_code == 200:
                     content_type = response.headers.get("content-type", "")
                     print(f"DEBUG: Snapshot response content-type: {content_type}")
@@ -425,8 +395,31 @@ class CameraService:
                         return None
         except Exception as e:
             print(f"Error getting snapshot: {e}")
-        
+
         return None
+
+    def _decode_password(self, password_enc: Optional[str]) -> Optional[str]:
+        """Safely decode a stored password string."""
+        if not password_enc:
+            return None
+
+        try:
+            return base64.b64decode(password_enc, validate=True).decode()
+        except Exception as exc:
+            print(f"DEBUG: Failed to decode password: {exc}")
+            return None
+
+    def _inject_credentials(self, url: str, username: str, password: str) -> str:
+        """Insert credentials into an HTTP/RTSP URL with proper escaping."""
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https", "rtsp"}:
+            return url
+
+        netloc = parsed.netloc.split("@")[-1]
+        safe_username = urlquote(username, safe="")
+        safe_password = urlquote(password, safe="")
+        new_netloc = f"{safe_username}:{safe_password}@{netloc}"
+        return urlunparse(parsed._replace(netloc=new_netloc))
 
     async def create_preset(self, preset_data: PresetCreate) -> Preset:
         """Create a PTZ preset"""
