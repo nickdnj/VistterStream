@@ -149,6 +149,34 @@ const TimelineEditor: React.FC = () => {
     loadAllData();
   }, []);
 
+  // Sync Start/Stop button with backend status on refresh and selection changes
+  useEffect(() => {
+    let statusInterval: any;
+
+    const refreshExecutionStatus = async () => {
+      try {
+        if (!selectedTimeline?.id) return;
+        const resp = await axios.get(`/api/timeline-execution/status/${selectedTimeline.id}`);
+        setIsRunning(Boolean(resp.data?.is_running));
+      } catch (err) {
+        console.error('Failed to fetch timeline status:', err);
+        // If status endpoint fails, assume not running to avoid false "Stop" state
+        setIsRunning(false);
+      }
+    };
+
+    if (selectedTimeline?.id) {
+      // Check immediately on mount/selection
+      refreshExecutionStatus();
+      // Light polling to keep UI in sync if user refreshes or stream stops externally
+      statusInterval = setInterval(refreshExecutionStatus, 5000);
+    }
+
+    return () => {
+      if (statusInterval) clearInterval(statusInterval);
+    };
+  }, [selectedTimeline?.id]);
+
   // Playback preview
   useEffect(() => {
     if (isPlaying && selectedTimeline) {
@@ -490,6 +518,8 @@ const TimelineEditor: React.FC = () => {
         destination_ids: selectedDestinations
       });
       setIsRunning(true);
+      // Immediately refresh status from backend to avoid drift
+      try { await axios.get(`/api/timeline-execution/status/${selectedTimeline.id}`).then(r => setIsRunning(Boolean(r.data?.is_running))); } catch {}
       const destNames = response.data.destinations.join(', ');
       const totalCues = selectedTimeline.tracks.reduce((sum, t) => sum + t.cues.length, 0);
       alert(`🎉 Timeline started!\n\n📡 Streaming to: ${destNames}\n🎬 ${totalCues} cues will execute`);
@@ -507,6 +537,8 @@ const TimelineEditor: React.FC = () => {
     try {
       await axios.post(`/api/timeline-execution/stop/${selectedTimeline.id}`);
       setIsRunning(false);
+      // Immediately refresh status
+      try { await axios.get(`/api/timeline-execution/status/${selectedTimeline.id}`).then(r => setIsRunning(Boolean(r.data?.is_running))); } catch {}
       alert('Timeline stopped');
     } catch (error) {
       console.error('Failed to stop timeline:', error);

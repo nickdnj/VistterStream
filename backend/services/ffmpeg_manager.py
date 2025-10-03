@@ -348,8 +348,11 @@ class FFmpegProcessManager:
         cmd = ['ffmpeg']
         
         # Input options
+        cmd.extend(['-re'])  # Read input at native framerate
+        # Use TCP for RTSP cameras to avoid UDP packet loss / stalls
+        if input_url.lower().startswith('rtsp://'):
+            cmd.extend(['-rtsp_transport', 'tcp'])
         cmd.extend([
-            '-re',  # Read input at native framerate
             '-timeout', '2000000',  # 2 second timeout (microseconds)
             '-i', input_url
         ])
@@ -357,7 +360,12 @@ class FFmpegProcessManager:
         # Add overlay image inputs
         if overlay_images:
             for overlay in overlay_images:
-                cmd.extend(['-i', overlay['path']])
+                # Loop still images so the filter graph never ends early
+                cmd.extend(['-loop', '1', '-i', overlay['path']])
+
+        # Add a persistent silent audio source to guarantee audio presence for RTMP destinations
+        # Index calculation: [0] camera, [1..N] overlays (if any), next is silent audio input
+        cmd.extend(['-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100'])
         
         # Video encoding options
         resolution_str = f"{profile.resolution[0]}x{profile.resolution[1]}"
@@ -392,8 +400,10 @@ class FFmpegProcessManager:
             cmd.extend(['-vf', f'scale={resolution_str}'])
             cmd.extend(['-map', '0:v'])
         
-        # Map audio from camera feed
-        cmd.extend(['-map', '0:a'])
+        # Map audio from the silent source to ensure audio is always present
+        # Silent audio input index depends on number of overlay inputs added above
+        audio_input_index = 1 + (len(overlay_images) if overlay_images else 0)
+        cmd.extend(['-map', f'{audio_input_index}:a'])
         
         if profile.codec == 'h264_v4l2m2m':
             # Pi 5 V4L2 hardware encoding
