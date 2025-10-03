@@ -110,12 +110,10 @@ class CameraRelay:
                         for log_line in last_10_lines:
                             logger.error(f"  {log_line}")
                     
-                    # Auto-restart after 5 seconds
-                    await asyncio.sleep(5)
-                    logger.info(f"🔄 Auto-restarting relay for {self.camera_name}")
+                    # Don't auto-restart - let the service handle it
+                    # Auto-restart creates duplicates!
                     self.process = None
-                    last_10_lines = []
-                    await self.start()
+                    logger.warning(f"⚠️  Relay {self.camera_name} stopped (auto-restart disabled)")
                     return
                 
                 # Decode and log all output (temporarily for debugging)

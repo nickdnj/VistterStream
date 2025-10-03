@@ -55,11 +55,10 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
         dest.last_used = datetime.utcnow()
     db.commit()
     
-    # TEMPORARY: Use old executor while debugging RTMP relay
-    # TODO: Switch back to seamless executor once RTMP relay is working
-    executor = get_timeline_executor()
+    # Use SEAMLESS executor with RTMP relay (THE SECRET SAUCE!)
+    executor = get_seamless_timeline_executor()
     
-    # Start timeline
+    # Start timeline with seamless switching
     success = await executor.start_timeline(
         timeline_id=request.timeline_id,
         output_urls=output_urls,
@@ -87,8 +86,8 @@ async def stop_timeline(timeline_id: int, db: Session = Depends(get_db)):
     if not timeline:
         raise HTTPException(status_code=404, detail="Timeline not found")
     
-    # TEMPORARY: Use old executor
-    executor = get_timeline_executor()
+    # Use seamless executor
+    executor = get_seamless_timeline_executor()
     
     # Stop timeline
     success = await executor.stop_timeline(timeline_id)
