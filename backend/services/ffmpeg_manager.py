@@ -383,9 +383,21 @@ class FFmpegProcessManager:
                 x = int(overlay.get('x', 0))
                 y = int(overlay.get('y', 0))
                 opacity = overlay.get('opacity', 1.0)
+                width = overlay.get('width')
+                height = overlay.get('height')
+                
+                # Scale overlay if dimensions specified
+                overlay_input = f"[{idx+1}:v]"
+                if width or height:
+                    # Build scale filter (width:height, -1 means maintain aspect ratio)
+                    w = width if width else -1
+                    h = height if height else -1
+                    scaled_label = f"scaled{idx}"
+                    filter_parts.append(f"{overlay_input}scale={w}:{h}[{scaled_label}]")
+                    overlay_input = f"[{scaled_label}]"
                 
                 # Overlay filter with positioning
-                overlay_filter = f"[{current_label}][{idx+1}:v]overlay=x={x}:y={y}"
+                overlay_filter = f"[{current_label}]{overlay_input}overlay=x={x}:y={y}"
                 if opacity < 1.0:
                     overlay_filter += f":alpha={opacity}"
                 overlay_filter += f"[{next_label}]"

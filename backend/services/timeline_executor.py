@@ -362,14 +362,27 @@ class TimelineExecutor:
                         x_pixels = int(asset.position_x * 1920)
                         y_pixels = int(asset.position_y * 1080)
                         
-                        overlay_images.append({
+                        overlay_data = {
                             'path': image_path,
                             'x': x_pixels,
                             'y': y_pixels,
                             'opacity': asset.opacity
-                        })
+                        }
                         
-                        logger.info(f"  🖼️  {asset.name} at ({x_pixels}, {y_pixels}) opacity={asset.opacity}")
+                        # Add dimensions if specified
+                        if asset.width:
+                            overlay_data['width'] = asset.width
+                        if asset.height:
+                            overlay_data['height'] = asset.height
+                        
+                        overlay_images.append(overlay_data)
+                        
+                        size_info = ""
+                        if asset.width or asset.height:
+                            w = f"{asset.width}px" if asset.width else "auto"
+                            h = f"{asset.height}px" if asset.height else "auto"
+                            size_info = f" size={w}x{h}"
+                        logger.info(f"  🖼️  {asset.name} at ({x_pixels}, {y_pixels}) opacity={asset.opacity}{size_info}")
                 
                 # Stop existing stream if running
                 try:

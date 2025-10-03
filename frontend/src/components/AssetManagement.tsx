@@ -360,6 +360,14 @@ const AssetManagement: React.FC = () => {
                     <span>Position:</span>
                     <span className="text-white">{getPositionLabel(asset.position_x, asset.position_y)}</span>
                   </div>
+                  {(asset.width || asset.height) && (
+                    <div className="flex justify-between">
+                      <span>Size:</span>
+                      <span className="text-white">
+                        {asset.width || 'Auto'} × {asset.height || 'Auto'}px
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span>Opacity:</span>
                     <span className="text-white">{Math.round(asset.opacity * 100)}%</span>
@@ -603,6 +611,46 @@ const AssetManagement: React.FC = () => {
                   rows={2}
                   placeholder="Optional description..."
                 />
+              </div>
+
+              {/* Dimensions (Scale) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Overlay Size (Optional)
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Width (pixels)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.width || ''}
+                      onChange={(e) => setFormData({ ...formData, width: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      min="1"
+                      max="3840"
+                      placeholder="Auto"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Height (pixels)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.height || ''}
+                      onChange={(e) => setFormData({ ...formData, height: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      min="1"
+                      max="2160"
+                      placeholder="Auto"
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-gray-400">
+                  💡 Leave blank for original size, or set one dimension to scale proportionally
+                </p>
               </div>
 
               {/* Position */}
