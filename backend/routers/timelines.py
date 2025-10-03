@@ -8,7 +8,7 @@ from typing import List
 from datetime import datetime
 
 from models.database import get_db
-from models.timeline import Timeline, TimelineTrack, TimelineCue
+from models.timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecution
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/timelines", tags=["timelines"])
@@ -238,9 +238,17 @@ def delete_timeline(timeline_id: int, db: Session = Depends(get_db)):
     if not timeline:
         raise HTTPException(status_code=404, detail="Timeline not found")
     
-    db.delete(timeline)
-    db.commit()
-    return {"message": "Timeline deleted successfully"}
+    try:
+        # Delete related execution records first (they have NOT NULL foreign key)
+        db.query(TimelineExecution).filter(TimelineExecution.timeline_id == timeline_id).delete()
+        
+        # Delete the timeline (tracks and cues will cascade delete)
+        db.delete(timeline)
+        db.commit()
+        return {"message": "Timeline deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete timeline: {str(e)}")
 
 
 @router.post("/{timeline_id}/duplicate", response_model=TimelineResponse)
