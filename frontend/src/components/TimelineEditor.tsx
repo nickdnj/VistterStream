@@ -289,7 +289,7 @@ const TimelineEditor: React.FC = () => {
       cue_order: track.cues.length,
       start_time: newStartTime,
       duration: 10,
-      action_type: 'camera_switch',
+      action_type: 'show_camera',
       action_params: {
         camera_id: camera.id,
         preset_id: preset?.id,
@@ -579,7 +579,7 @@ const TimelineEditor: React.FC = () => {
           cue_order: track.cues.length,
           start_time: Math.max(0, Math.round(dropTime * 2) / 2),
           duration: 10,
-          action_type: 'camera_switch',
+          action_type: 'show_camera',
           action_params: {
             camera_id: camera.id,
             transition: 'cut'
@@ -598,7 +598,7 @@ const TimelineEditor: React.FC = () => {
           cue_order: track.cues.length,
           start_time: Math.max(0, Math.round(dropTime * 2) / 2),
           duration: 10,
-          action_type: 'camera_switch',
+          action_type: 'show_camera',
           action_params: {
             camera_id: camera.id,
             preset_id: preset.id,
