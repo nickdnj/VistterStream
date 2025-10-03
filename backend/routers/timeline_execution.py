@@ -11,6 +11,7 @@ from models.database import get_db
 from models.timeline import Timeline
 from models.destination import StreamingDestination
 from services.timeline_executor import get_timeline_executor
+from services.seamless_timeline_executor import get_seamless_timeline_executor
 from services.ffmpeg_manager import EncodingProfile
 from datetime import datetime
 
@@ -54,10 +55,10 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
         dest.last_used = datetime.utcnow()
     db.commit()
     
-    # Get executor
-    executor = get_timeline_executor()
+    # Get SEAMLESS executor (the secret sauce!)
+    executor = get_seamless_timeline_executor()
     
-    # Start timeline
+    # Start timeline with seamless switching (NO BLACK SCREENS!)
     success = await executor.start_timeline(
         timeline_id=request.timeline_id,
         output_urls=output_urls,
@@ -85,8 +86,8 @@ async def stop_timeline(timeline_id: int, db: Session = Depends(get_db)):
     if not timeline:
         raise HTTPException(status_code=404, detail="Timeline not found")
     
-    # Get executor
-    executor = get_timeline_executor()
+    # Get seamless executor
+    executor = get_seamless_timeline_executor()
     
     # Stop timeline
     success = await executor.stop_timeline(timeline_id)
