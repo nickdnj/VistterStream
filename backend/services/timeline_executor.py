@@ -180,14 +180,25 @@ class TimelineExecutor:
             
         except asyncio.CancelledError:
             logger.info(f"Timeline {timeline_id} execution cancelled")
-            execution.status = "stopped"
-            db.commit()
+            try:
+                # Try to update execution status, but don't fail if object is deleted
+                db.refresh(execution)
+                execution.status = "stopped"
+                db.commit()
+            except Exception as db_error:
+                logger.warning(f"Could not update execution status (already deleted?): {db_error}")
+                db.rollback()
             raise
         except Exception as e:
             logger.error(f"Error executing timeline {timeline_id}: {e}")
-            execution.status = "error"
-            execution.error_message = str(e)
-            db.commit()
+            try:
+                db.refresh(execution)
+                execution.status = "error"
+                execution.error_message = str(e)
+                db.commit()
+            except Exception as db_error:
+                logger.warning(f"Could not update execution status: {db_error}")
+                db.rollback()
         finally:
             db.close()
             
