@@ -6,7 +6,7 @@ services:
     container_name: vistterstream-rtmp-relay
     ports:
       - "1935:1935"  # RTMP port
-      - "8080:8080"  # HTTP stats/HLS
+      - "8081:8080"  # HTTP stats/HLS
     restart: unless-stopped
     networks:
       - vistter-network
