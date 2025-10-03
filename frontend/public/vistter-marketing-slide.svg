@@ -1,0 +1,98 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient Background -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0F172A;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1E293B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0F172A;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Animated Pulse -->
+    <radialGradient id="pulseGradient">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#bgGradient)"/>
+  
+  <!-- Animated Pulse Circles -->
+  <circle cx="960" cy="540" r="400" fill="url(#pulseGradient)" opacity="0.3">
+    <animate attributeName="r" values="300;500;300" dur="4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.3;0.1;0.3" dur="4s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Grid Pattern Overlay -->
+  <g opacity="0.05">
+    <line x1="0" y1="270" x2="1920" y2="270" stroke="#3B82F6" stroke-width="1"/>
+    <line x1="0" y1="540" x2="1920" y2="540" stroke="#3B82F6" stroke-width="1"/>
+    <line x1="0" y1="810" x2="1920" y2="810" stroke="#3B82F6" stroke-width="1"/>
+    <line x1="480" y1="0" x2="480" y2="1080" stroke="#3B82F6" stroke-width="1"/>
+    <line x1="960" y1="0" x2="960" y2="1080" stroke="#3B82F6" stroke-width="1"/>
+    <line x1="1440" y1="0" x2="1440" y2="1080" stroke="#3B82F6" stroke-width="1"/>
+  </g>
+  
+  <!-- Top Accent Bar -->
+  <rect x="0" y="0" width="1920" height="8" fill="url(#accentGradient)"/>
+  
+  <!-- Logo/Icon Area -->
+  <circle cx="960" cy="380" r="100" fill="#1E293B" stroke="url(#accentGradient)" stroke-width="4"/>
+  <text x="960" y="410" font-family="Arial, sans-serif" font-size="80" font-weight="bold" fill="url(#accentGradient)" text-anchor="middle">V</text>
+  
+  <!-- Main Title -->
+  <text x="960" y="560" font-family="Arial, sans-serif" font-size="72" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
+    VISTTER
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="960" y="620" font-family="Arial, sans-serif" font-size="36" fill="#94A3B8" text-anchor="middle">
+    Professional Live Streaming Platform
+  </text>
+  
+  <!-- Products Section -->
+  <g transform="translate(960, 720)">
+    <!-- VistterStudio -->
+    <g transform="translate(-280, 0)">
+      <rect x="-160" y="-50" width="320" height="100" rx="12" fill="#1E293B" stroke="#3B82F6" stroke-width="2" opacity="0.8"/>
+      <text x="0" y="-10" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#3B82F6" text-anchor="middle">
+        🎬 VistterStudio
+      </text>
+      <text x="0" y="25" font-family="Arial, sans-serif" font-size="18" fill="#CBD5E1" text-anchor="middle">
+        Production Control
+      </text>
+    </g>
+    
+    <!-- VistterStream -->
+    <g transform="translate(280, 0)">
+      <rect x="-160" y="-50" width="320" height="100" rx="12" fill="#1E293B" stroke="#8B5CF6" stroke-width="2" opacity="0.8"/>
+      <text x="0" y="-10" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#8B5CF6" text-anchor="middle">
+        📡 VistterStream
+      </text>
+      <text x="0" y="25" font-family="Arial, sans-serif" font-size="18" fill="#CBD5E1" text-anchor="middle">
+        Streaming Appliance
+      </text>
+    </g>
+  </g>
+  
+  <!-- Tagline -->
+  <text x="960" y="940" font-family="Arial, sans-serif" font-size="24" fill="#64748B" text-anchor="middle" font-style="italic">
+    "Broadcast Quality • Multi-Camera • Cloud-Native"
+  </text>
+  
+  <!-- Bottom Accent Bar -->
+  <rect x="0" y="1072" width="1920" height="8" fill="url(#accentGradient)"/>
+  
+  <!-- Corner Branding -->
+  <text x="40" y="1050" font-family="Arial, sans-serif" font-size="18" fill="#475569">
+    www.vistter.com
+  </text>
+  <text x="1880" y="1050" font-family="Arial, sans-serif" font-size="18" fill="#475569" text-anchor="end">
+    © 2025 Vistter
+  </text>
+</svg>
+
