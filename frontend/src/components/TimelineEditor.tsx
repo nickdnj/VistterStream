@@ -435,6 +435,30 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
+  const deleteTimeline = async (timelineId: number, timelineName: string) => {
+    const confirmDelete = window.confirm(
+      `⚠️ Delete Timeline "${timelineName}"?\n\nThis action cannot be undone. All tracks and cues will be permanently deleted.`
+    );
+    
+    if (!confirmDelete) return;
+
+    try {
+      await axios.delete(`/api/timelines/${timelineId}`);
+      alert(`✅ Timeline "${timelineName}" deleted successfully!`);
+      
+      // Clear selection if deleted timeline was selected
+      if (selectedTimeline?.id === timelineId) {
+        setSelectedTimeline(null);
+      }
+      
+      // Reload timeline list
+      loadTimelines();
+    } catch (error: any) {
+      console.error('Failed to delete timeline:', error);
+      alert(`❌ Failed to delete timeline:\n${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    }
+  };
+
   const startTimeline = async () => {
     if (!selectedTimeline || !selectedTimeline.id || selectedDestinations.length === 0) {
       alert('⚠️  Please select a timeline and at least one destination');
@@ -939,17 +963,33 @@ const TimelineEditor: React.FC = () => {
             </div>
             <div className="p-2 space-y-1">
               {timelines.map((timeline) => (
-                <button
+                <div
                   key={timeline.id}
-                  onClick={() => setSelectedTimeline(timeline)}
-                  className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${
                     selectedTimeline?.id === timeline.id
-                      ? 'bg-primary-600 text-white'
-                      : 'text-gray-300 hover:bg-dark-700'
+                      ? 'bg-primary-600'
+                      : 'hover:bg-dark-700'
                   }`}
                 >
-                  {timeline.name}
-                </button>
+                  <button
+                    onClick={() => setSelectedTimeline(timeline)}
+                    className="flex-1 text-left text-gray-300 hover:text-white"
+                  >
+                    {timeline.name}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (timeline.id) {
+                        deleteTimeline(timeline.id, timeline.name);
+                      }
+                    }}
+                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Delete timeline"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
