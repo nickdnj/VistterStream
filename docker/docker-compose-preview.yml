@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  preview-server:
+    image: bluenviron/mediamtx:latest
+    container_name: vistterstream-preview
+    ports:
+      - "1935:1935"  # RTMP ingest
+      - "8888:8888"  # HLS output
+      - "9997:9997"  # API
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
+    networks:
+      - vistterstream
+
+networks:
+  vistterstream:
+    driver: bridge
+

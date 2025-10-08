@@ -1,3 +1,9 @@
+- 2025-10-08 Scheduler & Timeline Updates
+  - Added Scheduler (backend models, API, background loop)
+  - Frontend Scheduler page with overlap warnings and delete
+  - Segment-based timeline execution (overlays can change mid-cue)
+  - Removed local preview window; replaced with YouTube Live Studio link
+  - Added Asset copy action in Settings → Assets
 # Changelog
 
 All notable changes to the VistterStream project will be documented in this file.

@@ -10,7 +10,7 @@ import tempfile
 import os
 import httpx
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Tuple
 from sqlalchemy.orm import Session
 
 from models.database import SessionLocal, Asset
@@ -40,6 +40,9 @@ class TimelineExecutor:
         self.active_timelines: Dict[int, asyncio.Task] = {}
         self.ffmpeg_managers: Dict[int, FFmpegProcessManager] = {}
         self._shutdown_event = asyncio.Event()
+        # Track current playback position for each timeline
+        self.playback_positions: Dict[int, dict] = {}  # timeline_id -> {current_time, current_cue_id, loop_count}
+        self._position_update_tasks: Dict[int, asyncio.Task] = {}  # Tasks for position updates
         
     async def start_timeline(
         self,
@@ -146,29 +149,77 @@ class TimelineExecutor:
             await ffmpeg_manager.initialize()
             self.ffmpeg_managers[timeline_id] = ffmpeg_manager
             
-            # Main execution loop
+            # Main execution loop (segment-based: overlays can change mid-cue)
             loop_count = 0
+            last_camera_id: Optional[int] = None
+            last_preset_id: Optional[int] = None
             while not self._shutdown_event.is_set():
                 loop_count += 1
                 logger.info(f"Timeline {timeline.name} - Loop {loop_count}")
-                
-                # Execute each cue sequentially
-                for idx, cue in enumerate(cues, 1):
+
+                # Compute segment boundaries as union of all cue boundaries across enabled tracks
+                segments = self._compute_segments(timeline)
+                logger.debug(f"Computed {len(segments)} segments from track boundaries")
+
+                for seg_index, (seg_start, seg_end) in enumerate(segments):
                     if self._shutdown_event.is_set():
                         break
-                    
-                    logger.info(f"📋 Executing cue {idx}/{len(cues)} (ID: {cue.id})")
-                    await self._execute_cue(
-                        timeline_id,
-                        cue,
-                        ffmpeg_manager,
-                        output_urls,
-                        encoding_profile,
-                        db
+
+                    duration = max(0.0, seg_end - seg_start)
+                    if duration <= 0.0:
+                        continue
+
+                    # Determine active video cue at segment start
+                    active_video_cues = [
+                        c for c in cues
+                        if seg_start >= c.start_time and seg_start < (c.start_time + c.duration)
+                    ]
+                    if not active_video_cues:
+                        logger.debug(f"No active video cue at t={seg_start:.2f}s, skipping segment")
+                        continue
+
+                    video_cue = active_video_cues[0]  # single video track expected
+                    logger.info(f"📋 Segment {seg_index+1}/{len(segments)} at t={seg_start:.2f}s for {duration:.2f}s (video cue ID: {video_cue.id})")
+
+                    # Start continuous position updates for this segment
+                    update_task = asyncio.create_task(
+                        self._update_position_during_segment(
+                            timeline_id=timeline_id,
+                            start_time=seg_start,
+                            duration=duration,
+                            current_cue_id=video_cue.id,
+                            current_cue_index=video_cue.cue_order,
+                            total_cues=len(cues),
+                            loop_count=loop_count,
+                        )
                     )
-                    logger.info(f"✅ Cue {idx}/{len(cues)} completed\n")
-                    
-                # Check if we should loop
+                    self._position_update_tasks[timeline_id] = update_task
+
+                    # Execute this segment with current video and overlays
+                    await self._execute_segment(
+                        timeline_id=timeline_id,
+                        seg_start=seg_start,
+                        duration=duration,
+                        video_cue=video_cue,
+                        ffmpeg_manager=ffmpeg_manager,
+                        output_urls=output_urls,
+                        encoding_profile=encoding_profile,
+                        db=db,
+                        last_camera_preset=(last_camera_id, last_preset_id)
+                    )
+
+                    # Cancel position updates
+                    if timeline_id in self._position_update_tasks:
+                        self._position_update_tasks[timeline_id].cancel()
+                        try:
+                            await self._position_update_tasks[timeline_id]
+                        except asyncio.CancelledError:
+                            pass
+
+                    # Track last camera/preset to avoid redundant PTZ moves
+                    last_camera_id = video_cue.action_params.get("camera_id")
+                    last_preset_id = video_cue.action_params.get("preset_id")
+
                 if not timeline.loop:
                     logger.info(f"Timeline {timeline.name} completed (loop=False)")
                     break
@@ -180,6 +231,9 @@ class TimelineExecutor:
             
         except asyncio.CancelledError:
             logger.info(f"Timeline {timeline_id} execution cancelled")
+            # Clear playback position
+            if timeline_id in self.playback_positions:
+                del self.playback_positions[timeline_id]
             try:
                 # Try to update execution status, but don't fail if object is deleted
                 db.refresh(execution)
@@ -191,6 +245,9 @@ class TimelineExecutor:
             raise
         except Exception as e:
             logger.error(f"Error executing timeline {timeline_id}: {e}")
+            # Clear playback position
+            if timeline_id in self.playback_positions:
+                del self.playback_positions[timeline_id]
             try:
                 db.refresh(execution)
                 execution.status = "error"
@@ -218,6 +275,25 @@ class TimelineExecutor:
                     active_cues[track.track_type].append(cue)
         
         return active_cues
+
+    def _compute_segments(self, timeline: Timeline) -> List[Tuple[float, float]]:
+        """Compute contiguous time segments from union of all cue boundaries across enabled tracks."""
+        boundaries: List[float] = [0.0, timeline.duration]
+        for track in timeline.tracks:
+            if not track.is_enabled:
+                continue
+            for cue in track.cues:
+                boundaries.append(float(cue.start_time))
+                boundaries.append(float(cue.start_time + cue.duration))
+        # Unique and sort within [0, duration]
+        uniq = sorted(set(t for t in boundaries if t >= 0.0 and t <= timeline.duration))
+        segments: List[Tuple[float, float]] = []
+        for i in range(len(uniq) - 1):
+            start = uniq[i]
+            end = uniq[i + 1]
+            if end - start > 0.0:
+                segments.append((start, end))
+        return segments
     
     async def _download_asset_image(self, asset: Asset) -> Optional[str]:
         """Download an asset image to a temp file. Returns temp file path or None."""
@@ -252,23 +328,29 @@ class TimelineExecutor:
         
         return None
     
-    async def _execute_cue(
+    async def _execute_segment(
         self,
         timeline_id: int,
-        cue: TimelineCue,
+        seg_start: float,
+        duration: float,
+        video_cue: TimelineCue,
         ffmpeg_manager: FFmpegProcessManager,
         output_urls: list[str],
         encoding_profile: Optional[EncodingProfile],
-        db: Session
+        db: Session,
+        last_camera_preset: Tuple[Optional[int], Optional[int]]
     ):
-        """Execute a single cue (camera switch) with overlays"""
+        """Execute a single time segment with current video and overlays.
+
+        Overlays are sampled at segment start and applied for the whole segment.
+        """
         try:
-            if cue.action_type == "show_camera":
-                camera_id = cue.action_params.get("camera_id")
-                preset_id = cue.action_params.get("preset_id")  # Optional
+            if video_cue.action_type == "show_camera":
+                camera_id = video_cue.action_params.get("camera_id")
+                preset_id = video_cue.action_params.get("preset_id")  # Optional
                 
                 if not camera_id:
-                    logger.error(f"Cue {cue.id} has no camera_id")
+                    logger.error(f"Cue {video_cue.id} has no camera_id")
                     return
                     
                 # Get camera
@@ -281,7 +363,9 @@ class TimelineExecutor:
                 if preset_id:
                     preset = db.query(Preset).filter(Preset.id == preset_id).first()
                     if preset:
-                        logger.info(f"🎯 Moving camera {camera.name} to preset '{preset.name}'")
+                        # Avoid redundant PTZ if unchanged since last segment
+                        if (last_camera_preset[0] != camera_id) or (last_camera_preset[1] != preset_id):
+                            logger.info(f"🎯 Moving camera {camera.name} to preset '{preset.name}'")
                         
                         # Get camera credentials
                         password = None
@@ -291,7 +375,7 @@ class TimelineExecutor:
                             except Exception as e:
                                 logger.error(f"Failed to decode camera password: {e}")
                         
-                        if password:
+                        if password and ((last_camera_preset[0] != camera_id) or (last_camera_preset[1] != preset_id)):
                             # Use configured ONVIF port for PTZ control
                             ptz_service = get_ptz_service()
                             try:
@@ -320,20 +404,20 @@ class TimelineExecutor:
                 # Build RTSP URL
                 rtsp_url = self._build_rtsp_url(camera)
                 preset_info = f" at preset '{preset.name}'" if preset_id and preset else ""
-                logger.info(f"🎬 Switching to camera {camera.name}{preset_info} for {cue.duration}s")
+                logger.info(f"🎬 Segment streaming from camera {camera.name}{preset_info} for {duration}s")
                 logger.debug(f"RTSP URL: {rtsp_url}")
                 logger.debug(f"Output URLs: {output_urls}")
                 
                 # Get the timeline to find overlay cues at this time
                 timeline = db.query(Timeline).filter(Timeline.id == timeline_id).first()
-                active_cues = self._get_active_cues_at_time(timeline, cue.start_time)
+                active_cues = self._get_active_cues_at_time(timeline, seg_start)
                 
                 # Process overlay cues
                 overlay_images = []
                 temp_files = []
                 
                 if active_cues['overlay']:
-                    logger.info(f"🎨 Found {len(active_cues['overlay'])} overlay cue(s) at time {cue.start_time}")
+                    logger.info(f"🎨 Found {len(active_cues['overlay'])} overlay cue(s) at time {seg_start}")
                     
                     for overlay_cue in active_cues['overlay']:
                         asset_id = overlay_cue.action_params.get('asset_id')
@@ -421,9 +505,9 @@ class TimelineExecutor:
                     raise
                 
                 # Wait for cue duration
-                logger.info(f"⏱️  Waiting {cue.duration}s for cue to complete...")
-                await asyncio.sleep(cue.duration)
-                logger.info(f"✅ Cue {cue.id} ({camera.name}) completed successfully")
+                logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
+                await asyncio.sleep(duration)
+                logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
                 
                 # Clean up temp files after cue completes
                 for temp_file in temp_files:
@@ -434,13 +518,75 @@ class TimelineExecutor:
                         logger.warning(f"Failed to clean up temp file {temp_file}: {e}")
                 
             else:
-                logger.warning(f"Unsupported action type: {cue.action_type}")
+                logger.warning("Unsupported action type for video cue")
                 
         except Exception as e:
-            logger.error(f"❌ Error executing cue {cue.id}: {e}")
+            logger.error(f"❌ Error executing segment at t={seg_start:.2f}s: {e}")
             traceback.print_exc()
             raise  # Re-raise the exception to stop timeline execution
             
+    async def _update_position_during_cue(
+        self,
+        timeline_id: int,
+        cue: TimelineCue,
+        cue_index: int,
+        total_cues: int,
+        loop_count: int,
+        duration: float
+    ):
+        """Continuously update playback position during cue execution"""
+        start_time = datetime.utcnow()
+        
+        try:
+            while True:
+                elapsed = (datetime.utcnow() - start_time).total_seconds()
+                current_time = cue.start_time + min(elapsed, duration)
+                
+                self.playback_positions[timeline_id] = {
+                    "current_time": current_time,
+                    "current_cue_id": cue.id,
+                    "current_cue_index": cue_index,
+                    "loop_count": loop_count,
+                    "total_cues": total_cues,
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                
+                await asyncio.sleep(0.5)  # Update every 500ms
+                
+        except asyncio.CancelledError:
+            pass
+
+    async def _update_position_during_segment(
+        self,
+        timeline_id: int,
+        start_time: float,
+        duration: float,
+        current_cue_id: int,
+        current_cue_index: int,
+        total_cues: int,
+        loop_count: int,
+    ):
+        """Continuously update playback position during a segment.
+
+        Mirrors the cue-based updater but uses an explicit start_time/duration.
+        """
+        seg_start = datetime.utcnow()
+        try:
+            while True:
+                elapsed = (datetime.utcnow() - seg_start).total_seconds()
+                current_time = start_time + min(elapsed, duration)
+                self.playback_positions[timeline_id] = {
+                    "current_time": current_time,
+                    "current_cue_id": current_cue_id,
+                    "current_cue_index": current_cue_index,
+                    "loop_count": loop_count,
+                    "total_cues": total_cues,
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            pass
+    
     def _build_rtsp_url(self, camera: Camera) -> str:
         """Build RTSP URL for a camera"""
         import base64
@@ -468,4 +614,10 @@ def get_timeline_executor() -> TimelineExecutor:
     if _timeline_executor is None:
         _timeline_executor = TimelineExecutor()
     return _timeline_executor
+
+
+def get_playback_position(timeline_id: int) -> Optional[dict]:
+    """Get current playback position for a timeline"""
+    executor = get_timeline_executor()
+    return executor.playback_positions.get(timeline_id)
 

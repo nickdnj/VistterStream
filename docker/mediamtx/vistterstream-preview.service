@@ -1,0 +1,16 @@
+[Unit]
+Description=VistterStream Preview Server (MediaMTX)
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/usr/local/bin/mediamtx /etc/vistterstream/mediamtx.yml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

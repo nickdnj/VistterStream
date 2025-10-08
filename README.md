@@ -10,7 +10,7 @@ VistterStream is designed to run on hardware like the Raspberry Pi in a Docker c
 
 - **Camera Management**: Support for RTSP/RTMP cameras including Reolink (stationary) and Amcrest/Samba (PTZ)
 - **PTZ Presets**: Define and execute preset positions for PTZ cameras
-- **Live Previews**: Embedded video preview for each camera feed
+- **Live Scheduling**: Background scheduler starts/stops timelines on day/time windows
 - **Health Monitoring**: Real-time camera connection status and system metrics
 - **Web Interface**: Local-only web UI for configuration and monitoring
 - **FFmpeg Processing**: Professional video processing with overlays and transcoding
@@ -193,7 +193,6 @@ The project includes configuration for local test cameras:
 
 ### **Next Up:**
 - **🎯 End-to-End Testing**: Full timeline → YouTube test with seamless switching
-- **📆 Timeline Scheduling**: Future execution, recurring schedules
 - **☁️ VistterStudio Integration**: Import/export timelines, cloud control
 - **📊 Advanced Metrics**: Real-time bitrate graphs, FPS monitoring, dropped frames
 - **🔄 Multi-Destination Testing**: Simultaneous streaming to 3+ platforms (architecture ready)
@@ -206,6 +205,19 @@ The project includes configuration for local test cameras:
 - **[User Experience Design (UXD)](docs/UXD.md)** - UI/UX specifications and workflows
 - **[Streaming Pipeline Technical Spec](docs/StreamingPipeline-TechnicalSpec.md)** ⭐ **PRIMARY SPEC** - Detailed streaming & timeline implementation
 - **[VistterStudio Integration](docs/VistterStudioIntegration.md)** - Future cloud control integration
+
+### **Preview System** 🆕 ⭐ **(October 2025)**
+- **[Preview System Specification](docs/PreviewSystem-Specification.md)** - Complete PRD+SAD for local preview & go-live workflow (18,000 words)
+- **[Preview Quick Start Guide](docs/PreviewSystem-QuickStart.md)** - 30-minute developer setup guide
+- **[Preview Implementation TODO](docs/PreviewSystem-TODO.md)** - Detailed task breakdown with 57 actionable items
+- **[Preview Executive Summary](docs/PreviewSystem-Summary.md)** - High-level overview for stakeholders
+
+Note: Local preview window has been removed in favor of using YouTube Live Studio directly from the Timeline UI.
+
+### **Scheduler** (October 2025)
+- See `docs/Scheduler.md` for design and API
+- UI: left nav → Scheduler; create schedules with days/time windows and timelines
+- Background loop runs every 30s to enforce active schedules
 
 ### **Development Resources**
 - **[TODO List](TODO.md)** - Current development roadmap and task tracking

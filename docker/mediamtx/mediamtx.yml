@@ -1,0 +1,26 @@
+# MediaMTX Configuration for VistterStream Preview Server
+# Minimal working config
+
+# API for health checks
+api: yes
+apiAddress: 0.0.0.0:9997
+
+# RTMP configuration
+rtmpAddress: :1935
+
+# HLS configuration
+hlsAddress: :8888
+hlsAllowOrigin: "*"
+hlsAlwaysRemux: yes
+hlsSegmentCount: 10
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+
+# Paths
+paths:
+  preview:
+    source: publisher
+    record: no
+  "~^preview/.*$":
+    source: publisher
+    record: no

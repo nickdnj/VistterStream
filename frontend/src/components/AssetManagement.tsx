@@ -234,6 +234,31 @@ const AssetManagement: React.FC = () => {
     }
   };
 
+  const handleDuplicateAsset = async (asset: Asset) => {
+    try {
+      const payload = {
+        name: `${asset.name} (Copy)`,
+        type: asset.type,
+        file_path: asset.file_path,
+        api_url: asset.api_url,
+        api_refresh_interval: asset.api_url ? asset.api_refresh_interval : 30,
+        width: asset.width,
+        height: asset.height,
+        position_x: asset.position_x,
+        position_y: asset.position_y,
+        opacity: asset.opacity,
+        description: asset.description,
+        is_active: asset.is_active,
+      };
+      await axios.post('/api/assets/', payload);
+      alert('✅ Asset copied');
+      loadAssets();
+    } catch (error: any) {
+      console.error('Failed to copy asset:', error);
+      alert(`❌ Failed to copy asset:\n${error.response?.data?.detail || error.message}`);
+    }
+  };
+
   const handleTestAsset = async (assetId: number) => {
     setTesting(true);
     try {
@@ -387,6 +412,13 @@ const AssetManagement: React.FC = () => {
                     className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors font-medium"
                   >
                     ✏️ Edit
+                  </button>
+                  <button
+                    onClick={() => handleDuplicateAsset(asset)}
+                    className="px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded transition-colors font-medium"
+                    title="Copy asset"
+                  >
+                    📄 Copy
                   </button>
                   {asset.type === 'api_image' && (
                     <button

@@ -9,6 +9,7 @@ import PresetManagement from './components/PresetManagement';
 import TimelineEditor from './components/TimelineEditor';
 import StreamingDestinations from './components/StreamingDestinations';
 import Settings from './components/Settings';
+import Scheduler from './components/Scheduler';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -30,6 +31,7 @@ function App() {
                     <Route path="/timelines" element={<TimelineEditor />} />
                     <Route path="/destinations" element={<StreamingDestinations />} />
                     <Route path="/presets" element={<PresetManagement />} />
+                    <Route path="/scheduler" element={<Scheduler />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </Layout>
@@ -81,6 +83,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Settings />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/scheduler" element={
+              <ProtectedRoute>
+                <Layout>
+                  <Scheduler />
                 </Layout>
               </ProtectedRoute>
             } />

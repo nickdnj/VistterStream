@@ -97,7 +97,6 @@ const TimelineEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [showProgramMonitor, setShowProgramMonitor] = useState(true);
   const [cameraSnapshots, setCameraSnapshots] = useState<Record<number, string>>({});
 
   // Drag/resize state
@@ -112,11 +111,9 @@ const TimelineEditor: React.FC = () => {
   const [assetsExpanded, setAssetsExpanded] = useState(false);
   const [expandedCameras, setExpandedCameras] = useState<Set<number>>(new Set());
 
-  // Playhead and zoom controls
+  // Playhead and zoom controls (local-only, no live preview)
   const [playheadTime, setPlayheadTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(40); // pixels per second (default 40)
-  const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // New timeline form
   const [newTimeline, setNewTimeline] = useState<Timeline>({
@@ -177,36 +174,7 @@ const TimelineEditor: React.FC = () => {
     };
   }, [selectedTimeline?.id]);
 
-  // Playback preview
-  useEffect(() => {
-    if (isPlaying && selectedTimeline) {
-      playIntervalRef.current = setInterval(() => {
-        setPlayheadTime((prev) => {
-          const next = prev + 0.1;
-          if (next >= selectedTimeline.duration) {
-            if (selectedTimeline.loop) {
-              return 0;
-            } else {
-              setIsPlaying(false);
-              return selectedTimeline.duration;
-            }
-          }
-          return next;
-        });
-      }, 100); // Update every 100ms for smooth playback
-    } else {
-      if (playIntervalRef.current) {
-        clearInterval(playIntervalRef.current);
-        playIntervalRef.current = null;
-      }
-    }
-
-    return () => {
-      if (playIntervalRef.current) {
-        clearInterval(playIntervalRef.current);
-      }
-    };
-  }, [isPlaying, selectedTimeline]);
+  // Playback preview (local-only)
 
   useEffect(() => {
     // Add global mouse move and mouse up listeners for drag/resize
@@ -404,23 +372,18 @@ const TimelineEditor: React.FC = () => {
     setZoomLevel((prev) => Math.max(MIN_ZOOM, prev - 10));
   };
 
-  const togglePlayback = () => {
-    setIsPlaying(!isPlaying);
-  };
-
-  const stopPlayback = () => {
-    setIsPlaying(false);
-    setPlayheadTime(0);
-  };
+  // Old playback controls removed - using Preview Window instead
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (draggingCue || resizingCue) return;
-    
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickTime = clickX / zoomLevel;
-    
     setPlayheadTime(Math.max(0, Math.min(selectedTimeline?.duration || 0, clickTime)));
+  };
+
+  const resetPlayhead = () => {
+    setPlayheadTime(0);
   };
 
   const addTrack = (trackType: 'video' | 'overlay' | 'audio') => {
@@ -710,6 +673,8 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
+  // No live playhead polling
+
   // Fetch snapshots when playhead changes
   useEffect(() => {
     const currentCues = getCurrentCues();
@@ -744,6 +709,7 @@ const TimelineEditor: React.FC = () => {
     const marks = [];
     const duration = selectedTimeline.duration;
     const interval = zoomLevel < 20 ? 10 : zoomLevel < 40 ? 5 : 1;
+    const playheadPosition = (playheadTime / duration) * 100;
     
     for (let i = 0; i <= duration; i += interval) {
       marks.push(
@@ -1031,295 +997,23 @@ const TimelineEditor: React.FC = () => {
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedTimeline ? (
             <>
-              {/* Program Monitor - Preview Window */}
-              {showProgramMonitor && (
-                <div className="bg-dark-800 border-b border-dark-700 pb-6">
-                  <div className="flex items-center justify-between px-4 py-2 bg-dark-900 border-b border-dark-700">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-semibold">📺 Program Monitor</span>
-                      <span className="text-xs text-gray-400">(Preview Before Streaming)</span>
-                    </div>
-                    <button
-                      onClick={() => setShowProgramMonitor(false)}
-                      className="text-gray-400 hover:text-white transition-colors"
-                      title="Hide program monitor"
-                    >
-                      <XMarkIcon className="h-5 w-5" />
-                    </button>
+              {/* Live Control Link (YouTube Live Studio) */}
+              <div className="bg-dark-800 border-b border-dark-700 p-4">
+                <div className="max-w-4xl mx-auto flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white mb-1">Live Control</h2>
+                    <p className="text-gray-400 text-sm">Open YouTube Live Studio to manage your live stream.</p>
                   </div>
-
-                  {/* Preview Frame Container */}
-                  <div style={{ padding: '24px' }}>
-                    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-                      {/* 16:9 Video Preview */}
-                      <div 
-                        style={{
-                          width: '100%',
-                          height: '600px',
-                          backgroundColor: '#000000',
-                          borderRadius: '8px',
-                          border: '2px solid #4B5563',
-                          position: 'relative',
-                          overflow: 'hidden',
-                          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
-                        }}
-                      >
-                        {(() => {
-                          const currentCues = getCurrentCues();
-                          const videoCue = currentCues.find(c => c.track.track_type === 'video');
-                          const overlayCues = currentCues.filter(c => c.track.track_type === 'overlay');
-                          
-                          if (!videoCue) {
-                            return (
-                              <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <div style={{ textAlign: 'center' }}>
-                                  <div style={{ fontSize: '96px', marginBottom: '16px' }}>📹</div>
-                                  <div style={{ color: '#9CA3AF', fontSize: '20px', fontWeight: '500' }}>No Active Video Source</div>
-                                  <div style={{ color: '#6B7280', fontSize: '14px', marginTop: '8px' }}>Move playhead to a video cue or press Preview</div>
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          const camera = getCameraById(videoCue.cue.action_params.camera_id || 0);
-                          const preset = videoCue.cue.action_params.preset_id ? getPresetById(videoCue.cue.action_params.preset_id) : null;
-
-                          return (
-                            <>
-                              {/* Base Video Layer - Camera Snapshot Preview */}
-                              <div 
-                                style={{
-                                  position: 'absolute',
-                                  inset: '0',
-                                  backgroundColor: '#000000'
-                                }}
-                              >
-                                {cameraSnapshots[videoCue.cue.action_params.camera_id || 0] ? (
-                                  // Actual camera snapshot
-                                  <img
-                                    src={cameraSnapshots[videoCue.cue.action_params.camera_id || 0]}
-                                    alt={camera?.name}
-                                    style={{
-                                      width: '100%',
-                                      height: '100%',
-                                      objectFit: 'contain'
-                                    }}
-                                  />
-                                ) : (
-                                  // Loading state with gradient
-                                  <div 
-                                    style={{
-                                      position: 'absolute',
-                                      inset: '0',
-                                      background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 25%, #2563eb 50%, #1e40af 75%, #1e3a8a 100%)',
-                                      backgroundSize: '400% 400%'
-                                    }}
-                                  >
-                                    <div style={{ 
-                                      position: 'absolute', 
-                                      inset: '0',
-                                      backgroundImage: `
-                                        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px),
-                                        repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px)
-                                      `
-                                    }}>
-                                      <div style={{ position: 'absolute', inset: '0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <div style={{ textAlign: 'center' }}>
-                                          <div style={{ fontSize: '72px', marginBottom: '12px' }}>🎥</div>
-                                          <div style={{ color: '#FFFFFF', fontSize: '28px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                                            {camera?.name || 'Camera'}
-                                          </div>
-                                          {preset && <div style={{ color: '#60A5FA', fontSize: '18px', marginTop: '8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>🎯 {preset.name}</div>}
-                                          <div style={{ 
-                                            color: '#E5E7EB', 
-                                            fontSize: '13px', 
-                                            marginTop: '16px', 
-                                            padding: '8px 16px',
-                                            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                                            borderRadius: '6px',
-                                            display: 'inline-block',
-                                            textShadow: 'none'
-                                          }}>
-                                            📸 Loading Camera Snapshot...
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Camera Name Overlay */}
-                                <div style={{
-                                  position: 'absolute',
-                                  top: '20px',
-                                  right: '20px',
-                                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                  color: '#FFFFFF',
-                                  fontSize: '16px',
-                                  fontWeight: '600',
-                                  padding: '8px 16px',
-                                  borderRadius: '6px',
-                                  border: '2px solid rgba(59, 130, 246, 0.5)',
-                                  textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-                                }}>
-                                  🎥 {camera?.name || 'Camera'}
-                                  {preset && <div style={{ fontSize: '13px', color: '#60A5FA', marginTop: '4px' }}>🎯 {preset.name}</div>}
-                                </div>
-
-                                {/* "STATIC SNAPSHOT" Watermark */}
-                                <div style={{
-                                  position: 'absolute',
-                                  bottom: '20px',
-                                  right: '20px',
-                                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                  color: '#60A5FA',
-                                  fontSize: '11px',
-                                  fontWeight: '600',
-                                  padding: '6px 12px',
-                                  borderRadius: '4px',
-                                  border: '1px solid rgba(96, 165, 250, 0.5)',
-                                  letterSpacing: '0.5px'
-                                }}>
-                                  📸 STATIC SNAPSHOT
-                                </div>
-                              </div>
-
-                              {/* Overlay Layers */}
-                              {overlayCues.map((overlayCue, idx) => {
-                                const asset = getAssetById(overlayCue.cue.action_params.asset_id || 0);
-                                if (!asset) return null;
-
-                                return (
-                                  <div
-                                    key={idx}
-                                    style={{
-                                      position: 'absolute',
-                                      left: `${asset.position_x * 100}%`,
-                                      top: `${asset.position_y * 100}%`,
-                                      transform: 'translate(-50%, -50%)',
-                                      opacity: asset.opacity,
-                                      zIndex: 10 + idx,
-                                      pointerEvents: 'none'
-                                    }}
-                                  >
-                                    {asset.type === 'api_image' && asset.api_url ? (
-                                      <img
-                                        src={asset.api_url}
-                                        alt={asset.name}
-                                        style={{ maxWidth: '448px', maxHeight: '256px', borderRadius: '8px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}
-                                        onError={(e) => {
-                                          (e.target as HTMLImageElement).style.display = 'none';
-                                        }}
-                                      />
-                                    ) : asset.type === 'static_image' && asset.file_path ? (
-                                      <img
-                                        src={asset.file_path}
-                                        alt={asset.name}
-                                        style={{ maxWidth: '448px', maxHeight: '256px', borderRadius: '8px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}
-                                        onError={(e) => {
-                                          (e.target as HTMLImageElement).style.display = 'none';
-                                        }}
-                                      />
-                                    ) : (
-                                      <div style={{ 
-                                        backgroundColor: '#9333EA', 
-                                        color: '#FFFFFF', 
-                                        padding: '12px 24px', 
-                                        borderRadius: '8px', 
-                                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-                                        fontSize: '18px',
-                                        fontWeight: '500'
-                                      }}>
-                                        {asset.type === 'api_image' && '🌐 '}
-                                        {asset.type === 'static_image' && '🖼️ '}
-                                        {asset.type === 'video' && '🎥 '}
-                                        {asset.type === 'graphic' && '🎨 '}
-                                        {asset.name}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-
-                              {/* Timecode Overlay */}
-                              <div style={{
-                                position: 'absolute',
-                                top: '16px',
-                                left: '16px',
-                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                color: '#FFFFFF',
-                                fontSize: '14px',
-                                fontFamily: 'monospace',
-                                padding: '6px 12px',
-                                borderRadius: '4px'
-                              }}>
-                                {formatTime(playheadTime)}
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Info Messages */}
-                      <div style={{ marginTop: '16px', display: 'flex', gap: '12px' }}>
-                        {/* Static Preview Notice */}
-                        <div style={{
-                          flex: '1',
-                          padding: '16px',
-                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                          border: '1px solid rgba(59, 130, 246, 0.3)',
-                          borderRadius: '8px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                            <span style={{ fontSize: '20px', color: '#3B82F6' }}>📸</span>
-                            <div style={{ flex: '1' }}>
-                              <div style={{ color: '#3B82F6', fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
-                                Static Frame Preview
-                              </div>
-                              <div style={{ color: 'rgba(59, 130, 246, 0.8)', fontSize: '13px' }}>
-                                This shows a simulated camera frame with your overlays for positioning and evaluation. The actual live video feed will stream when you click <strong style={{ color: '#FFFFFF' }}>Start</strong>.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Streaming Notice */}
-                        <div style={{
-                          flex: '1',
-                          padding: '16px',
-                          backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                          border: '1px solid rgba(34, 197, 94, 0.3)',
-                          borderRadius: '8px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                            <span style={{ fontSize: '20px', color: '#22C55E' }}>🎬</span>
-                            <div style={{ flex: '1' }}>
-                              <div style={{ color: '#22C55E', fontSize: '14px', fontWeight: '600', marginBottom: '4px' }}>
-                                Ready to Stream
-                              </div>
-                              <div style={{ color: 'rgba(34, 197, 94, 0.8)', fontSize: '13px' }}>
-                                Once your timeline looks good, click the <strong style={{ color: '#FFFFFF' }}>Start</strong> button to begin live streaming with camera switching and overlays to your selected destinations.
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Show Program Monitor Button (if hidden) */}
-              {!showProgramMonitor && (
-                <div className="px-4 py-2 bg-dark-800 border-b border-dark-700">
-                  <button
-                    onClick={() => setShowProgramMonitor(true)}
-                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors font-medium"
+                  <a
+                    href="https://studio.youtube.com/video/ST8KGpJjFSE/livestreaming"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold"
                   >
-                    📺 Show Program Monitor
-                  </button>
+                    Open YouTube Live Studio ↗
+                  </a>
                 </div>
-              )}
+              </div>
 
               {/* Track Controls */}
               <div className="flex items-center justify-between gap-2 px-4 py-3 bg-dark-800 border-b border-dark-700">
@@ -1345,26 +1039,15 @@ const TimelineEditor: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Playback Controls */}
+                {/* Timeline Info & Playback Controls */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 border-r border-dark-700 pr-3">
                     <button
-                      onClick={togglePlayback}
-                      className={`px-3 py-1.5 rounded transition-colors ${
-                        isPlaying 
-                          ? 'bg-yellow-600 hover:bg-yellow-700' 
-                          : 'bg-gray-600 hover:bg-gray-700'
-                      } text-white text-sm font-medium`}
-                      title="Preview playback (Space)"
+                      onClick={resetPlayhead}
+                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
+                      title="Reset to start"
                     >
-                      {isPlaying ? '⏸️ Pause' : '▶️ Preview'}
-                    </button>
-                    <button
-                      onClick={stopPlayback}
-                      className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-                      title="Stop and reset"
-                    >
-                      ⏹️
+                      ⏮️
                     </button>
                     <span className="text-gray-300 text-sm font-mono">
                       {formatTime(playheadTime)} / {formatTime(selectedTimeline.duration)}
@@ -1433,16 +1116,11 @@ const TimelineEditor: React.FC = () => {
                     {/* Time Ruler */}
                     {renderTimeRuler()}
                     
-                    {/* Playhead */}
+                    {/* Playhead (simple) */}
                     <div 
-                      className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-50 pointer-events-none"
+                      className="absolute top-0 bottom-0 z-50 pointer-events-none w-0.5 bg-red-500"
                       style={{ left: `${playheadTime * zoomLevel}px` }}
-                    >
-                      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-red-500" style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }}></div>
-                      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white text-xs px-1 py-0.5 rounded whitespace-nowrap">
-                        {formatTime(playheadTime)}
-                      </div>
-                    </div>
+                    />
                     
                     {/* Tracks */}
                     {selectedTimeline.tracks.map((track, trackIndex) => (

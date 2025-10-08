@@ -12,11 +12,12 @@ import os
 from pathlib import Path
 
 # Import routers
-from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets
+from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler
 from routers import presets as presets_router
 
 # Import health monitor
 from services.camera_health_monitor import start_health_monitor, stop_health_monitor
+from services.scheduler_service import get_scheduler_service
 
 # Import RTMP relay service (THE SECRET SAUCE!)
 from services.rtmp_relay_service import get_rtmp_relay_service
@@ -54,6 +55,9 @@ app.include_router(status.router, prefix="/api/status", tags=["status"])
 app.include_router(destinations.router)  # Streaming destinations (YouTube, Facebook, etc.)
 app.include_router(timelines.router)  # Timeline CRUD
 app.include_router(timeline_execution.router)  # Timeline execution (start/stop/status)
+# Scheduling API
+app.include_router(scheduler.router)
+# Preview disabled per refactor away from local HLS preview
 app.include_router(emergency.router)  # Emergency controls (kill all streams)
 
 # Serve static files (React build)
@@ -89,6 +93,12 @@ async def startup_event():
     relay_service = get_rtmp_relay_service()
     await relay_service.start_all_cameras()
     print("✅ All services started")
+    # Start scheduler loop
+    try:
+        await get_scheduler_service().start()
+        print("🗓️ Scheduler started")
+    except Exception as e:
+        print(f"⚠️ Failed to start scheduler: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -100,6 +110,11 @@ async def shutdown_event():
     relay_service = get_rtmp_relay_service()
     await relay_service.stop_all_relays()
     print("✅ All services stopped")
+    # Stop scheduler loop
+    try:
+        await get_scheduler_service().stop()
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     uvicorn.run(

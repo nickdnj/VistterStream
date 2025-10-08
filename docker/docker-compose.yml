@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # RTMP Relay (existing - for camera ingestion)
+  rtmp-relay:
+    build: ./nginx-rtmp
+    container_name: vistterstream-rtmp-relay
+    ports:
+      - "1935:1935"  # RTMP port for camera feeds
+      - "8081:8080"  # HTTP stats/HLS
+    restart: unless-stopped
+    networks:
+      - vistter-network
+
+  # Preview Server (NEW - for timeline preview)
+  preview-server:
+    image: bluenviron/mediamtx:latest
+    container_name: vistterstream-preview
+    ports:
+      - "1936:1935"  # RTMP ingest (different port to avoid conflict)
+      - "8888:8888"  # HLS output
+      - "9997:9997"  # API
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
+    networks:
+      - vistter-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9997/v1/config/get", "||", "exit", "0"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  vistter-network:
+    driver: bridge
