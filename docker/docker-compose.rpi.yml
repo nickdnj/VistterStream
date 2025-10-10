@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: vistterstream-backend
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/vistterstream.db}
+      - UPLOADS_DIR=${UPLOADS_DIR:-/data/uploads}
+      - RTMP_RELAY_HOST=${RTMP_RELAY_HOST:-rtmp-relay}
+      - RTMP_RELAY_PORT=${RTMP_RELAY_PORT:-1935}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+    volumes:
+      - vistter_data:/data
+    devices:
+      - "/dev/video11:/dev/video11"
+    group_add:
+      - "44"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - rtmp-relay
+    restart: unless-stopped
+    networks:
+      - vistter-net
+
+  rtmp-relay:
+    build: ./nginx-rtmp
+    container_name: vistterstream-rtmp-relay
+    ports:
+      - "1935:1935"
+      - "8081:8080"
+    restart: unless-stopped
+    networks:
+      - vistter-net
+
+  preview-server:
+    image: bluenviron/mediamtx:latest
+    container_name: vistterstream-preview
+    ports:
+      - "1936:1935"
+      - "8888:8888"
+      - "9997:9997"
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    restart: unless-stopped
+    networks:
+      - vistter-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9997/v1/config/get", "||", "exit", "0"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  frontend:
+    image: docker.io/nickdnj/vistter-frontend:latest
+    container_name: vistterstream-frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    networks:
+      - vistter-net
+
+volumes:
+  vistter_data:
+
+networks:
+  vistter-net:
+    driver: bridge
+
+

@@ -9,6 +9,7 @@ The main FFmpeg switcher pulls from local RTMP (instant switching!)
 import asyncio
 import logging
 import base64
+import os
 from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
@@ -23,7 +24,10 @@ class CameraRelay:
         self.camera_id = camera_id
         self.camera_name = camera_name
         self.rtsp_url = rtsp_url
-        self.rtmp_url = f"rtmp://127.0.0.1:1935/live/camera_{camera_id}"
+        # Allow RTMP relay host/port to be configured for Docker networking
+        relay_host = os.getenv("RTMP_RELAY_HOST", "127.0.0.1")
+        relay_port = os.getenv("RTMP_RELAY_PORT", "1935")
+        self.rtmp_url = f"rtmp://{relay_host}:{relay_port}/live/camera_{camera_id}"
         self.process: Optional[asyncio.subprocess.Process] = None
         self.monitor_task: Optional[asyncio.Task] = None
     

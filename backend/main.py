@@ -17,7 +17,11 @@ from routers import presets as presets_router
 
 # Import health monitor
 from services.camera_health_monitor import start_health_monitor, stop_health_monitor
-from services.scheduler_service import get_scheduler_service
+# Scheduler is optional in some builds; avoid crashing if missing
+try:
+    from services.scheduler_service import get_scheduler_service  # type: ignore
+except Exception:  # noqa: E722
+    get_scheduler_service = None  # type: ignore
 
 # Import RTMP relay service (THE SECRET SAUCE!)
 from services.rtmp_relay_service import get_rtmp_relay_service
@@ -32,16 +36,21 @@ app = FastAPI(
 )
 
 # CORS middleware for frontend communication
+# CORS configuration (configurable via env)
+cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000,http://localhost:5173")
+cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Mount uploads directory for serving uploaded assets
-uploads_path = Path(__file__).parent / "uploads"
+# Allow overriding via environment variable to support Docker volume mounts
+uploads_dir_env = os.getenv("UPLOADS_DIR")
+uploads_path = Path(uploads_dir_env) if uploads_dir_env else (Path(__file__).parent / "uploads")
 uploads_path.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
 
@@ -61,16 +70,23 @@ app.include_router(scheduler.router)
 app.include_router(emergency.router)  # Emergency controls (kill all streams)
 
 # Serve static files (React build)
-frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
-if frontend_path.exists():
+# Support both Vite (dist) and CRA (build)
+frontend_candidates = [
+    Path(__file__).parent.parent / "frontend" / "dist",
+    Path(__file__).parent.parent / "frontend" / "build",
+]
+frontend_path = next((p for p in frontend_candidates if p.exists()), None)
+if frontend_path:
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the React frontend"""
-    frontend_file = Path(__file__).parent.parent / "frontend" / "dist" / "index.html"
-    if frontend_file.exists():
-        return HTMLResponse(content=frontend_file.read_text())
+    # Resolve the frontend index.html if available
+    if frontend_path:
+        frontend_file = frontend_path / "index.html"
+        if frontend_file.exists():
+            return HTMLResponse(content=frontend_file.read_text())
     return HTMLResponse(content="<h1>VistterStream Backend Running</h1><p>Frontend not built yet</p>")
 
 @app.get("/api/health")
@@ -94,11 +110,12 @@ async def startup_event():
     await relay_service.start_all_cameras()
     print("✅ All services started")
     # Start scheduler loop
-    try:
-        await get_scheduler_service().start()
-        print("🗓️ Scheduler started")
-    except Exception as e:
-        print(f"⚠️ Failed to start scheduler: {e}")
+    if get_scheduler_service:
+        try:
+            await get_scheduler_service().start()
+            print("🗓️ Scheduler started")
+        except Exception as e:
+            print(f"⚠️ Failed to start scheduler: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -111,10 +128,11 @@ async def shutdown_event():
     await relay_service.stop_all_relays()
     print("✅ All services stopped")
     # Stop scheduler loop
-    try:
-        await get_scheduler_service().stop()
-    except Exception:
-        pass
+    if get_scheduler_service:
+        try:
+            await get_scheduler_service().stop()
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     uvicorn.run(
