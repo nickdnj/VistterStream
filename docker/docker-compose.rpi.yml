@@ -14,10 +14,11 @@ services:
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000}
     volumes:
       - vistter_data:/data
-    devices:
-      - "/dev/video11:/dev/video11"
-    group_add:
-      - "44"
+    # Uncomment below if you have Pi 5 with hardware encoder
+    # devices:
+    #   - "/dev/video11:/dev/video11"
+    # group_add:
+    #   - "44"  # video group
     ports:
       - "8000:8000"
     depends_on:
