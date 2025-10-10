@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -58,7 +56,12 @@ services:
       start_period: 5s
 
   frontend:
-    image: docker.io/nickdnj/vistter-frontend:latest
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        # Update this with your Pi's IP address
+        REACT_APP_API_URL: "http://localhost:8000/api"
     container_name: vistterstream-frontend
     ports:
       - "3000:80"
