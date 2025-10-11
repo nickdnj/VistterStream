@@ -62,7 +62,7 @@ services:
       dockerfile: Dockerfile
       args:
         # Update this with your Pi's IP address
-        REACT_APP_API_URL: "http://localhost:8000/api"
+        REACT_APP_API_URL: "http://192.168.12.107:8000/api"
     container_name: vistterstream-frontend
     ports:
       - "3000:80"
