@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 
 interface Destination {
   id?: number;
@@ -41,7 +41,7 @@ const StreamingDestinations: React.FC = () => {
 
   const loadDestinations = async () => {
     try {
-      const response = await axios.get('/api/destinations/');
+      const response = await api.get('/destinations/');
       setDestinations(response.data);
     } catch (error) {
       console.error('Failed to load destinations:', error);
@@ -50,7 +50,7 @@ const StreamingDestinations: React.FC = () => {
 
   const loadPresets = async () => {
     try {
-      const response = await axios.get('/api/destinations/presets');
+      const response = await api.get('/destinations/presets');
       setPresets(response.data);
     } catch (error) {
       console.error('Failed to load presets:', error);
@@ -72,7 +72,7 @@ const StreamingDestinations: React.FC = () => {
 
   const createDestination = async () => {
     try {
-      await axios.post('/api/destinations/', newDestination);
+      await api.post('/destinations/', newDestination);
       setShowAddModal(false);
       setNewDestination({
         name: '',
@@ -92,7 +92,7 @@ const StreamingDestinations: React.FC = () => {
     if (!editingDestination || !editingDestination.id) return;
 
     try {
-      await axios.put(`/api/destinations/${editingDestination.id}`, editingDestination);
+      await api.put(`/destinations/${editingDestination.id}`, editingDestination);
       setEditingDestination(null);
       loadDestinations();
     } catch (error) {
@@ -105,7 +105,7 @@ const StreamingDestinations: React.FC = () => {
     if (!window.confirm('Delete this streaming destination?')) return;
 
     try {
-      await axios.delete(`/api/destinations/${id}`);
+      await api.delete(`/destinations/${id}`);
       loadDestinations();
     } catch (error) {
       console.error('Failed to delete destination:', error);

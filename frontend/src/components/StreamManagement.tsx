@@ -9,6 +9,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
+import { api } from '../services/api';
 
 interface Stream {
   id: number;
@@ -78,6 +79,14 @@ const StreamManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStream, setEditingStream] = useState<Stream | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const extractErrorDetail = (error: unknown): string | undefined => {
+    if (typeof error === 'object' && error && 'response' in error) {
+      const response = (error as { response?: { data?: { detail?: string } } }).response;
+      return response?.data?.detail;
+    }
+    return undefined;
+  };
   
   // Form state
   const [formData, setFormData] = useState({
@@ -100,35 +109,17 @@ const StreamManagement: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-      
       const [streamsRes, camerasRes, destinationsRes, presetsRes] = await Promise.all([
-        fetch('http://localhost:8000/api/streams/', { headers }),
-        fetch('http://localhost:8000/api/cameras/', { headers }),
-        fetch('http://localhost:8000/api/destinations/', { headers }),
-        fetch('http://localhost:8000/api/presets/', { headers })
+        api.get<Stream[]>('/streams/'),
+        api.get<Camera[]>('/cameras/'),
+        api.get<Destination[]>('/destinations/'),
+        api.get<Preset[]>('/presets/')
       ]);
-      
-      if (streamsRes.ok) {
-        const streamsData = await streamsRes.json();
-        setStreams(streamsData);
-      }
-      
-      if (camerasRes.ok) {
-        const camerasData = await camerasRes.json();
-        setCameras(camerasData);
-      }
-      
-      if (destinationsRes.ok) {
-        const destinationsData = await destinationsRes.json();
-        setDestinations(destinationsData.filter((d: Destination) => d.is_active));
-      }
-      
-      if (presetsRes.ok) {
-        const presetsData = await presetsRes.json();
-        setPresets(presetsData);
-      }
+
+      setStreams(streamsRes.data);
+      setCameras(camerasRes.data);
+      setDestinations(destinationsRes.data.filter((d) => d.is_active));
+      setPresets(presetsRes.data);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -138,103 +129,67 @@ const StreamManagement: React.FC = () => {
 
   const handleStartStream = async (streamId: number) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/streams/${streamId}/start`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (response.ok) {
-        loadData(); // Refresh
-      } else {
-        const error = await response.json();
-        alert(`Failed to start stream: ${error.detail}`);
-      }
+      await api.post(`/streams/${streamId}/start`);
+      loadData();
     } catch (error) {
       console.error('Failed to start stream:', error);
-      alert('Failed to start stream');
+      const detail = extractErrorDetail(error);
+      alert(`Failed to start stream${detail ? `: ${detail}` : ''}`);
     }
   };
 
   const handleStopStream = async (streamId: number) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/streams/${streamId}/stop`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (response.ok) {
-        loadData(); // Refresh
-      } else {
-        const error = await response.json();
-        alert(`Failed to stop stream: ${error.detail}`);
-      }
+      await api.post(`/streams/${streamId}/stop`);
+      loadData();
     } catch (error) {
       console.error('Failed to stop stream:', error);
-      alert('Failed to stop stream');
+      const detail = extractErrorDetail(error);
+      alert(`Failed to stop stream${detail ? `: ${detail}` : ''}`);
     }
   };
 
   const handleDeleteStream = async (streamId: number) => {
     if (!window.confirm('Are you sure you want to delete this stream?')) return;
-    
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/streams/${streamId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      if (response.ok) {
-        loadData(); // Refresh
-      }
+      await api.delete(`/streams/${streamId}`);
+      loadData();
     } catch (error) {
       console.error('Failed to delete stream:', error);
+      const detail = extractErrorDetail(error);
+      alert(`Failed to delete stream${detail ? `: ${detail}` : ''}`);
     }
   };
 
   const handleSubmitStream = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:8000/api/streams/', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...formData,
-          camera_id: parseInt(formData.camera_id),
-          destination_id: parseInt(formData.destination_id),
-          preset_id: formData.preset_id ? parseInt(formData.preset_id) : undefined,
-          framerate: parseInt(String(formData.framerate))
-        })
+      await api.post('/streams/', {
+        ...formData,
+        camera_id: parseInt(formData.camera_id, 10),
+        destination_id: parseInt(formData.destination_id, 10),
+        preset_id: formData.preset_id ? parseInt(formData.preset_id, 10) : undefined,
+        framerate: parseInt(String(formData.framerate), 10)
       });
-      
-      if (response.ok) {
-        // Reset form
-        setFormData({
-          name: '',
-          camera_id: '',
-          preset_id: '',
-          destination_id: '',
-          resolution: '1920x1080',
-          bitrate: '4500k',
-          framerate: 30
-        });
-        setShowAddModal(false);
-        loadData(); // Refresh streams
-      } else {
-        const error = await response.json();
-        alert(`Failed to create stream: ${error.detail || 'Unknown error'}`);
-      }
+
+      setFormData({
+        name: '',
+        camera_id: '',
+        preset_id: '',
+        destination_id: '',
+        resolution: '1920x1080',
+        bitrate: '4500k',
+        framerate: 30
+      });
+      setShowAddModal(false);
+      loadData();
     } catch (error) {
       console.error('Failed to create stream:', error);
-      alert('Failed to create stream. Check console for details.');
+      const detail = extractErrorDetail(error);
+      alert(`Failed to create stream${detail ? `: ${detail}` : ''}`);
     } finally {
       setSaving(false);
     }
@@ -298,46 +253,33 @@ const StreamManagement: React.FC = () => {
   const handleUpdateStream = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStream) return;
-    
+
     setSaving(true);
-    
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:8000/api/streams/${editingStream.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          ...formData,
-          camera_id: parseInt(formData.camera_id),
-          destination_id: parseInt(formData.destination_id),
-          preset_id: formData.preset_id ? parseInt(formData.preset_id) : undefined,
-          framerate: parseInt(String(formData.framerate))
-        })
+      await api.put(`/streams/${editingStream.id}`, {
+        ...formData,
+        camera_id: parseInt(formData.camera_id, 10),
+        destination_id: parseInt(formData.destination_id, 10),
+        preset_id: formData.preset_id ? parseInt(formData.preset_id, 10) : undefined,
+        framerate: parseInt(String(formData.framerate), 10)
       });
-      
-      if (response.ok) {
-        // Reset form and close modal
-        setFormData({
-          name: '',
-          camera_id: '',
-          preset_id: '',
-          destination_id: '',
-          resolution: '1920x1080',
-          bitrate: '4500k',
-          framerate: 30
-        });
-        setEditingStream(null);
-        loadData(); // Refresh streams
-      } else {
-        const error = await response.json();
-        alert(`Failed to update stream: ${error.detail || 'Unknown error'}`);
-      }
+
+      setFormData({
+        name: '',
+        camera_id: '',
+        preset_id: '',
+        destination_id: '',
+        resolution: '1920x1080',
+        bitrate: '4500k',
+        framerate: 30
+      });
+      setEditingStream(null);
+      loadData();
     } catch (error) {
       console.error('Failed to update stream:', error);
-      alert('Failed to update stream. Check console for details.');
+      const detail = extractErrorDetail(error);
+      alert(`Failed to update stream${detail ? `: ${detail}` : ''}`);
     } finally {
       setSaving(false);
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface Camera {
@@ -153,7 +153,7 @@ const TimelineEditor: React.FC = () => {
     const refreshExecutionStatus = async () => {
       try {
         if (!selectedTimeline?.id) return;
-        const resp = await axios.get(`/api/timeline-execution/status/${selectedTimeline.id}`);
+        const resp = await api.get(`/timeline-execution/status/${selectedTimeline.id}`);
         setIsRunning(Boolean(resp.data?.is_running));
       } catch (err) {
         console.error('Failed to fetch timeline status:', err);
@@ -202,7 +202,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadTimelines = async () => {
     try {
-      const response = await axios.get('/api/timelines/');
+      const response = await api.get('/timelines/');
       setTimelines(response.data);
       if (response.data.length > 0 && !selectedTimeline) {
         setSelectedTimeline(response.data[0]);
@@ -214,7 +214,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadCameras = async () => {
     try {
-      const response = await axios.get('/api/cameras/');
+      const response = await api.get('/cameras/');
       setCameras(response.data);
     } catch (error) {
       console.error('Failed to load cameras:', error);
@@ -223,7 +223,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadPresets = async () => {
     try {
-      const response = await axios.get('/api/presets/');
+      const response = await api.get('/presets/');
       setPresets(response.data);
     } catch (error) {
       console.error('Failed to load presets:', error);
@@ -232,7 +232,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadAssets = async () => {
     try {
-      const response = await axios.get('/api/assets/');
+      const response = await api.get('/assets/');
       setAssets(response.data);
     } catch (error) {
       console.error('Failed to load assets:', error);
@@ -241,7 +241,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadDestinations = async () => {
     try {
-      const response = await axios.get('/api/destinations/');
+      const response = await api.get('/destinations/');
       setDestinations(response.data.filter((d: Destination) => d.is_active));
     } catch (error) {
       console.error('Failed to load destinations:', error);
@@ -415,7 +415,7 @@ const TimelineEditor: React.FC = () => {
 
     setSaving(true);
     try {
-      await axios.put(`/api/timelines/${selectedTimeline.id}`, selectedTimeline);
+      await api.put(`/timelines/${selectedTimeline.id}`, selectedTimeline);
       alert('✅ Timeline saved successfully!');
       loadTimelines();
     } catch (error: any) {
@@ -434,7 +434,7 @@ const TimelineEditor: React.FC = () => {
     if (!confirmDelete) return;
 
     try {
-      await axios.delete(`/api/timelines/${timelineId}`);
+      await api.delete(`/timelines/${timelineId}`);
       alert(`✅ Timeline "${timelineName}" deleted successfully!`);
       
       // Clear selection if deleted timeline was selected
@@ -467,7 +467,7 @@ const TimelineEditor: React.FC = () => {
     try {
       // First, try to stop the timeline if it's already running
       try {
-        await axios.post(`/api/timeline-execution/stop/${selectedTimeline.id}`);
+        await api.post(`/timeline-execution/stop/${selectedTimeline.id}`);
         console.log('🛑 Stopped existing timeline instance');
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
       } catch (stopError) {
@@ -476,13 +476,13 @@ const TimelineEditor: React.FC = () => {
       }
 
       // Now start the timeline
-      const response = await axios.post('/api/timeline-execution/start', {
+      const response = await api.post('/timeline-execution/start', {
         timeline_id: selectedTimeline.id,
         destination_ids: selectedDestinations
       });
       setIsRunning(true);
       // Immediately refresh status from backend to avoid drift
-      try { await axios.get(`/api/timeline-execution/status/${selectedTimeline.id}`).then(r => setIsRunning(Boolean(r.data?.is_running))); } catch {}
+      try { await api.get(`/timeline-execution/status/${selectedTimeline.id}`).then(r => setIsRunning(Boolean(r.data?.is_running))); } catch {}
       const destNames = response.data.destinations.join(', ');
       const totalCues = selectedTimeline.tracks.reduce((sum, t) => sum + t.cues.length, 0);
       alert(`🎉 Timeline started!\n\n📡 Streaming to: ${destNames}\n🎬 ${totalCues} cues will execute`);
@@ -498,10 +498,10 @@ const TimelineEditor: React.FC = () => {
     if (!selectedTimeline || !selectedTimeline.id) return;
 
     try {
-      await axios.post(`/api/timeline-execution/stop/${selectedTimeline.id}`);
+      await api.post(`/timeline-execution/stop/${selectedTimeline.id}`);
       setIsRunning(false);
       // Immediately refresh status
-      try { await axios.get(`/api/timeline-execution/status/${selectedTimeline.id}`).then(r => setIsRunning(Boolean(r.data?.is_running))); } catch {}
+      try { await api.get(`/timeline-execution/status/${selectedTimeline.id}`).then(r => setIsRunning(Boolean(r.data?.is_running))); } catch {}
       alert('Timeline stopped');
     } catch (error) {
       console.error('Failed to stop timeline:', error);
@@ -511,7 +511,7 @@ const TimelineEditor: React.FC = () => {
 
   const createNewTimeline = async () => {
     try {
-      const response = await axios.post('/api/timelines/', newTimeline);
+      const response = await api.post('/timelines/', newTimeline);
       setTimelines([...timelines, response.data]);
       setSelectedTimeline(response.data);
       setShowNewTimelineModal(false);
@@ -662,7 +662,7 @@ const TimelineEditor: React.FC = () => {
     }
 
     try {
-      const response = await axios.get(`/api/cameras/${cameraId}/snapshot`);
+      const response = await api.get(`/cameras/${cameraId}/snapshot`);
       // Backend returns JSON with base64 encoded image
       if (response.data && response.data.image_data) {
         const imageUrl = `data:${response.data.content_type};base64,${response.data.image_data}`;

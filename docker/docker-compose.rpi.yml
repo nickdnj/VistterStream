@@ -11,7 +11,9 @@ services:
       - UPLOADS_DIR=${UPLOADS_DIR:-/data/uploads}
       - RTMP_RELAY_HOST=${RTMP_RELAY_HOST:-rtmp-relay}
       - RTMP_RELAY_PORT=${RTMP_RELAY_PORT:-1935}
-      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      - CORS_ALLOW_ORIGINS=http://vistterpi.local:3000,http://192.168.12.107:3000,http://localhost:3000
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
     volumes:
       - vistter_data:/data
     # Uncomment below if you have Pi 5 with hardware encoder

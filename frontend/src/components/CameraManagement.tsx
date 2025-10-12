@@ -42,16 +42,9 @@ const CameraManagement: React.FC = () => {
 
     const refreshSnapshot = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/cameras/${streamingCamera.id}/snapshot`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.image_data) {
-            setLiveSnapshot(`data:${data.content_type};base64,${data.image_data}`);
-          }
+        const data = await cameraService.getCameraSnapshot(streamingCamera.id);
+        if (data?.image_data) {
+          setLiveSnapshot(`data:${data.content_type};base64,${data.image_data}`);
         }
       } catch (error) {
         console.error('Failed to refresh snapshot:', error);
@@ -85,18 +78,9 @@ const CameraManagement: React.FC = () => {
     for (const camera of cameraList) {
       if (camera.status === 'online') {
         try {
-          const response = await fetch(`http://localhost:8000/api/cameras/${camera.id}/snapshot`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data.image_data) {
-              newSnapshots[camera.id] = `data:${data.content_type};base64,${data.image_data}`;
-            }
-          } else {
-            console.log(`Snapshot response for camera ${camera.id}:`, response.status, response.statusText);
+          const data = await cameraService.getCameraSnapshot(camera.id);
+          if (data?.image_data) {
+            newSnapshots[camera.id] = `data:${data.content_type};base64,${data.image_data}`;
           }
         } catch (error) {
           console.error(`Failed to load snapshot for camera ${camera.id}:`, error);

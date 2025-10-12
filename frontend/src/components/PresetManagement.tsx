@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 
 interface Camera {
   id: number;
@@ -40,8 +40,8 @@ const PresetManagement: React.FC = () => {
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const [camerasRes, presetsRes] = await Promise.all([
-        axios.get('/api/cameras/', { headers }),
-        axios.get('/api/presets/', { headers })
+        api.get('/cameras/', { headers }),
+        api.get('/presets/', { headers })
       ]);
 
       if (camerasRes.data) {
@@ -74,8 +74,8 @@ const PresetManagement: React.FC = () => {
     setCapturing(true);
     try {
       const token = localStorage.getItem('token');
-      await axios.post(
-        '/api/presets/capture',
+      await api.post(
+        '/presets/capture',
         null,
         {
           params: {
@@ -106,8 +106,8 @@ const PresetManagement: React.FC = () => {
     setTestingPreset(presetId);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `/api/presets/${presetId}/move`,
+      const response = await api.post(
+        `/presets/${presetId}/move`,
         null,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
@@ -128,7 +128,7 @@ const PresetManagement: React.FC = () => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/presets/${presetId}`, {
+      await api.delete(`/presets/${presetId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

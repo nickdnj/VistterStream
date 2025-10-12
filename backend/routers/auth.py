@@ -11,7 +11,7 @@ from jose import jwt
 import bcrypt
 
 from models.database import get_db, User
-from models.schemas import UserCreate, User as UserSchema, Token
+from models.schemas import UserCreate, User as UserSchema, Token, PasswordChangeRequest
 
 router = APIRouter()
 
@@ -116,6 +116,31 @@ async def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/change-password")
+async def change_password(
+    payload: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change the authenticated user's password"""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the current password",
+        )
+
+    current_user.password_hash = get_password_hash(payload.new_password)
+    db.add(current_user)
+    db.commit()
+    return {"success": True}
+
 
 @router.get("/me", response_model=UserSchema)
 async def read_users_me(current_user: User = Depends(get_current_user)):

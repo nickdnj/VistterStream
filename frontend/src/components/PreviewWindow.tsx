@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 // @ts-ignore - HLS.js types
 import Hls from 'hls.js';
-import axios from 'axios';
+import { api } from '../services/api';
 import { 
   PlayIcon, 
   StopIcon, 
@@ -65,7 +65,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
     while (Date.now() - start < maxWaitMs) {
       try {
         const url = `${manifestUrl}?t=${Date.now()}`;
-        const res = await axios.get(url, { validateStatus: () => true });
+        const res = await api.get(url, { validateStatus: () => true });
         if (res.status === 200 && typeof res.data === 'string' && res.data.includes('#EXTM3U')) {
           return true;
         }
@@ -93,7 +93,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
     
     const positionInterval = setInterval(async () => {
       try {
-        const response = await axios.get('/api/preview/playback-position');
+        const response = await api.get('/preview/playback-position');
         if (response.data.is_playing && response.data.position) {
           const newCueId = response.data.position.current_cue_id;
           setPlaybackPosition(response.data.position);
@@ -162,7 +162,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
 
   const loadPreviewStatus = async () => {
     try {
-      const response = await axios.get('/api/preview/status');
+      const response = await api.get('/preview/status');
       setStatus(response.data);
       setError(null);
     } catch (err) {
@@ -172,7 +172,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
 
   const loadDestinations = async () => {
     try {
-      const response = await axios.get('/api/destinations');
+      const response = await api.get('/destinations');
       setDestinations(response.data.filter((d: Destination) => d.is_active));
     } catch (err) {
       console.error('Failed to load destinations:', err);
@@ -250,7 +250,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
     setError(null);
     
     try {
-      await axios.post('/api/preview/start', { timeline_id: timelineId });
+      await api.post('/preview/start', { timeline_id: timelineId });
       await loadPreviewStatus();
       onPreviewStart?.();
     } catch (err: any) {
@@ -265,7 +265,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
     setError(null);
     
     try {
-      await axios.post('/api/preview/stop');
+      await api.post('/preview/stop');
       await loadPreviewStatus();
       onPreviewStop?.();
     } catch (err: any) {
@@ -296,7 +296,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
     setError(null);
     
     try {
-      await axios.post('/api/preview/go-live', {
+      await api.post('/preview/go-live', {
         destination_ids: selectedDestinations
       });
       await loadPreviewStatus();

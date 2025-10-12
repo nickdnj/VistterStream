@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const Login: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +24,9 @@ const Login: React.FC = () => {
       const success = await login(username, password);
       if (!success) {
         setError('Invalid username or password');
+      } else {
+        const redirectTo = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname || '/dashboard';
+        navigate(redirectTo, { replace: true });
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -58,6 +64,7 @@ const Login: React.FC = () => {
                   id="username"
                   name="username"
                   type="text"
+                  autoComplete="username"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -76,6 +83,7 @@ const Login: React.FC = () => {
                     name="password"
                     type={showPassword ? 'text' : 'password'}
                     required
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full px-3 py-2 pr-10 border border-gray-600 rounded-md shadow-sm placeholder-gray-400 bg-dark-700 text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"

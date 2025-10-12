@@ -188,6 +188,11 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=6)
+
+
 # Status schemas
 class SystemStatus(BaseModel):
     status: str

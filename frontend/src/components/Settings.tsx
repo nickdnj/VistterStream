@@ -1,15 +1,31 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
+import { authService } from '../services/authService';
+import { useAuth } from '../contexts/AuthContext';
 import PresetManagement from './PresetManagement';
 import StreamingDestinations from './StreamingDestinations';
 import AssetManagement from './AssetManagement';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-type SettingsTab = 'general' | 'presets' | 'assets' | 'destinations' | 'system';
+type SettingsTab = 'general' | 'account' | 'presets' | 'assets' | 'destinations' | 'system';
 
 const Settings: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [isKilling, setIsKilling] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const extractErrorDetail = (error: unknown): string | undefined => {
+    if (typeof error === 'object' && error && 'response' in error) {
+      const response = (error as { response?: { data?: { detail?: string; message?: string } } }).response;
+      return response?.data?.detail || response?.data?.message;
+    }
+    return undefined;
+  };
 
   const handleEmergencyStop = async () => {
     if (!window.confirm('🚨 EMERGENCY STOP: Kill all streams and FFmpeg processes?')) {
@@ -18,18 +34,45 @@ const Settings: React.FC = () => {
 
     setIsKilling(true);
     try {
-      const response = await axios.post('/api/emergency/kill-all-streams');
+      const response = await api.post('/emergency/kill-all-streams');
       alert(`✅ Emergency stop complete!\n\nKilled ${response.data.total_killed} processes:\n${response.data.killed_processes.join('\n')}`);
     } catch (error) {
       console.error('Emergency stop failed:', error);
-      alert('❌ Emergency stop failed! Check console for details.');
+      const detail = extractErrorDetail(error);
+      alert(`❌ Emergency stop failed${detail ? `: ${detail}` : '! Check console for details.'}`);
     } finally {
       setIsKilling(false);
     }
   };
 
+  const handleChangePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setPasswordMessage(null);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: 'error', text: 'New passwords do not match.' });
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      await authService.changePassword(currentPassword, newPassword);
+      setPasswordMessage({ type: 'success', text: 'Password updated successfully.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      console.error('Failed to change password:', error);
+      const detail = extractErrorDetail(error);
+      setPasswordMessage({ type: 'error', text: detail || 'Failed to update password. Please try again.' });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   const tabs = [
     { id: 'general' as SettingsTab, name: 'General', icon: '⚙️' },
+    { id: 'account' as SettingsTab, name: 'Account', icon: '👤' },
     { id: 'presets' as SettingsTab, name: 'PTZ Presets', icon: '🎯' },
     { id: 'assets' as SettingsTab, name: 'Assets', icon: '🎨' },
     { id: 'destinations' as SettingsTab, name: 'Destinations', icon: '📡' },
@@ -97,6 +140,84 @@ const Settings: React.FC = () => {
                 </select>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'account' && (
+          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700 max-w-3xl">
+            <h2 className="text-xl font-semibold text-white mb-2">Account Security</h2>
+            <p className="text-gray-400 mb-6">Update the administrator password for this appliance.</p>
+
+            <div className="mb-6">
+              <span className="text-sm text-gray-400">Signed in as</span>
+              <div className="text-lg text-white font-semibold">{user?.username || 'admin'}</div>
+            </div>
+
+            {passwordMessage && (
+              <div
+                className={`rounded-md p-4 mb-6 border ${passwordMessage.type === 'success' ? 'bg-green-900/20 border-green-500/40 text-green-300' : 'bg-red-900/20 border-red-500/40 text-red-300'}`}
+              >
+                {passwordMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-4 max-w-xl">
+              <div>
+                <label htmlFor="current-password" className="block text-sm font-medium text-gray-300 mb-2">Current Password</label>
+                <input
+                  id="current-password"
+                  name="current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  required
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="new-password" className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
+                  <input
+                    id="new-password"
+                    name="new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
+                  <input
+                    id="confirm-password"
+                    name="confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {passwordLoading ? 'Saving...' : 'Update Password'}
+                </button>
+                <span className="text-xs text-gray-500">Password must be at least 6 characters.</span>
+              </div>
+            </form>
           </div>
         )}
 

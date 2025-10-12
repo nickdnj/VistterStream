@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface Asset {
@@ -52,7 +52,7 @@ const AssetManagement: React.FC = () => {
 
   const loadAssets = async () => {
     try {
-      const response = await axios.get('/api/assets/');
+      const response = await api.get('/assets/');
       setAssets(response.data);
     } catch (error) {
       console.error('Failed to load assets:', error);
@@ -169,7 +169,7 @@ const AssetManagement: React.FC = () => {
         uploadFormData.append('file', selectedFile);
         uploadFormData.append('asset_type', formData.type);
 
-        const uploadResponse = await axios.post('/api/assets/upload', uploadFormData, {
+        const uploadResponse = await api.post('/assets/upload', uploadFormData, {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
@@ -203,10 +203,10 @@ const AssetManagement: React.FC = () => {
 
     try {
       if (selectedAsset) {
-        await axios.put(`/api/assets/${selectedAsset.id}`, payload);
+        await api.put(`/assets/${selectedAsset.id}`, payload);
         alert('✅ Asset updated successfully!');
       } else {
-        await axios.post('/api/assets/', payload);
+        await api.post('/assets/', payload);
         alert('✅ Asset created successfully!');
       }
       setShowModal(false);
@@ -225,7 +225,7 @@ const AssetManagement: React.FC = () => {
     }
 
     try {
-      await axios.delete(`/api/assets/${assetId}`);
+      await api.delete(`/assets/${assetId}`);
       alert('✅ Asset deleted successfully!');
       loadAssets();
     } catch (error) {
@@ -250,7 +250,7 @@ const AssetManagement: React.FC = () => {
         description: asset.description,
         is_active: asset.is_active,
       };
-      await axios.post('/api/assets/', payload);
+      await api.post('/assets/', payload);
       alert('✅ Asset copied');
       loadAssets();
     } catch (error: any) {
@@ -262,7 +262,7 @@ const AssetManagement: React.FC = () => {
   const handleTestAsset = async (assetId: number) => {
     setTesting(true);
     try {
-      const response = await axios.post(`/api/assets/${assetId}/test`);
+      const response = await api.post(`/assets/${assetId}/test`);
       if (response.data.success) {
         alert(`✅ Asset test successful!\n\nStatus: ${response.data.status_code}\nContent-Type: ${response.data.content_type}\nSize: ${response.data.content_length} bytes`);
       } else {
