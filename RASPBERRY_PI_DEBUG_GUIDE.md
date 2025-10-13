@@ -559,6 +559,15 @@ mitmproxy --mode reverse:http://vistterpi.local:3000
 - Timeline preview reachable at `http://vistterpi.local:8888/stream.m3u8`
 - `.env` stored safely with current hostname/IP notes for future rebuilds
 
+- YouTube quick-links need the Channel ID set under Settings → Streaming Destinations (edit your YouTube entry)
+
+## Scheduler Automation
+
+- Scheduler service polls every 30s and auto-starts timelines while a schedule window is active
+- Use **Scheduler → Start Now** in the UI (or `POST /api/scheduler/{id}/run`) to force an immediate start outside the window
+- Stop a running schedule from the UI or `POST /api/scheduler/{id}/stop`; the service also stops streams when the window closes
+- Check `/api/scheduler/running` to see which schedules are currently executing
+
 ## Maintenance & Health Checks
 
 ### Weekly

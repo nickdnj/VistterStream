@@ -8,6 +8,7 @@ interface Destination {
   rtmp_url: string;
   stream_key: string;
   description: string;
+  channel_id?: string;
   is_active?: boolean;
   created_at?: string;
   last_used?: string;
@@ -31,8 +32,11 @@ const StreamingDestinations: React.FC = () => {
     platform: 'youtube',
     rtmp_url: '',
     stream_key: '',
-    description: ''
+    description: '',
+    channel_id: ''
   });
+
+  const isYoutubeForm = (editingDestination?.platform ?? newDestination.platform) === 'youtube';
 
   useEffect(() => {
     loadDestinations();
@@ -65,7 +69,8 @@ const StreamingDestinations: React.FC = () => {
         platform,
         name: preset.name,
         rtmp_url: preset.rtmp_url,
-        description: preset.description
+        description: preset.description,
+        channel_id: platform === 'youtube' ? (newDestination.channel_id || '') : ''
       });
     }
   };
@@ -79,7 +84,8 @@ const StreamingDestinations: React.FC = () => {
         platform: 'youtube',
         rtmp_url: '',
         stream_key: '',
-        description: ''
+        description: '',
+        channel_id: ''
       });
       loadDestinations();
     } catch (error) {
@@ -185,6 +191,15 @@ const StreamingDestinations: React.FC = () => {
               </div>
             </div>
 
+            {(dest.platform === 'youtube' || dest.channel_id) && (
+              <div className="mb-3">
+                <div className="text-gray-500 text-xs mb-1">Channel ID</div>
+                <div className="bg-gray-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
+                  {dest.channel_id || 'Not set'}
+                </div>
+              </div>
+            )}
+
             {/* Stream Key (masked) */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-1">
@@ -257,7 +272,11 @@ const StreamingDestinations: React.FC = () => {
                   value={editingDestination ? editingDestination.platform : newDestination.platform}
                   onChange={(e) => {
                     if (editingDestination) {
-                      setEditingDestination({ ...editingDestination, platform: e.target.value });
+                      setEditingDestination({
+                        ...editingDestination,
+                        platform: e.target.value,
+                        channel_id: e.target.value === 'youtube' ? (editingDestination.channel_id || '') : ''
+                      });
                     } else {
                       handlePlatformChange(e.target.value);
                     }
@@ -325,6 +344,27 @@ const StreamingDestinations: React.FC = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-gray-300 mb-2">YouTube Channel ID</label>
+                <input
+                  type="text"
+                  value={editingDestination ? (editingDestination.channel_id || '') : (newDestination.channel_id || '')}
+                  onChange={(e) => {
+                    if (editingDestination) {
+                      setEditingDestination({ ...editingDestination, channel_id: e.target.value });
+                    } else {
+                      setNewDestination({ ...newDestination, channel_id: e.target.value });
+                    }
+                  }}
+                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
+                  placeholder="UCxxxxxxxxxxxxxxxx"
+                  disabled={!isYoutubeForm}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Add your channel ID to enable quick links to YouTube Studio and the public channel page.
+                </p>
+              </div>
+
               {/* Description */}
               <div>
                 <label className="block text-gray-300 mb-2">Description (Optional)</label>
@@ -369,4 +409,3 @@ const StreamingDestinations: React.FC = () => {
 };
 
 export default StreamingDestinations;
-

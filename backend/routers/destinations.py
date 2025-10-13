@@ -21,15 +21,17 @@ class DestinationCreate(BaseModel):
     rtmp_url: str
     stream_key: str
     description: str = ""
+    channel_id: Optional[str] = None
 
 
 class DestinationUpdate(BaseModel):
-    name: str = None
-    platform: str = None
-    rtmp_url: str = None
-    stream_key: str = None
-    description: str = None
-    is_active: bool = None
+    name: Optional[str] = None
+    platform: Optional[str] = None
+    rtmp_url: Optional[str] = None
+    stream_key: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+    channel_id: Optional[str] = None
 
 
 class DestinationResponse(BaseModel):
@@ -39,6 +41,7 @@ class DestinationResponse(BaseModel):
     rtmp_url: str
     stream_key: str  # Note: In production, you might want to mask this
     description: str
+    channel_id: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -104,7 +107,8 @@ def create_destination(destination_data: DestinationCreate, db: Session = Depend
             platform=destination_data.platform,
             rtmp_url=destination_data.rtmp_url,
             stream_key=destination_data.stream_key,
-            description=destination_data.description
+            description=destination_data.description,
+            channel_id=destination_data.channel_id
         )
         db.add(destination)
         db.commit()
@@ -137,6 +141,8 @@ def update_destination(
         destination.stream_key = destination_data.stream_key
     if destination_data.description is not None:
         destination.description = destination_data.description
+    if destination_data.channel_id is not None:
+        destination.channel_id = destination_data.channel_id
     if destination_data.is_active is not None:
         destination.is_active = destination_data.is_active
     

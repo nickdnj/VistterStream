@@ -78,6 +78,7 @@ interface Destination {
   platform: string;
   rtmp_url: string;
   is_active: boolean;
+  channel_id?: string;
 }
 
 const TRACK_HEIGHT = 80; // Height of each track in pixels
@@ -97,6 +98,15 @@ const TimelineEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
+  const youtubeDestination = destinations.find((dest) => dest.platform === 'youtube' && dest.is_active !== false);
+  const youtubeChannelId = youtubeDestination?.channel_id || null;
+  const youtubeStudioUrl = youtubeChannelId
+    ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming`
+    : 'https://studio.youtube.com/channel';
+  const youtubeChannelUrl = youtubeChannelId
+    ? `https://www.youtube.com/channel/${youtubeChannelId}/live`
+    : 'https://www.youtube.com/live';
+
   const [cameraSnapshots, setCameraSnapshots] = useState<Record<number, string>>({});
 
   // Drag/resize state
@@ -999,19 +1009,38 @@ const TimelineEditor: React.FC = () => {
             <>
               {/* Live Control Link (YouTube Live Studio) */}
               <div className="bg-dark-800 border-b border-dark-700 p-4">
-                <div className="max-w-4xl mx-auto flex items-center justify-between">
+                <div className="max-w-4xl mx-auto flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-white mb-1">Live Control</h2>
-                    <p className="text-gray-400 text-sm">Open YouTube Live Studio to manage your live stream.</p>
+                    {youtubeChannelId ? (
+                      <p className="text-gray-400 text-sm">
+                        Quick links for YouTube channel{' '}
+                        <span className="font-mono text-xs text-gray-200">{youtubeChannelId}</span>.
+                      </p>
+                    ) : (
+                      <p className="text-gray-400 text-sm">
+                        Add a YouTube destination with a channel ID to enable quick links for previewing your public stream.
+                      </p>
+                    )}
                   </div>
-                  <a
-                    href="https://studio.youtube.com/video/ST8KGpJjFSE/livestreaming"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold"
-                  >
-                    Open YouTube Live Studio ↗
-                  </a>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={youtubeStudioUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold text-center"
+                    >
+                      Open YouTube Live Studio ↗
+                    </a>
+                    <a
+                      href={youtubeChannelUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`px-4 py-2 ${youtubeChannelId ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-700/70 hover:bg-gray-600/70'} text-white rounded-md font-semibold text-center`}
+                    >
+                      Preview Channel Page ↗
+                    </a>
+                  </div>
                 </div>
               </div>
 

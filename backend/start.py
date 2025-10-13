@@ -10,10 +10,23 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
-from models.database import create_tables, SessionLocal, User
+from models.database import create_tables, SessionLocal, User, engine
 from routers.auth import get_user_by_username, get_password_hash
 from main import app
 import uvicorn
+from sqlalchemy import text
+
+
+def ensure_streaming_destination_channel_column() -> None:
+    """Ensure the streaming_destinations table has a channel_id column."""
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("PRAGMA table_info(streaming_destinations)"))
+            columns = [row[1] for row in result]
+            if "channel_id" not in columns:
+                connection.execute(text("ALTER TABLE streaming_destinations ADD COLUMN channel_id TEXT"))
+    except Exception as exc:
+        print(f"⚠️ Unable to update streaming_destinations schema: {exc}")
 
 
 def ensure_default_admin():
@@ -46,6 +59,7 @@ def ensure_default_admin():
 if __name__ == "__main__":
     # Create database tables
     create_tables()
+    ensure_streaming_destination_channel_column()
     ensure_default_admin()
 
     # Start the server
