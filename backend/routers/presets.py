@@ -2,16 +2,20 @@
 PTZ Preset API endpoints
 """
 
+import base64
+import logging
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-import base64
 
-from models.database import get_db, Preset, Camera
-from models.schemas import PresetCreate, PresetUpdate, Preset as PresetSchema
+from models.database import Camera, Preset, get_db
+from models.schemas import Preset as PresetSchema
+from models.schemas import PresetCreate, PresetUpdate
 from services.ptz_service import get_ptz_service
 
 router = APIRouter(prefix="/api/presets", tags=["presets"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/", response_model=List[PresetSchema])
@@ -110,7 +114,7 @@ async def move_to_preset(preset_id: int, db: Session = Depends(get_db)):
         port=camera.onvif_port,
         username=camera.username,
         password=password,
-        preset_token=str(preset.id)  # Use preset ID as token
+        preset_token=preset.camera_preset_token or str(preset.id)
     )
     
     if not success:
@@ -146,17 +150,27 @@ async def capture_current_position(camera_id: int, preset_name: str, db: Session
     
     # Get current position using configured ONVIF port
     ptz_service = get_ptz_service()
-    position = await ptz_service.get_current_position(
-        address=camera.address,
-        port=camera.onvif_port,
-        username=camera.username,
-        password=password
-    )
+
+    try:
+        position = await ptz_service.get_current_position(
+            address=camera.address,
+            port=camera.onvif_port,
+            username=camera.username,
+            password=password
+        )
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("Failed to get PTZ status for camera %s: %s", camera.name, exc)
+        position = None
     
     if position is None:
-        raise HTTPException(status_code=500, detail="Failed to get current camera position")
-    
-    pan, tilt, zoom = position
+        # Fall back to defaults but continue so we can still attempt to save preset on camera
+        logger.warning(
+            "Proceeding without PTZ coordinates for camera %s; storing defaults",
+            camera.name
+        )
+        pan, tilt, zoom = 0.0, 0.0, 1.0
+    else:
+        pan, tilt, zoom = position
     
     # Create preset
     preset = Preset(
@@ -168,22 +182,50 @@ async def capture_current_position(camera_id: int, preset_name: str, db: Session
     )
     
     db.add(preset)
-    db.commit()
-    db.refresh(preset)
+    db.flush()  # Ensure preset.id is populated for ONVIF calls
     
-    # Save preset on camera (optional, some cameras support this)
     try:
-        await ptz_service.set_preset(
+        if not preset.camera_preset_token:
+            # Use deterministic token per preset if camera won't return one
+            preset.camera_preset_token = str(preset.id)
+
+        camera_token = await ptz_service.set_preset(
             address=camera.address,
             port=camera.onvif_port,
             username=camera.username,
             password=password,
-            preset_token=str(preset.id),
-            preset_name=preset_name
+            preset_name=preset_name,
+            preset_token=preset.camera_preset_token
         )
-    except Exception as e:
-        print(f"Warning: Could not save preset on camera: {e}")
-        # Continue anyway, we have it in our database
+        preset.camera_preset_token = camera_token
+
+        if position is None:
+            # Try again now that the camera saved the preset
+            try:
+                refreshed_position = await ptz_service.get_current_position(
+                    address=camera.address,
+                    port=camera.onvif_port,
+                    username=camera.username,
+                    password=password
+                )
+                if refreshed_position:
+                    preset.pan, preset.tilt, preset.zoom = refreshed_position
+            except Exception as refresh_exc:  # pragma: no cover - defensive logging
+                logger.debug(
+                    "Unable to refresh PTZ coordinates for camera %s: %s",
+                    camera.name,
+                    refresh_exc
+                )
+
+        db.commit()
+        db.refresh(preset)
+    except Exception as exc:
+        logger.error("Unable to save preset on camera %s: %s", camera.name, exc)
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save preset on camera"
+        ) from exc
     
     return {
         "message": f"Preset '{preset_name}' captured successfully",

@@ -1,0 +1,22 @@
+# PTZ preset validation via ONVIF SOAP (captured on Raspberry Pi)
+# Commands executed with Digest auth using camera admin credentials
+
+$ curl --http1.1 -sS -u admin:**** --anyauth -H 'Content-Type: application/soap+xml; charset=utf-8' --data-binary @diagnostics/soap/GetCapabilities.xml http://192.168.12.59:8899/onvif/device_service
+# -> HTTP/1.1 200 OK (hsoap/2.8), response saved to diagnostics/soap/GetCapabilities.response.xml
+
+$ curl --http1.1 -sS -u admin:**** --anyauth -H 'Content-Type: application/soap+xml; charset=utf-8' --data-binary @diagnostics/soap/GetProfiles.xml http://192.168.12.59:8899/onvif/media_service
+# -> media profile token '000'; response saved to diagnostics/soap/GetProfiles.response.xml
+
+$ curl --http1.1 -sS -u admin:**** --anyauth -H 'Content-Type: application/soap+xml; charset=utf-8' --data-binary @/tmp/GetPresets_000.xml http://192.168.12.59:8899/onvif/ptz_service
+# -> single preset token '0'; response saved to diagnostics/soap/GetPresets.response.xml
+
+$ curl --http1.1 -sS -u admin:**** --anyauth -H 'Content-Type: application/soap+xml; charset=utf-8' --data-binary @/tmp/GotoPreset_000_0.xml http://192.168.12.59:8899/onvif/ptz_service
+# -> PTZ acknowledged (GotoPresetResponse), response saved to diagnostics/soap/GotoPreset.response.xml
+
+# Application-level PTZ verification
+$ curl --anyauth -u admin:**** --data-binary @diagnostics/soap/GetPresets.xml http://192.168.12.59:8899/onvif/ptz_service
+# -> Confirmed preset token '0'
+$ curl -s -X POST "http://127.0.0.1:8000/api/presets/capture?camera_id=2&preset_name=Preset1" -H "Authorization: Bearer <token>"
+# -> 200 OK, preset saved with camera_preset_token "2"
+$ curl -s -X POST http://127.0.0.1:8000/api/presets/2/move -H "Authorization: Bearer <token>"
+# -> 200 OK, Sunba acknowledged move (see PTZ_DEBUG in backend logs)

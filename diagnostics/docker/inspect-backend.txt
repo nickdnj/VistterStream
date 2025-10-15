@@ -1,0 +1,4 @@
+# Placeholder
+# Run after container is up:
+#   docker inspect vistterstream-backend > diagnostics/docker/inspect-backend.txt
+#   docker inspect vistterstream-backend-host > diagnostics/docker/inspect-backend-host.txt

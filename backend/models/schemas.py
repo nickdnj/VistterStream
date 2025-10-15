@@ -86,6 +86,7 @@ class PresetUpdate(BaseModel):
 class Preset(PresetBase):
     id: int
     camera_id: int
+    camera_preset_token: Optional[str] = None
     created_at: datetime
     
     class Config:

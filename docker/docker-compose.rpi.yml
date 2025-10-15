@@ -1,33 +1,51 @@
+x-backend-base: &backend-base
+  build:
+    context: ../backend
+    dockerfile: Dockerfile
+  env_file:
+    - ../.env
+  environment:
+    - DATABASE_URL=${DATABASE_URL:-sqlite:////data/vistterstream.db}
+    - UPLOADS_DIR=${UPLOADS_DIR:-/data/uploads}
+    - RTMP_RELAY_HOST=${RTMP_RELAY_HOST:-rtmp-relay}
+    - RTMP_RELAY_PORT=${RTMP_RELAY_PORT:-1935}
+    - CORS_ALLOW_ORIGINS=http://vistterpi.local:3000,http://192.168.12.107:3000,http://localhost:3000
+    - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+    - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
+  volumes:
+    - vistter_data:/data
+  # Uncomment below if you have Pi 5 with hardware encoder
+  # devices:
+  #   - "/dev/video11:/dev/video11"
+  # group_add:
+  #   - "44"  # video group
+  depends_on:
+    - rtmp-relay
+  restart: unless-stopped
+
 services:
   backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
+    <<: *backend-base
     container_name: vistterstream-backend
-    env_file:
-      - ../.env
+    ports:
+      - "8000:8000"
+    networks:
+      - vistter-net
+
+  backend-host:
+    <<: *backend-base
+    container_name: vistterstream-backend-host
+    profiles:
+      - pi-host
+    network_mode: host
     environment:
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/vistterstream.db}
       - UPLOADS_DIR=${UPLOADS_DIR:-/data/uploads}
-      - RTMP_RELAY_HOST=${RTMP_RELAY_HOST:-rtmp-relay}
+      - RTMP_RELAY_HOST=${PI_RTMP_HOST:-127.0.0.1}
       - RTMP_RELAY_PORT=${RTMP_RELAY_PORT:-1935}
-      - CORS_ALLOW_ORIGINS=http://vistterpi.local:3000,http://192.168.12.107:3000,http://localhost:3000
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000}
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
-    volumes:
-      - vistter_data:/data
-    # Uncomment below if you have Pi 5 with hardware encoder
-    # devices:
-    #   - "/dev/video11:/dev/video11"
-    # group_add:
-    #   - "44"  # video group
-    ports:
-      - "8000:8000"
-    depends_on:
-      - rtmp-relay
-    restart: unless-stopped
-    networks:
-      - vistter-net
 
   rtmp-relay:
     build: ./nginx-rtmp
@@ -78,5 +96,4 @@ volumes:
 networks:
   vistter-net:
     driver: bridge
-
 

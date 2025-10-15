@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">
+  <s:Header/>
+  <s:Body>
+    <tptz:GotoPreset xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl">
+      <tptz:ProfileToken>{{PROFILE_TOKEN}}</tptz:ProfileToken>
+      <tptz:PresetToken>{{PRESET_TOKEN}}</tptz:PresetToken>
+    </tptz:GotoPreset>
+  </s:Body>
+</s:Envelope>

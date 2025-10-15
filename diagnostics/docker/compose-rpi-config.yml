@@ -1,0 +1,134 @@
+name: docker
+services:
+  backend:
+    build:
+      context: /home/nickd/VistterStream/backend
+      dockerfile: Dockerfile
+    container_name: vistterstream-backend
+    depends_on:
+      rtmp-relay:
+        condition: service_started
+        required: true
+    environment:
+      CORS_ALLOW_ORIGINS: http://vistterpi.local:3000,http://192.168.12.107:3000,http://localhost:3000
+      DATABASE_URL: sqlite:////data/vistterstream.db
+      DEFAULT_ADMIN_PASSWORD: admin
+      DEFAULT_ADMIN_USERNAME: admin
+      ONVIF_DEVICE_URL: http://192.168.12.59:8899/onvif/device_service
+      ONVIF_PTZ_URL: http://192.168.12.59:8899/onvif/ptz_service
+      PTZ_DEBUG: "1"
+      RTMP_RELAY_HOST: rtmp-relay
+      RTMP_RELAY_PORT: "1935"
+      UPLOADS_DIR: /data/uploads
+    networks:
+      vistter-net: null
+    ports:
+      - mode: ingress
+        target: 8000
+        published: "8000"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: vistter_data
+        target: /data
+        volume: {}
+  frontend:
+    build:
+      context: /home/nickd/VistterStream/frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: http://192.168.12.107:8000/api
+    container_name: vistterstream-frontend
+    networks:
+      vistter-net: null
+    ports:
+      - mode: ingress
+        target: 80
+        published: "3000"
+        protocol: tcp
+    restart: unless-stopped
+  preview-server:
+    container_name: vistterstream-preview
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --no-verbose
+        - --tries=1
+        - --spider
+        - http://localhost:9997/v1/config/get
+        - '||'
+        - exit
+        - "0"
+      timeout: 5s
+      interval: 10s
+      retries: 3
+      start_period: 5s
+    image: bluenviron/mediamtx:latest
+    networks:
+      vistter-net: null
+    ports:
+      - mode: ingress
+        target: 1935
+        published: "1936"
+        protocol: tcp
+      - mode: ingress
+        target: 8888
+        published: "8888"
+        protocol: tcp
+      - mode: ingress
+        target: 9997
+        published: "9997"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /home/nickd/VistterStream/docker/mediamtx/mediamtx.yml
+        target: /mediamtx.yml
+        read_only: true
+        bind:
+          create_host_path: true
+  rtmp-relay:
+    build:
+      context: /home/nickd/VistterStream/docker/nginx-rtmp
+      dockerfile: Dockerfile
+    container_name: vistterstream-rtmp-relay
+    networks:
+      vistter-net: null
+    ports:
+      - mode: ingress
+        target: 1935
+        published: "1935"
+        protocol: tcp
+      - mode: ingress
+        target: 8080
+        published: "8081"
+        protocol: tcp
+    restart: unless-stopped
+networks:
+  vistter-net:
+    name: docker_vistter-net
+    driver: bridge
+volumes:
+  vistter_data:
+    name: docker_vistter_data
+x-backend-base:
+  build:
+    context: ../backend
+    dockerfile: Dockerfile
+  depends_on:
+    - rtmp-relay
+  env_file:
+    - ../.env
+  environment:
+    - DATABASE_URL=sqlite:////data/vistterstream.db
+    - UPLOADS_DIR=/data/uploads
+    - RTMP_RELAY_HOST=rtmp-relay
+    - RTMP_RELAY_PORT=1935
+    - CORS_ALLOW_ORIGINS=http://vistterpi.local:3000,http://192.168.12.107:3000,http://localhost:3000
+    - DEFAULT_ADMIN_USERNAME=admin
+    - DEFAULT_ADMIN_PASSWORD=admin
+  restart: unless-stopped
+  volumes:
+    - vistter_data:/data

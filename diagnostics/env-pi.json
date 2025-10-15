@@ -1,0 +1,31 @@
+{
+  "platform": {
+    "system": "Linux",
+    "release": "6.12.25+rpt-rpi-2712",
+    "version": "#1 SMP PREEMPT Debian 1:6.12.25-1+rpt1 (2025-04-30)",
+    "machine": "aarch64"
+  },
+  "python": {
+    "executable": "/usr/bin/python3",
+    "version": "3.11.2"
+  },
+  "node": {
+    "node": "v22.20.0",
+    "npm": "10.9.3",
+    "pnpm": "error: /bin/sh: 1: pnpm: not found"
+  },
+  "docker": {
+    "docker": "Docker version 28.5.1, build e180ab8",
+    "docker compose": "Docker Compose version v2.40.0"
+  },
+  "pip": {
+    "onvif-zeep": null,
+    "zeep": null
+  },
+  "ptz_overrides": {
+    "PTZ_DEBUG": "1",
+    "ONVIF_DEVICE_URL": "http://192.168.12.59:8899/onvif/device_service",
+    "ONVIF_PTZ_URL": "http://192.168.12.59:8899/onvif/ptz_service"
+  },
+  "label": "pi-docker"
+}

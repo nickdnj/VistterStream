@@ -16,6 +16,17 @@ from main import app
 import uvicorn
 from sqlalchemy import text
 
+def ensure_preset_token_column() -> None:
+    """Ensure the presets table has a camera_preset_token column."""
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("PRAGMA table_info(presets)"))
+            columns = [row[1] for row in result]
+            if "camera_preset_token" not in columns:
+                connection.execute(text("ALTER TABLE presets ADD COLUMN camera_preset_token TEXT"))
+    except Exception as exc:
+        print(f"⚠️ Unable to update presets schema: {exc}")
+
 
 def ensure_streaming_destination_channel_column() -> None:
     """Ensure the streaming_destinations table has a channel_id column."""
@@ -59,6 +70,7 @@ def ensure_default_admin():
 if __name__ == "__main__":
     # Create database tables
     create_tables()
+    ensure_preset_token_column()
     ensure_streaming_destination_channel_column()
     ensure_default_admin()
 

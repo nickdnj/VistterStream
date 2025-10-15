@@ -1,0 +1,5 @@
+{
+  "status": "pending",
+  "instructions": "Run: python3 scripts/collect_env.py --label mac-dev --output diagnostics/env-mac.json on the Mac workstation.",
+  "expected_fields": ["platform", "python", "node", "docker", "pip", "ptz_overrides"]
+}

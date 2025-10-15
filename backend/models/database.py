@@ -61,6 +61,7 @@ class Preset(Base):
     pan = Column(Float, default=0.0)
     tilt = Column(Float, default=0.0)
     zoom = Column(Float, default=1.0)
+    camera_preset_token = Column(String)  # Token returned by camera for ONVIF control
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
