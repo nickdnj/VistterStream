@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import platform
+from functools import partial
 from typing import Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -216,6 +217,23 @@ class PTZService:
         # Return connection stored under the resolved key
         resolved_key = f"{resolved_address}:{resolved_port}"
         return self._camera_connections[resolved_key]
+
+    @staticmethod
+    def _build_absolute_position(
+        pan: Optional[float],
+        tilt: Optional[float],
+        zoom: Optional[float],
+    ) -> Optional[dict]:
+        position = {}
+        if pan is not None or tilt is not None:
+            position["PanTilt"] = {}
+            if pan is not None:
+                position["PanTilt"]["x"] = pan
+            if tilt is not None:
+                position["PanTilt"]["y"] = tilt
+        if zoom is not None:
+            position["Zoom"] = {"x": zoom}
+        return position or None
     
     async def move_to_preset(
         self,
@@ -223,7 +241,10 @@ class PTZService:
         port: int,
         username: str,
         password: str,
-        preset_token: str
+        preset_token: str,
+        pan: Optional[float] = None,
+        tilt: Optional[float] = None,
+        zoom: Optional[float] = None,
     ) -> bool:
         """
         Move camera to a preset position
@@ -243,10 +264,20 @@ class PTZService:
             return False
             
         try:
-            logger.info("🎯 Moving camera %s to preset %s", address, preset_token)
+            masked_user = _mask_secret(username)
+            logger.info(
+                "🎯 Moving camera %s to preset %s (user=%s, pan=%s, tilt=%s, zoom=%s)",
+                address,
+                preset_token,
+                masked_user,
+                pan,
+                tilt,
+                zoom,
+            )
             
             # Get ONVIF camera connection
             camera = await self.get_onvif_camera(address, port, username, password)
+            loop = asyncio.get_event_loop()
             self._debug(
                 "Camera connection ready for preset move",
                 user=username,
@@ -258,10 +289,7 @@ class PTZService:
             
             # Get media profile
             media_service = camera.create_media_service()
-            profiles = await asyncio.get_event_loop().run_in_executor(
-                None,
-                media_service.GetProfiles
-            )
+            profiles = await loop.run_in_executor(None, media_service.GetProfiles)
             
             if not profiles:
                 logger.error("No media profiles found")
@@ -275,6 +303,36 @@ class PTZService:
             
             # Use first profile
             media_profile = profiles[0]
+            position = self._build_absolute_position(pan, tilt, zoom)
+            if position:
+                self._debug(
+                    "Dispatching AbsoluteMove",
+                    profile_token=media_profile.token,
+                    pan=pan,
+                    tilt=tilt,
+                    zoom=zoom,
+                )
+                try:
+                    abs_move_request = ptz_service.create_type("AbsoluteMove")
+                    abs_move_request.ProfileToken = media_profile.token
+                    abs_move_request.Position = position
+                    await loop.run_in_executor(
+                        None,
+                        partial(ptz_service.AbsoluteMove, abs_move_request),
+                    )
+                    logger.info(
+                        "🧭 Absolute move completed for camera %s (preset %s)",
+                        address,
+                        preset_token,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "❌ AbsoluteMove failed for camera %s preset %s: %s",
+                        address,
+                        preset_token,
+                        exc,
+                    )
+                    # Continue with GotoPreset so behaviour remains tolerant
             
             # Create request
             request = ptz_service.create_type('GotoPreset')
@@ -288,11 +346,7 @@ class PTZService:
             )
             
             # Execute move
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                ptz_service.GotoPreset,
-                request
-            )
+            await loop.run_in_executor(None, ptz_service.GotoPreset, request)
             
             logger.info("✅ Camera %s moved to preset %s", address, preset_token)
             return True
@@ -378,7 +432,10 @@ class PTZService:
         username: str,
         password: str,
         preset_name: str,
-        preset_token: Optional[str] = None
+        preset_token: Optional[str] = None,
+        pan: Optional[float] = None,
+        tilt: Optional[float] = None,
+        zoom: Optional[float] = None,
     ) -> str:
         """
         Save current position as a preset
@@ -399,11 +456,16 @@ class PTZService:
             raise RuntimeError('ONVIF support is not available')
 
         try:
+            masked_user = _mask_secret(username)
             logger.info(
-                "💾 Saving preset %s (token: %s) for camera %s",
+                "💾 Saving preset %s (token: %s) for camera %s (user=%s, pan=%s, tilt=%s, zoom=%s)",
                 preset_name,
                 preset_token or "new",
                 address,
+                masked_user,
+                pan,
+                tilt,
+                zoom,
             )
 
             camera = await self.get_onvif_camera(address, port, username, password)
@@ -425,6 +487,37 @@ class PTZService:
             if preset_token:
                 request.PresetToken = preset_token
             request.PresetName = preset_name
+
+            position = self._build_absolute_position(pan, tilt, zoom)
+            if position:
+                self._debug(
+                    "Dispatching AbsoluteMove prior to SetPreset",
+                    profile_token=media_profile.token,
+                    pan=pan,
+                    tilt=tilt,
+                    zoom=zoom,
+                )
+                try:
+                    abs_move_request = ptz.create_type("AbsoluteMove")
+                    abs_move_request.ProfileToken = media_profile.token
+                    abs_move_request.Position = position
+                    await loop.run_in_executor(
+                        None,
+                        partial(ptz.AbsoluteMove, abs_move_request),
+                    )
+                    logger.info(
+                        "🧭 Absolute move completed prior to saving preset %s on camera %s",
+                        preset_name,
+                        address,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "❌ AbsoluteMove failed before SetPreset for camera %s preset %s: %s",
+                        address,
+                        preset_name,
+                        exc,
+                    )
+                    # Continue so SetPreset still executes
 
             # Execute save and capture response
             response = await loop.run_in_executor(None, ptz.SetPreset, request)

@@ -20,12 +20,30 @@ class _FakeMediaService:
 
 
 class _FakePTZService:
-    def __init__(self, goto_log, set_log):
+    def __init__(self, goto_log, set_log, absolute_log, sequence_log):
         self._goto_log = goto_log
         self._set_log = set_log
+        self._absolute_log = absolute_log
+        self._sequence_log = sequence_log
 
     def create_type(self, name):
         return SimpleNamespace()
+
+    def AbsoluteMove(self, ProfileToken=None, Position=None, **kwargs):
+        # Accept either explicit kwargs or a request object, mirroring zeep behaviour
+        if Position is None and ProfileToken is not None and hasattr(ProfileToken, "ProfileToken"):
+            Position = getattr(ProfileToken, "Position", None)
+            ProfileToken = getattr(ProfileToken, "ProfileToken", None)
+        if "profile_token" in kwargs or "position" in kwargs:
+            ProfileToken = kwargs.get("profile_token", ProfileToken)
+            Position = kwargs.get("position", Position)
+        self._absolute_log.append(
+            {
+                "profile_token": ProfileToken,
+                "position": Position,
+            }
+        )
+        self._sequence_log.append("absolute")
 
     def GotoPreset(self, request):
         self._goto_log.append(
@@ -34,6 +52,7 @@ class _FakePTZService:
                 "preset_token": getattr(request, "PresetToken", None),
             }
         )
+        self._sequence_log.append("goto")
 
     def SetPreset(self, request):
         self._set_log.append(
@@ -42,6 +61,7 @@ class _FakePTZService:
                 "preset_token": getattr(request, "PresetToken", None),
             }
         )
+        self._sequence_log.append("set")
         return SimpleNamespace(PresetToken=None)
 
 
@@ -54,6 +74,8 @@ class _FakeCamera:
         self.xaddrs = {}
         self._goto_calls = []
         self._set_calls = []
+        self._absolute_calls = []
+        self._call_sequence = []
         self._media_tokens = ["MEDIA_TOKEN_1"]
 
     def update_xaddrs(self):
@@ -63,7 +85,12 @@ class _FakeCamera:
         }
 
     def create_ptz_service(self):
-        return _FakePTZService(self._goto_calls, self._set_calls)
+        return _FakePTZService(
+            self._goto_calls,
+            self._set_calls,
+            self._absolute_calls,
+            self._call_sequence,
+        )
 
     def create_media_service(self):
         return _FakeMediaService(self._media_tokens)
@@ -104,6 +131,9 @@ async def test_move_to_preset_with_explicit_onvif_url(monkeypatch):
         username="admin",
         password="very-secret",
         preset_token="PRESET_TOKEN_5",
+        pan=0.12,
+        tilt=-0.5,
+        zoom=1.3,
     )
 
     assert moved is True
@@ -119,6 +149,16 @@ async def test_move_to_preset_with_explicit_onvif_url(monkeypatch):
     assert fake_camera._goto_calls == [
         {"profile_token": "MEDIA_TOKEN_1", "preset_token": "PRESET_TOKEN_5"}
     ]
+    assert fake_camera._absolute_calls == [
+        {
+            "profile_token": "MEDIA_TOKEN_1",
+            "position": {
+                "PanTilt": {"x": 0.12, "y": -0.5},
+                "Zoom": {"x": 1.3},
+            },
+        }
+    ]
+    assert fake_camera._call_sequence == ["absolute", "goto"]
 
 
 @pytest.mark.anyio("asyncio")
@@ -151,9 +191,22 @@ async def test_set_preset_uses_provided_token(monkeypatch):
         password="very-secret",
         preset_name="Preset1",
         preset_token="2",
+        pan=0.25,
+        tilt=0.33,
+        zoom=2.0,
     )
 
     assert token == "2"
     assert fake_camera._set_calls == [
         {"profile_token": "MEDIA_TOKEN_1", "preset_token": "2"}
     ]
+    assert fake_camera._absolute_calls == [
+        {
+            "profile_token": "MEDIA_TOKEN_1",
+            "position": {
+                "PanTilt": {"x": 0.25, "y": 0.33},
+                "Zoom": {"x": 2.0},
+            },
+        }
+    ]
+    assert fake_camera._call_sequence == ["absolute", "set"]
