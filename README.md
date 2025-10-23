@@ -1,10 +1,26 @@
 # VistterStream
 
-A local streaming appliance that connects on-premises cameras to VistterStudio cloud timelines. VistterStream discovers, manages, and processes local cameras, including PTZ (pan-tilt-zoom) presets, and streams the final output to destinations such as YouTube Live, Facebook Live, or Twitch.
+VistterStream isn’t just a local streaming appliance – it’s a full-on movement for camera creators who want to bring the energy of their waterfronts, main streets, and weather stations straight to the world. Built for the Tempest weather station community, destination marketers, and any creator who dreams in live video, VistterStream discovers, manages, and processes local cameras, including PTZ (pan-tilt-zoom) presets, and streams the final output to destinations such as YouTube Live, Facebook Live, or Twitch.
+
+## About Us – The Conversational Build
+
+VistterStream is what happens when a lifetime of systems thinking meets an all-AI creative room. I’m Nick DiMarco — 61, retired from four decades of architecting bespoke enterprise software in the EDA world — and this project is the culmination of twenty years of “what if” ideas, Raspberry Pi experiments, and late-night tinkering finally unleashed.
+
+We didn’t wing it. We vibe-coded *formally*. The very first sprint with ChatGPT produced a full stack of living documents: a PRD, software architecture blueprint, UX design outline, and supporting specs. Every requirement, every user story, every timeline started as a conversation, got shaped into documentation, and then came right back into the dialogue for iteration. We refined, diverted, updated, and versioned those specs as the build evolved — just like a real software shop, but orchestrated entirely through conversation.
+
+Once the documents felt right, we opened the repo and started pairing with tools like Cursor, Claude, Codec CLI, and Gemini. ChatGPT remained the anchor for spec maintenance and decision-making, while Cursor and Codec CLI handled code execution, Claude brought narrative clarity, and Gemini sparked lateral options when we hit forks in the road. Every AI came at the problem from a different angle; my job was to conduct the orchestra, keep the specs honest, and make sure the build stayed grounded in real-world broadcasting needs.
+
+So yes, this project was built in conversation — but it was conversation with structure, documentation, review, and relentless iteration. We built this motherfucker together, and it shows up like a serious piece of software ready for every storm chaser, harbor host, marina master, and city storyteller who wants to go live without friction.
 
 ## Overview
 
 VistterStream is designed to run on hardware like the Raspberry Pi in a Docker container, providing a web interface for camera management and live streaming capabilities. It ingests RTSP/RTMP feeds, applies overlays and instructions received from VistterStudio, and streams the final output to various platforms.
+
+### Why Tempest Weather Stations & Creators Love It
+
+- **Weather storytellers** can pull in live atmospheric data, overlay it on cinematic shoreline feeds, and push to audiences who crave the real-time pulse of the planet.
+- **Destination marketers** can spin up 24/7 scenic loops with PTZ presets that fly from wide shot to detail without anyone on-site.
+- **Community creators** finally get the “studio-in-a-box” that makes neighborhood pride look like a network broadcast.
 
 ## Key Features
 
@@ -18,10 +34,11 @@ VistterStream is designed to run on hardware like the Raspberry Pi in a Docker c
 
 ## Target Users
 
-- **Small businesses & venues**: Shops, restaurants, marinas, and tourist attractions
-- **Community organizations**: Visitor bureaus or chambers of commerce
-- **Property managers & real estate**: Broadcasting properties or scenic angles
-- **Event operators**: Local operators who need reliable camera-to-stream appliances
+- **Tempest Weather Station champions**: Pair your hyperlocal weather intel with gorgeous live visuals.
+- **Small businesses & venues**: Shops, restaurants, marinas, and tourist attractions.
+- **Community organizations**: Visitor bureaus or chambers of commerce looking to showcase their town.
+- **Property managers & real estate**: Broadcast properties or scenic angles around the clock.
+- **Event operators**: Local operators who need reliable camera-to-stream appliances.
 
 ## Architecture
 
