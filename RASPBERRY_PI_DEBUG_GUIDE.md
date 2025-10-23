@@ -630,3 +630,6 @@ docker compose -f docker-compose.rpi.yml up -d
 **Pi IP**: 192.168.12.107 (DHCP reservation recommended)  
 **Status**: Deployment complete, browser cache clear needed
 
+
+
+

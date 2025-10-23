@@ -29,6 +29,8 @@
 
 VistterStream is accessed through a web browser at your appliance's IP address (default port 3000).
 
+![Login Page](screenshots/00-login.png)
+
 **Default Credentials:**
 - **Username:** `admin`
 - **Password:** `admin`
@@ -46,6 +48,8 @@ VistterStream is accessed through a web browser at your appliance's IP address (
 ## Dashboard
 
 The Dashboard is your central hub for monitoring the VistterStream appliance status.
+
+![Dashboard](screenshots/01-dashboard.png)
 
 ### Overview Cards
 
@@ -91,6 +95,8 @@ The top-right corner shows:
 
 The Camera Management page allows you to view, configure, and manage all connected IP cameras.
 
+![Camera Management](screenshots/02-cameras.png)
+
 ### Camera List
 
 Cameras are displayed in a table format with:
@@ -132,6 +138,8 @@ Click the **"+ Add Camera"** button in the top-right to configure a new camera. 
 
 The Stream Management page is where you configure output streams to platforms like YouTube, Facebook, and Twitch.
 
+![Stream Management](screenshots/03-streams.png)
+
 ### Current Status
 
 If no streams are configured, you'll see:
@@ -159,6 +167,8 @@ When adding a stream, you can:
 ## Timeline Editor
 
 The Timeline Editor is VistterStream's most powerful feature - a video production timeline for creating sophisticated multi-camera broadcasts.
+
+![Timeline Editor](screenshots/04-timelines.png)
 
 ### Timeline Overview
 
@@ -274,6 +284,8 @@ The timeline shows scheduled camera positions and overlays:
 
 The Scheduler allows you to automate timeline playback on a recurring schedule.
 
+![Scheduler](screenshots/05-scheduler.png)
+
 ### Create Schedule
 
 **Schedule Configuration:**
@@ -336,6 +348,8 @@ Six tabs organize different setting categories:
 
 Basic system configuration options.
 
+![Settings - General](screenshots/06-settings-general.png)
+
 **Available Settings:**
 - **Appliance Name** - Currently: "VistterStream Appliance" (disabled)
 - **Timezone** - Currently: "America/New_York" (disabled)
@@ -347,6 +361,8 @@ Basic system configuration options.
 ### Account Security
 
 Manage the administrator account password.
+
+![Settings - Account Security](screenshots/07-settings-account.png)
 
 **Current User:**
 - Signed in as: **admin**
@@ -369,6 +385,8 @@ Manage the administrator account password.
 ### PTZ Presets
 
 Manage saved camera positions for PTZ (Pan-Tilt-Zoom) cameras.
+
+![Settings - PTZ Presets](screenshots/08-settings-ptz-presets.png)
 
 **Camera Selection:**
 - Dropdown to select PTZ camera
@@ -408,6 +426,8 @@ Each preset card displays:
 ### Assets
 
 Manage overlay graphics, images, videos, and dynamic content for your streams.
+
+![Settings - Assets](screenshots/09-settings-assets.png)
 
 **Add Asset Button:**
 - **+ Add Asset** - Create new asset
@@ -488,6 +508,8 @@ Click **"+ Add Asset"** or **"Create First Asset"** to:
 
 Configure where your streams will be broadcast.
 
+![Settings - Destinations](screenshots/10-settings-destinations.png)
+
 **Add Destination Button:**
 - **+ Add Destination** - Add new streaming destination
 
@@ -538,6 +560,8 @@ Configure where your streams will be broadcast.
 ### System Information
 
 View system details and access emergency controls.
+
+![Settings - System Information](screenshots/11-settings-system.png)
 
 **System Details:**
 - **Version:** 1.0.0-beta
