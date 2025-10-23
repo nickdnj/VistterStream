@@ -17,6 +17,16 @@ Not a single line of traditional boilerplate was typed out in isolation. Not one
 
 We built this motherfucker together. And now it’s ready for every storm chaser, harbor host, marina master, and city storyteller to light up their own channels with zero friction.
 
+## 📖 Documentation for End Users
+
+**New to VistterStream?** Start here:
+
+- **🚀 [Quick Start Guide](docs/QUICK_START_GUIDE.md)** - Get streaming in 5 minutes!
+- **📚 [Complete User Guide](docs/USER_GUIDE.md)** - Comprehensive reference for all features
+- **📋 [Documentation Index](docs/README.md)** - All available documentation organized by topic
+
+These guides include screenshots, step-by-step instructions, and troubleshooting tips for using VistterStream.
+
 ## Overview
 
 VistterStream is designed to run on hardware like the Raspberry Pi in a Docker container, providing a web interface for camera management and live streaming capabilities. It ingests RTSP/RTMP feeds, applies overlays and instructions received from VistterStudio, and streams the final output to various platforms.
@@ -221,7 +231,18 @@ The project includes configuration for local test cameras:
 
 ## Documentation
 
-### **Core Specifications**
+### **📖 User Documentation**
+- **[Quick Start Guide](docs/QUICK_START_GUIDE.md)** ⭐ **START HERE!** - Get streaming in 5 minutes
+- **[Complete User Guide](docs/USER_GUIDE.md)** - Comprehensive reference with screenshots and instructions
+- **[Documentation Index](docs/README.md)** - All documentation organized by topic and role
+
+### **🔧 Installation & Setup**
+- **[Manual Installation](MANUAL_INSTALL.md)** - Manual setup instructions
+- **[Raspberry Pi Setup](RASPBERRY_PI_SETUP.md)** - Deploy on Raspberry Pi
+- **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** - Docker deployment
+- **[Raspberry Pi Debug Guide](RASPBERRY_PI_DEBUG_GUIDE.md)** - Troubleshooting for RPi
+
+### **📋 Technical Specifications**
 - **[Product Requirements Document (PRD)](docs/PRD.md)** - Product vision, use cases, requirements
 - **[Software Architecture Document (SAD)](docs/SAD.md)** - System architecture and component design
 - **[User Experience Design (UXD)](docs/UXD.md)** - UI/UX specifications and workflows
