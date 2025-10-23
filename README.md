@@ -1,10 +1,24 @@
 # VistterStream
 
-A local streaming appliance that connects on-premises cameras to VistterStudio cloud timelines. VistterStream discovers, manages, and processes local cameras, including PTZ (pan-tilt-zoom) presets, and streams the final output to destinations such as YouTube Live, Facebook Live, or Twitch.
+VistterStream isn’t just a local streaming appliance – it’s a full-on movement for camera creators who want to bring the energy of their waterfronts, main streets, and weather stations straight to the world. Built for the Tempest weather station community, destination marketers, and any creator who dreams in live video, VistterStream discovers, manages, and processes local cameras, including PTZ (pan-tilt-zoom) presets, and streams the final output to destinations such as YouTube Live, Facebook Live, or Twitch.
+
+## About Us – The Conversational Build
+
+This project is the definition of collaborative storytelling. There was no spec doc, no lonely engineer grinding out code in a vacuum. We talked it into existence – in Cursor, in Claude, in ChatGPT, in Codec CLI, in Gemini. Every angle, every idea, every breakthrough happened in conversation. We were there together, riffing at all hours, swapping “what if” scenarios like musicians trading solos, and watching the product snap into focus one epic dialogue at a time.
+
+Not a single line of traditional boilerplate was typed out in isolation. Not one sheet of a formal spec ever existed. The whole build is a living transcript of collaborators and AI copilots working in real time. We used Cursor for the engineering cockpit, Claude for big-picture rewrites, ChatGPT for surgical code shifts, Codec CLI for local wizardry, Gemini for lateral thinking, and every one of them pushed from a different angle. That multi-model braintrust turned a blank repo into a working, ship-ready streaming platform.
+
+We built this motherfucker together. And now it’s ready for every storm chaser, harbor host, marina master, and city storyteller to light up their own channels with zero friction.
 
 ## Overview
 
 VistterStream is designed to run on hardware like the Raspberry Pi in a Docker container, providing a web interface for camera management and live streaming capabilities. It ingests RTSP/RTMP feeds, applies overlays and instructions received from VistterStudio, and streams the final output to various platforms.
+
+### Why Tempest Weather Stations & Creators Love It
+
+- **Weather storytellers** can pull in live atmospheric data, overlay it on cinematic shoreline feeds, and push to audiences who crave the real-time pulse of the planet.
+- **Destination marketers** can spin up 24/7 scenic loops with PTZ presets that fly from wide shot to detail without anyone on-site.
+- **Community creators** finally get the “studio-in-a-box” that makes neighborhood pride look like a network broadcast.
 
 ## Key Features
 
@@ -18,10 +32,11 @@ VistterStream is designed to run on hardware like the Raspberry Pi in a Docker c
 
 ## Target Users
 
-- **Small businesses & venues**: Shops, restaurants, marinas, and tourist attractions
-- **Community organizations**: Visitor bureaus or chambers of commerce
-- **Property managers & real estate**: Broadcasting properties or scenic angles
-- **Event operators**: Local operators who need reliable camera-to-stream appliances
+- **Tempest Weather Station champions**: Pair your hyperlocal weather intel with gorgeous live visuals.
+- **Small businesses & venues**: Shops, restaurants, marinas, and tourist attractions.
+- **Community organizations**: Visitor bureaus or chambers of commerce looking to showcase their town.
+- **Property managers & real estate**: Broadcast properties or scenic angles around the clock.
+- **Event operators**: Local operators who need reliable camera-to-stream appliances.
 
 ## Architecture
 
