@@ -7,6 +7,7 @@ This guide captures the steps used to diagnose and stabilize Sunba PTZ presets w
 - Enable `PTZ_DEBUG=1` to log device/ptz endpoints, profile tokens, and preset tokens during preset moves.
 - Use the new `pi-host` Docker Compose profile when multicast/UDP is required or discovery must be re-enabled.
 - Capture artifacts under `diagnostics/` to compare Mac vs Pi behaviour and retain reproducibility.
+- Preset capture now stores raw pan/tilt/zoom, exposes live status, and reuses them for AbsoluteMove before every GotoPreset/SetPreset.
 
 ## Prerequisites
 1. Copy `.env.example` to `.env` and adjust values:
@@ -53,6 +54,12 @@ This guide captures the steps used to diagnose and stabilize Sunba PTZ presets w
    uvicorn backend.main:app --port 8000 2>&1 | tee diagnostics/mac-ptz-run.log
    diff -u diagnostics/mac-ptz-run.log diagnostics/pi-ptz-run.log | less
    ```
+
+## Updated Preset Workflow
+1. **Capture:** Use the Preset Management UI (or `POST /api/presets/capture`) to save a position. The capture modal now streams live `GetStatus` telemetry; once the camera reports coordinates the UI immediately opens an edit dialog pre-filled with those values so you can fine-tune before leaving. Backend logs appear as `📸`/`📍` lines in `diagnostics/pi-ptz-run.log`.
+2. **Edit:** Adjust pan/tilt/zoom numerically in the UI or send `PATCH /api/presets/{id}` with `{"pan": ..., "tilt": ..., "zoom": ...}`. The backend issues an `AbsoluteMove` followed by `SetPreset`, updating both the database and camera token.
+3. **Recall:** Calling `POST /api/presets/{id}/move` triggers `AbsoluteMove` before `GotoPreset`, so the stored coordinates drive the motion even after a backend restart.
+4. **Check status:** Query `GET /api/presets/cameras/{camera_id}/status` to poll live PTZ position (the UI poll interval is 2s). Logs mark these reads with `📊` entries.
 
 ## Option B – Host Network Profile (for discovery / multicast)
 If the camera requires WS-Discovery or multicast traffic, use the optional profile introduced in `docker/docker-compose.rpi.yml`:

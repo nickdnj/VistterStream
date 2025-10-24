@@ -132,6 +132,9 @@ class StreamService:
                 if password:
                     # Use configured ONVIF port for PTZ control
                     ptz_service = get_ptz_service()
+                    pan = preset.pan if preset.pan is not None else 0.0
+                    tilt = preset.tilt if preset.tilt is not None else 0.0
+                    zoom = preset.zoom if preset.zoom is not None else 1.0
                     
                     try:
                         success = await ptz_service.move_to_preset(
@@ -139,11 +142,17 @@ class StreamService:
                             port=camera.onvif_port,
                             username=camera.username,
                             password=password,
-                            preset_token=str(stream.preset_id)
+                            preset_token=preset.camera_preset_token or str(stream.preset_id),
+                            pan=pan,
+                            tilt=tilt,
+                            zoom=zoom,
                         )
                         
                         if success:
-                            print(f"✅ Camera moved to preset '{preset.name}', waiting 3 seconds for camera to settle...")
+                            print(
+                                f"✅ Camera moved to preset '{preset.name}' "
+                                f"(pan={pan}, tilt={tilt}, zoom={zoom}), waiting 3 seconds for camera to settle..."
+                            )
                             await asyncio.sleep(3)  # Wait for camera to settle
                         else:
                             print(f"⚠️  Failed to move camera to preset, streaming anyway")
