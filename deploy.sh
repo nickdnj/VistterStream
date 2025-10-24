@@ -56,8 +56,22 @@ log "Pulling latest changes from Git..."
 current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)
 log "Current branch: ${current_branch}"
 
+# Stash any local changes to avoid conflicts
+STASHED=0
+if ! git diff-index --quiet HEAD --; then
+  log "Stashing local changes..."
+  git stash push -u -m "deploy.sh auto-stash $(date +%Y%m%d-%H%M%S)" || true
+  STASHED=1
+fi
+
 git fetch --all --prune
 git pull --rebase origin "${current_branch}"
+
+# Restore stashed changes if we stashed
+if [[ "$STASHED" -eq 1 ]]; then
+  log "Restoring stashed changes..."
+  git stash pop || log "Warning: Could not restore stashed changes (check 'git stash list')"
+fi
 
 # Stop containers
 log "Stopping containers..."
