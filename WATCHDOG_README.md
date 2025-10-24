@@ -11,6 +11,11 @@ The Local Watchdog monitors your FFmpeg encoder process health and automatically
 - Monitors CPU and memory usage
 - Detects zombie/hung processes
 
+✅ **Optional YouTube Live Check (NEW!)**
+- Checks if YouTube shows your stream as live (no API required!)
+- Simply provide your channel `/live` URL
+- Detects when YouTube stops receiving video
+
 ✅ **Automatic Recovery**
 - Detects failures after 3 consecutive unhealthy checks
 - Automatically restarts the stream
@@ -21,10 +26,10 @@ The Local Watchdog monitors your FFmpeg encoder process health and automatically
 - Records recovery attempts
 - Tracks process statistics
 
-❌ **What It Doesn't Do (Yet)**
-- Check YouTube's side (if YouTube is actually receiving the stream)
-- Verify actual video frames are being transmitted
-- Manage YouTube broadcast lifecycle
+❌ **What It Doesn't Do**
+- Require API keys or OAuth2
+- Verify exact bitrate/quality metrics
+- Manage YouTube broadcast lifecycle directly
 
 ## How to Enable
 
@@ -43,8 +48,11 @@ The Local Watchdog monitors your FFmpeg encoder process health and automatically
 |--------|-------------|---------|
 | **Enable Watchdog** | Turn watchdog monitoring on/off | `false` |
 | **Check Interval** | Seconds between health checks | `30` |
+| **YouTube Channel /live URL** | (Optional) Your channel's `/live` URL for YouTube-side monitoring | None |
 
-**Note:** YouTube API Key, Stream ID, Broadcast ID, and Watch URL fields are **not required** for the local watchdog and can be left empty.
+**Example YouTube URL:** `https://youtube.com/channel/UCxxxxx/live`
+
+When you provide your channel `/live` URL, the watchdog will also check if YouTube shows your stream as live. This catches issues where your encoder is running fine, but YouTube isn't receiving the stream properly!
 
 ## How It Works
 
@@ -55,6 +63,7 @@ Every 30 seconds (configurable):
   ├─ Check if FFmpeg process is running
   ├─ Verify process is not zombie/hung
   ├─ Monitor CPU and memory usage
+  ├─ (Optional) Check if YouTube shows stream as live
   └─ Log health status
 
 If 3 consecutive checks fail:
@@ -63,6 +72,20 @@ If 3 consecutive checks fail:
   ├─ Restart the stream automatically
   └─ Enter 120-second cooldown period
 ```
+
+### How the YouTube Live Check Works
+
+When you provide your channel `/live` URL (e.g., `https://youtube.com/channel/UCxxxxx/live`):
+
+1. **Stream is LIVE**: The URL shows your live video player → ✅ Healthy
+2. **Stream is OFFLINE**: The URL redirects to channel page or home → ❌ Unhealthy
+
+This simple HTTP check catches scenarios where:
+- Your encoder is running but YouTube isn't receiving frames
+- Network issues prevent stream from reaching YouTube
+- YouTube has stopped accepting your stream for some reason
+
+**Best of all**: No API keys, no OAuth2, no configuration complexity!
 
 ### Recovery Strategy
 
@@ -179,16 +202,21 @@ Potential additions (not yet implemented):
 ## FAQ
 
 **Q: Do I need YouTube API credentials?**  
-A: No, not for the local watchdog. It works entirely locally.
+A: No! The watchdog works entirely locally by monitoring your FFmpeg process. The optional YouTube live check uses simple HTTP requests (no API keys required).
+
+**Q: How do I get my YouTube channel /live URL?**  
+A: Go to your channel, then add `/live` to the end. For example:
+- Your channel: `https://youtube.com/channel/UCfWC5cyYX15sSolvZya5RUQ`  
+- Your /live URL: `https://youtube.com/channel/UCfWC5cyYX15sSolvZya5RUQ/live`
 
 **Q: Will this prevent my stream from going down?**  
-A: It helps with **encoder-side failures** (FFmpeg crashes, process hangs). It cannot prevent issues on YouTube's side, network outages, or camera failures.
+A: It helps with **encoder-side failures** (FFmpeg crashes, process hangs) and can detect when YouTube stops showing your stream as live. It cannot prevent network outages or camera failures.
 
 **Q: How much overhead does this add?**  
-A: Minimal. One health check every 30 seconds uses negligible CPU/memory.
+A: Minimal. One health check every 30 seconds uses negligible CPU/memory. The YouTube live check adds a simple 10-second HTTP request.
 
 **Q: Can I use this for non-YouTube destinations?**  
-A: Yes! The local watchdog works for any streaming destination.
+A: Yes! The local FFmpeg monitoring works for any streaming destination. The YouTube live check is optional and only works for YouTube.
 
 **Q: What happens if the watchdog itself crashes?**  
 A: The watchdog runs inside the backend container, so if the backend restarts, the watchdog restarts too. Docker's restart policy ensures the backend stays running.
