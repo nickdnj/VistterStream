@@ -311,72 +311,21 @@ def update_watchdog_config(
 
 @router.post("/{destination_id}/validate-watchdog")
 async def validate_watchdog_config(destination_id: int, db: Session = Depends(get_db)):
-    """Validate YouTube watchdog configuration by testing API connectivity"""
+    """Validate watchdog configuration"""
     destination = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
     if not destination:
         raise HTTPException(status_code=404, detail="Destination not found")
     
-    if destination.platform != "youtube":
-        raise HTTPException(status_code=400, detail="Watchdog only supported for YouTube destinations")
-    
     if not destination.enable_watchdog:
         raise HTTPException(status_code=400, detail="Watchdog is not enabled for this destination")
     
-    # Validate required fields
-    missing_fields = []
-    if not destination.youtube_api_key:
-        missing_fields.append("youtube_api_key")
-    if not destination.youtube_stream_id:
-        missing_fields.append("youtube_stream_id")
-    if not destination.youtube_broadcast_id:
-        missing_fields.append("youtube_broadcast_id")
-    if not destination.youtube_watch_url:
-        missing_fields.append("youtube_watch_url")
-    
-    if missing_fields:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing required fields: {', '.join(missing_fields)}"
-        )
-    
-    # Test API connectivity
-    try:
-        from services.youtube_api_helper import YouTubeAPIHelper, YouTubeAPIError
-        
-        async with YouTubeAPIHelper(destination.youtube_api_key) as api:
-            # Test stream health
-            try:
-                stream_health = await api.get_stream_health(destination.youtube_stream_id)
-                stream_status = "OK"
-                stream_message = f"Stream health: {stream_health['status']}"
-            except YouTubeAPIError as e:
-                stream_status = "ERROR"
-                stream_message = f"Stream check failed: {str(e)}"
-            
-            # Test broadcast status
-            try:
-                broadcast_status = await api.get_broadcast_status(destination.youtube_broadcast_id)
-                broadcast_status_result = "OK"
-                broadcast_message = f"Broadcast status: {broadcast_status['life_cycle_status']}"
-            except YouTubeAPIError as e:
-                broadcast_status_result = "ERROR"
-                broadcast_message = f"Broadcast check failed: {str(e)}"
-            
-            overall_status = "OK" if stream_status == "OK" and broadcast_status_result == "OK" else "ERROR"
-            
-            return {
-                "status": overall_status,
-                "stream_check": {
-                    "status": stream_status,
-                    "message": stream_message
-                },
-                "broadcast_check": {
-                    "status": broadcast_status_result,
-                    "message": broadcast_message
-                },
-                "message": "Validation complete" if overall_status == "OK" else "Validation failed - check details"
-            }
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Validation error: {str(e)}")
+    # For now, local watchdog doesn't require API validation
+    # Just confirm the watchdog is enabled
+    return {
+        "status": "OK",
+        "message": "Local watchdog is enabled and will monitor FFmpeg encoder health",
+        "check_interval": destination.watchdog_check_interval or 30,
+        "destination_name": destination.name,
+        "destination_id": destination.id
+    }
 
