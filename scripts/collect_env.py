@@ -85,6 +85,12 @@ def collect_metadata(label: Optional[str]) -> dict:
         "ONVIF_PTZ_URL": os.getenv("ONVIF_PTZ_URL"),
     }
     env_info["ptz_overrides"] = {k: v for k, v in overrides.items() if v}
+    env_info["ptz_logging"] = {
+        "log_file": "diagnostics/pi-ptz-run.log",
+        "status_endpoint": "/api/presets/cameras/{camera_id}/status",
+        "preset_update_endpoint": "/api/presets/{id}",
+        "absolute_move_enabled": True,
+    }
 
     if label:
         env_info["label"] = label

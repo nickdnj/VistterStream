@@ -232,12 +232,18 @@ class SeamlessTimelineExecutor:
                 password = base64.b64decode(camera.password_enc).decode() if camera.password_enc else None
                 if password:
                     ptz_service = get_ptz_service()
+                    pan = preset.pan if preset.pan is not None else 0.0
+                    tilt = preset.tilt if preset.tilt is not None else 0.0
+                    zoom = preset.zoom if preset.zoom is not None else 1.0
                     await ptz_service.move_to_preset(
                         address=camera.address,
                         port=camera.onvif_port,
                         username=camera.username,
                         password=password,
-                        preset_token=str(preset_id)
+                        preset_token=preset.camera_preset_token or str(preset_id),
+                        pan=pan,
+                        tilt=tilt,
+                        zoom=zoom,
                     )
                     await asyncio.sleep(0.5)  # Brief settle time
             except Exception as e:
@@ -513,4 +519,3 @@ def get_seamless_timeline_executor() -> SeamlessTimelineExecutor:
     if _seamless_executor is None:
         _seamless_executor = SeamlessTimelineExecutor()
     return _seamless_executor
-

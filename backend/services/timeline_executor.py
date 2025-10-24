@@ -378,17 +378,29 @@ class TimelineExecutor:
                         if password and ((last_camera_preset[0] != camera_id) or (last_camera_preset[1] != preset_id)):
                             # Use configured ONVIF port for PTZ control
                             ptz_service = get_ptz_service()
+                            pan = preset.pan if preset.pan is not None else 0.0
+                            tilt = preset.tilt if preset.tilt is not None else 0.0
+                            zoom = preset.zoom if preset.zoom is not None else 1.0
                             try:
                                 success = await ptz_service.move_to_preset(
                                     address=camera.address,
                                     port=camera.onvif_port,
                                     username=camera.username,
                                     password=password,
-                                    preset_token=str(preset_id)
+                                    preset_token=preset.camera_preset_token or str(preset_id),
+                                    pan=pan,
+                                    tilt=tilt,
+                                    zoom=zoom,
                                 )
-                                
+                               
                                 if success:
-                                    logger.info(f"✅ Camera moved to preset '{preset.name}'")
+                                    logger.info(
+                                        "✅ Camera moved to preset '%s' (pan=%s, tilt=%s, zoom=%s)",
+                                        preset.name,
+                                        pan,
+                                        tilt,
+                                        zoom,
+                                    )
                                     # Wait a moment for camera to settle
                                     await asyncio.sleep(2)
                                 else:
@@ -620,4 +632,3 @@ def get_playback_position(timeline_id: int) -> Optional[dict]:
     """Get current playback position for a timeline"""
     executor = get_timeline_executor()
     return executor.playback_positions.get(timeline_id)
-
