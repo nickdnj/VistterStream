@@ -13,3 +13,4 @@ pydantic-settings
 python-dotenv
 onvif-zeep==0.2.12  # ONVIF PTZ camera control
 psutil  # System resource monitoring
+aiohttp  # YouTube API async HTTP client for watchdog

@@ -1,0 +1,30 @@
+[Unit]
+Description=VistterStream YouTube Stream Watchdog
+Documentation=https://github.com/yourusername/VistterStream
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/vistterstream
+EnvironmentFile=/opt/vistterstream/.env
+
+# Main command
+ExecStart=/usr/bin/python3 /opt/vistterstream/backend/services/youtube_stream_watchdog.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=append:/var/log/vistterstream-watchdog.log
+StandardError=append:/var/log/vistterstream-watchdog.log
+
+# Security and resource limits
+LimitNOFILE=65536
+Nice=0
+
+[Install]
+WantedBy=multi-user.target
+

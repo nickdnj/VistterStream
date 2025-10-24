@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 # Import routers
-from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler
+from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog
 from routers import presets as presets_router
 
 # Import health monitor
@@ -25,6 +25,10 @@ except Exception:  # noqa: E722
 
 # Import RTMP relay service (THE SECRET SAUCE!)
 from services.rtmp_relay_service import get_rtmp_relay_service
+
+# Import watchdog manager
+from services.watchdog_manager import get_watchdog_manager
+from models.database import get_db
 
 # Create FastAPI app
 app = FastAPI(
@@ -62,6 +66,7 @@ app.include_router(presets_router.router)  # PTZ Presets
 app.include_router(assets.router)  # Assets (overlays, graphics, API images)
 app.include_router(status.router, prefix="/api/status", tags=["status"])
 app.include_router(destinations.router)  # Streaming destinations (YouTube, Facebook, etc.)
+app.include_router(watchdog.router)  # YouTube stream watchdog management
 app.include_router(timelines.router)  # Timeline CRUD
 app.include_router(timeline_execution.router)  # Timeline execution (start/stop/status)
 # Scheduling API
@@ -108,7 +113,6 @@ async def startup_event():
     print("📡 Starting RTMP relay service (THE SECRET SAUCE!)...")
     relay_service = get_rtmp_relay_service()
     await relay_service.start_all_cameras()
-    print("✅ All services started")
     # Start scheduler loop
     if get_scheduler_service:
         try:
@@ -116,6 +120,16 @@ async def startup_event():
             print("🗓️ Scheduler started")
         except Exception as e:
             print(f"⚠️ Failed to start scheduler: {e}")
+    # Start YouTube watchdog manager
+    try:
+        print("🐕 Starting YouTube watchdog manager...")
+        watchdog_manager = get_watchdog_manager()
+        db = next(get_db())
+        await watchdog_manager.start(db)
+        print("✅ Watchdog manager started")
+    except Exception as e:
+        print(f"⚠️ Failed to start watchdog manager: {e}")
+    print("✅ All services started")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -126,13 +140,21 @@ async def shutdown_event():
     print("📡 Stopping RTMP relay service...")
     relay_service = get_rtmp_relay_service()
     await relay_service.stop_all_relays()
-    print("✅ All services stopped")
     # Stop scheduler loop
     if get_scheduler_service:
         try:
             await get_scheduler_service().stop()
         except Exception:
             pass
+    # Stop watchdog manager
+    try:
+        print("🐕 Stopping watchdog manager...")
+        watchdog_manager = get_watchdog_manager()
+        await watchdog_manager.stop_all()
+        print("✅ Watchdog manager stopped")
+    except Exception:
+        pass
+    print("✅ All services stopped")
 
 if __name__ == "__main__":
     uvicorn.run(

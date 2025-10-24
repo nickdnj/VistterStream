@@ -1,0 +1,49 @@
+[Unit]
+Description=VistterStream YouTube Encoder (FFmpeg)
+Documentation=https://github.com/yourusername/VistterStream
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/vistterstream
+EnvironmentFile=/opt/vistterstream/.env
+
+# Example FFmpeg command - CUSTOMIZE THIS FOR YOUR SETUP
+# This is a basic example that captures from RTMP and sends to YouTube
+# Adjust input source, encoding settings, and stream key as needed
+ExecStart=/usr/bin/ffmpeg \
+    -re \
+    -i ${RTMP_SOURCE_URL} \
+    -c:v libx264 \
+    -preset veryfast \
+    -b:v 3000k \
+    -maxrate 3500k \
+    -bufsize 6000k \
+    -pix_fmt yuv420p \
+    -g 60 \
+    -c:a aac \
+    -b:a 128k \
+    -ar 44100 \
+    -f flv \
+    rtmp://a.rtmp.youtube.com/live2/${YOUTUBE_STREAM_KEY}
+
+# Alternative: If using OBS headless
+# ExecStart=/usr/bin/obs --startstreaming --minimize-to-tray --profile YouTube --scene-collection VistterStream
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=append:/var/log/vistterstream-encoder.log
+StandardError=append:/var/log/vistterstream-encoder.log
+
+# Security and resource limits
+LimitNOFILE=65536
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target
+
