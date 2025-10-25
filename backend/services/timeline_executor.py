@@ -89,6 +89,15 @@ class TimelineExecutor:
         except asyncio.CancelledError:
             pass
             
+        # Notify watchdog manager that stream is stopping
+        try:
+            from services.watchdog_manager import get_watchdog_manager
+            watchdog_manager = get_watchdog_manager()
+            await watchdog_manager.notify_stream_stopped(timeline_id)
+            logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} stopped")
+        except Exception as e:
+            logger.warning(f"Failed to notify watchdog manager: {e}")
+        
         # Stop FFmpeg if running
         if timeline_id in self.ffmpeg_managers:
             ffmpeg_manager = self.ffmpeg_managers[timeline_id]
@@ -505,6 +514,38 @@ class TimelineExecutor:
                         overlay_images=overlay_images if overlay_images else None
                     )
                     logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
+                    
+                    # Notify watchdog manager about the stream start
+                    try:
+                        from services.watchdog_manager import get_watchdog_manager
+                        from models.destination import StreamingDestination
+                        
+                        watchdog_manager = get_watchdog_manager()
+                        
+                        # Find destination IDs that match the output URLs
+                        destination_ids = []
+                        db = SessionLocal()
+                        try:
+                            for output_url in output_urls:
+                                # Match destinations by their full RTMP URL
+                                destinations = db.query(StreamingDestination).all()
+                                for dest in destinations:
+                                    if dest.get_full_rtmp_url() == output_url:
+                                        destination_ids.append(dest.id)
+                                        break
+                            
+                            # Notify watchdog manager
+                            if destination_ids:
+                                await watchdog_manager.notify_stream_started(
+                                    destination_ids=destination_ids,
+                                    stream_id=timeline_id,
+                                    db_session=db
+                                )
+                                logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} → destinations {destination_ids}")
+                        finally:
+                            db.close()
+                    except Exception as e:
+                        logger.warning(f"Failed to notify watchdog manager: {e}")
                 except Exception as e:
                     logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
                     traceback.print_exc()
