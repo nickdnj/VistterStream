@@ -85,12 +85,12 @@ interface Destination {
 }
 
 /**
- * TIMELINE ZOOM CONFIGURATION
+ * TIMELINE ZOOM CONFIGURATION & VERTICAL SIZING
  * 
  * These constants control the timeline zoom behavior:
  * - MIN_ZOOM: Minimum zoom level (pixels per second) - allows viewing ~10 minutes (600s) in standard viewport
  * - MAX_ZOOM: Maximum zoom level (pixels per second) - for detailed frame-by-frame editing
- * - TRACK_HEIGHT: Visual height of each track in the timeline
+ * - TRACK_HEIGHT: Visual height of each track in the timeline (reduced to 60px for better vertical fit)
  * 
  * Zoom Level Examples at 1200px viewport width:
  * - 2 px/s: 600 seconds (10 minutes) visible
@@ -98,12 +98,12 @@ interface Destination {
  * - 40 px/s: 30 seconds visible (default)
  * - 200 px/s: 6 seconds visible (maximum zoom-in)
  * 
- * Performance Considerations:
- * - Lower zoom levels render more timeline content simultaneously
- * - Rendering remains stable down to MIN_ZOOM with hundreds of cues
- * - Grid background rendering scales efficiently with zoom level
+ * Vertical Layout Optimization:
+ * - TRACK_HEIGHT reduced from 80px to 60px to minimize vertical scrolling
+ * - Top controls and YouTube buttons section condensed
+ * - Ensures full timeline visibility at standard resolutions (1200-1400px wide)
  */
-const TRACK_HEIGHT = 80; // Height of each track in pixels
+const TRACK_HEIGHT = 60; // Height of each track in pixels (optimized for vertical fit)
 const MIN_ZOOM = 2; // Minimum pixels per second (extended range for 10-minute view)
 const MAX_ZOOM = 200; // Maximum pixels per second
 
@@ -120,8 +120,19 @@ const TimelineEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
-  const youtubeDestination = destinations.find((dest) => dest.platform === 'youtube' && dest.is_active !== false);
-  const youtubeChannelId = youtubeDestination?.channel_id || null;
+  
+  /**
+   * YouTube Button Logic:
+   * - Find the first SELECTED YouTube destination from selectedDestinations
+   * - Extract channel_id to construct Studio and Channel URLs
+   * - Buttons are disabled/grayed if no YouTube destination is selected
+   */
+  const selectedYoutubeDestination = destinations.find((dest) => 
+    selectedDestinations.includes(dest.id) && 
+    dest.platform === 'youtube'
+  );
+  const youtubeChannelId = selectedYoutubeDestination?.channel_id || null;
+  const hasYoutubeDestination = !!selectedYoutubeDestination;
   const youtubeStudioUrl = youtubeChannelId
     ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming`
     : 'https://studio.youtube.com/channel';
@@ -925,7 +936,7 @@ const TimelineEditor: React.FC = () => {
 
     return (
       <div 
-        className="relative h-8 bg-dark-800 border-b border-dark-700 cursor-pointer" 
+        className="relative h-6 bg-dark-800 border-b border-dark-700 cursor-pointer" 
         style={{ width: `${duration * zoomLevel}px` }}
         onClick={handleTimelineClick}
       >
@@ -948,7 +959,7 @@ const TimelineEditor: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-dark-900">
       {/* Top Bar */}
-      <div className="flex items-center justify-between px-6 py-4 bg-dark-800 border-b border-dark-700">
+      <div className="flex items-center justify-between px-6 py-2.5 bg-dark-800 border-b border-dark-700">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-white">🎬 Timeline Editor</h1>
           <span className="text-xs text-gray-500 font-mono">{UI_VERSION}</span>
@@ -1201,62 +1212,91 @@ const TimelineEditor: React.FC = () => {
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedTimeline ? (
             <>
-              {/* Live Control Link (YouTube Live Studio) */}
-              <div className="bg-dark-800 border-b border-dark-700 p-4">
-                <div className="max-w-4xl mx-auto flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-white mb-1">Live Control</h2>
-                    {youtubeChannelId ? (
-                      <p className="text-gray-400 text-sm">
-                        Quick links for YouTube channel{' '}
-                        <span className="font-mono text-xs text-gray-200">{youtubeChannelId}</span>.
-                      </p>
-                    ) : (
-                      <p className="text-gray-400 text-sm">
-                        Add a YouTube destination with a channel ID to enable quick links for previewing your public stream.
+              {/* Live Control - YouTube Quick Links */}
+              <div className="bg-dark-800 border-b border-dark-700 px-4 py-2.5">
+                <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-sm font-semibold text-white">
+                      {hasYoutubeDestination ? (
+                        <>
+                          📺 {selectedYoutubeDestination?.name}
+                          {youtubeChannelId && (
+                            <span className="ml-2 font-mono text-xs text-gray-400">({youtubeChannelId})</span>
+                          )}
+                        </>
+                      ) : (
+                        'YouTube Quick Links'
+                      )}
+                    </h2>
+                    {!hasYoutubeDestination && (
+                      <p className="text-gray-500 text-xs mt-0.5">
+                        Select a YouTube destination above to enable quick links
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <a
-                      href={youtubeStudioUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold text-center"
-                    >
-                      Open YouTube Live Studio ↗
-                    </a>
-                    <a
-                      href={youtubeChannelUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`px-4 py-2 ${youtubeChannelId ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-700/70 hover:bg-gray-600/70'} text-white rounded-md font-semibold text-center`}
-                    >
-                      Preview Channel Page ↗
-                    </a>
+                  <div className="flex gap-2">
+                    {hasYoutubeDestination ? (
+                      <>
+                        <a
+                          href={youtubeStudioUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
+                          title="Open YouTube Live Studio in new tab"
+                        >
+                          Studio ↗
+                        </a>
+                        <a
+                          href={youtubeChannelUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
+                          title="Preview public channel page in new tab"
+                        >
+                          Channel ↗
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          disabled
+                          className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
+                          title="Select a YouTube destination first"
+                        >
+                          Studio ↗
+                        </button>
+                        <button
+                          disabled
+                          className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
+                          title="Select a YouTube destination first"
+                        >
+                          Channel ↗
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Track Controls */}
-              <div className="flex items-center justify-between gap-2 px-4 py-3 bg-dark-800 border-b border-dark-700">
+              <div className="flex items-center justify-between gap-2 px-4 py-2 bg-dark-800 border-b border-dark-700">
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-sm font-medium">Add Track:</span>
+                  <span className="text-gray-400 text-xs font-medium">Add Track:</span>
                   <button
                     onClick={() => addTrack('video')}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors"
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
                   >
                     🎥 Video
                   </button>
                   <button
                     onClick={() => addTrack('overlay')}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded transition-colors"
+                    className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors"
                   >
                     🎨 Overlay
                   </button>
                   <button
                     onClick={() => addTrack('audio')}
-                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                    className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
                   >
                     🔊 Audio
                   </button>
@@ -1307,7 +1347,7 @@ const TimelineEditor: React.FC = () => {
               <div className="flex-1 flex overflow-hidden">
                 {/* Track Labels */}
                 <div className="w-40 bg-dark-800 border-r border-dark-700 flex flex-col">
-                  <div className="h-8 border-b border-dark-700 flex items-center px-3 text-xs text-gray-400 font-semibold">
+                  <div className="h-6 border-b border-dark-700 flex items-center px-3 text-xs text-gray-400 font-semibold">
                     TRACKS
                   </div>
                   {selectedTimeline.tracks.map((track, trackIndex) => (
