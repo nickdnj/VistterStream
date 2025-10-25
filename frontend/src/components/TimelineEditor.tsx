@@ -370,6 +370,15 @@ const TimelineEditor: React.FC = () => {
     const maxStartTime = Math.max(0, selectedTimeline.duration - cue.duration);
     newStartTime = Math.min(newStartTime, maxStartTime);
     
+    // Debug logging
+    console.log('Drag:', {
+      duration: cue.duration,
+      oldStart: cue.start_time,
+      newStart: newStartTime,
+      maxStart: maxStartTime,
+      timelineDuration: selectedTimeline.duration
+    });
+    
     // Create new timeline object with immutable update for proper React re-render
     const updatedTimeline = {
       ...selectedTimeline,
@@ -1303,14 +1312,28 @@ const TimelineEditor: React.FC = () => {
                           const preset = cue.action_params.preset_id ? getPresetById(cue.action_params.preset_id) : null;
                           const asset = cue.action_params.asset_id ? getAssetById(cue.action_params.asset_id) : null;
                           const cueColor = getTrackColor(track.track_type);
+                          
+                          // Debug: log render values
+                          const leftPx = cue.start_time * zoomLevel;
+                          const widthPx = cue.duration * zoomLevel;
+                          if (cueIndex === 0) { // Only log first cue to avoid spam
+                            console.log('Render cue:', { 
+                              start: cue.start_time, 
+                              duration: cue.duration, 
+                              zoom: zoomLevel,
+                              leftPx, 
+                              widthPx,
+                              timelineDuration: selectedTimeline.duration
+                            });
+                          }
 
                           return (
                             <div
                               key={cueIndex}
                               className={`absolute ${cueColor} text-white rounded border-2 border-white/20 hover:border-white/40 transition-all cursor-move select-none`}
                               style={{
-                                left: `${cue.start_time * zoomLevel}px`,
-                                width: `${cue.duration * zoomLevel}px`,
+                                left: `${leftPx}px`,
+                                width: `${widthPx}px`,
                                 top: '4px',
                                 bottom: '4px',
                                 display: 'flex',
