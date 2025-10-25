@@ -82,6 +82,8 @@ interface Destination {
   rtmp_url: string;
   is_active: boolean;
   channel_id?: string;
+  youtube_stream_id?: string;
+  youtube_broadcast_id?: string;
 }
 
 /**
@@ -124,18 +126,26 @@ const TimelineEditor: React.FC = () => {
   /**
    * YouTube Button Logic:
    * - Find the first SELECTED YouTube destination from selectedDestinations
-   * - Extract channel_id to construct Studio and Channel URLs
+   * - Extract youtube_stream_id (or youtube_broadcast_id) for Studio URL
+   * - Extract channel_id for public Channel URL
    * - Buttons are disabled/grayed if no YouTube destination is selected
+   * 
+   * URL Formats:
+   * - Studio: https://studio.youtube.com/video/{stream_id}/livestreaming
+   * - Channel: https://www.youtube.com/channel/{channel_id}/live
    */
   const selectedYoutubeDestination = destinations.find((dest) => 
     selectedDestinations.includes(dest.id) && 
     dest.platform === 'youtube'
   );
+  const youtubeStreamId = selectedYoutubeDestination?.youtube_stream_id || 
+                          selectedYoutubeDestination?.youtube_broadcast_id || 
+                          null;
   const youtubeChannelId = selectedYoutubeDestination?.channel_id || null;
   const hasYoutubeDestination = !!selectedYoutubeDestination;
-  const youtubeStudioUrl = youtubeChannelId
-    ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming`
-    : 'https://studio.youtube.com/channel';
+  const youtubeStudioUrl = youtubeStreamId
+    ? `https://studio.youtube.com/video/${youtubeStreamId}/livestreaming`
+    : 'https://studio.youtube.com';
   const youtubeChannelUrl = youtubeChannelId
     ? `https://www.youtube.com/channel/${youtubeChannelId}/live`
     : 'https://www.youtube.com/live';
@@ -1220,8 +1230,10 @@ const TimelineEditor: React.FC = () => {
                       {hasYoutubeDestination ? (
                         <>
                           📺 {selectedYoutubeDestination?.name}
-                          {youtubeChannelId && (
-                            <span className="ml-2 font-mono text-xs text-gray-400">({youtubeChannelId})</span>
+                          {youtubeStreamId && (
+                            <span className="ml-2 font-mono text-xs text-gray-400" title="Stream ID">
+                              ({youtubeStreamId.substring(0, 12)}...)
+                            </span>
                           )}
                         </>
                       ) : (
@@ -1233,28 +1245,53 @@ const TimelineEditor: React.FC = () => {
                         Select a YouTube destination above to enable quick links
                       </p>
                     )}
+                    {hasYoutubeDestination && !youtubeStreamId && (
+                      <p className="text-yellow-500 text-xs mt-0.5">
+                        ⚠️ Add Stream ID to destination to enable Studio link
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {hasYoutubeDestination ? (
                       <>
-                        <a
-                          href={youtubeStudioUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                          title="Open YouTube Live Studio in new tab"
-                        >
-                          Studio ↗
-                        </a>
-                        <a
-                          href={youtubeChannelUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                          title="Preview public channel page in new tab"
-                        >
-                          Channel ↗
-                        </a>
+                        {youtubeStreamId ? (
+                          <a
+                            href={youtubeStudioUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
+                            title="Open YouTube Live Studio in new tab"
+                          >
+                            Studio ↗
+                          </a>
+                        ) : (
+                          <button
+                            disabled
+                            className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
+                            title="Add Stream ID to destination to enable Studio link"
+                          >
+                            Studio ↗
+                          </button>
+                        )}
+                        {youtubeChannelId ? (
+                          <a
+                            href={youtubeChannelUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
+                            title="Preview public channel page in new tab"
+                          >
+                            Channel ↗
+                          </a>
+                        ) : (
+                          <button
+                            disabled
+                            className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
+                            title="Add Channel ID to destination to enable Channel link"
+                          >
+                            Channel ↗
+                          </button>
+                        )}
                       </>
                     ) : (
                       <>
