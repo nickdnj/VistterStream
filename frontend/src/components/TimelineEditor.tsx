@@ -364,6 +364,12 @@ const TimelineEditor: React.FC = () => {
     newStartTime = Math.round(newStartTime * 2) / 2;
 
     const cue = selectedTimeline.tracks[draggingCue.trackIndex].cues[draggingCue.cueIndex];
+    
+    // Constrain cue to stay within timeline bounds
+    // Ensure the cue doesn't start beyond the timeline duration
+    const maxStartTime = Math.max(0, selectedTimeline.duration - cue.duration);
+    newStartTime = Math.min(newStartTime, maxStartTime);
+    
     cue.start_time = newStartTime;
     
     setSelectedTimeline({ ...selectedTimeline });
@@ -387,6 +393,11 @@ const TimelineEditor: React.FC = () => {
       // Resize from right (change duration)
       let newDuration = cue.duration + deltaTime;
       newDuration = Math.round(newDuration * 2) / 2;
+      
+      // Constrain resize to not exceed timeline duration
+      const maxDuration = selectedTimeline.duration - cue.start_time;
+      newDuration = Math.min(newDuration, maxDuration);
+      
       cue.duration = Math.max(1, newDuration);
     }
 
@@ -614,13 +625,36 @@ const TimelineEditor: React.FC = () => {
 
     const track = selectedTimeline.tracks[trackIndex];
     
+    // Default duration for new cues
+    const defaultDuration = 10;
+    
+    // Constrain drop position to timeline bounds
+    // Snap to grid first
+    let constrainedStartTime = Math.max(0, Math.round(dropTime * 2) / 2);
+    
+    // Ensure the cue fits within timeline
+    // If dropping too close to the end, adjust duration or position
+    if (constrainedStartTime + defaultDuration > selectedTimeline.duration) {
+      // If there's room for a 1-second cue, allow it at the end
+      if (constrainedStartTime < selectedTimeline.duration) {
+        // Adjust start time to fit the default duration, or place at max possible position
+        constrainedStartTime = Math.max(0, selectedTimeline.duration - defaultDuration);
+      } else {
+        // Drop is beyond timeline, place at the very end with minimal duration
+        constrainedStartTime = Math.max(0, selectedTimeline.duration - 1);
+      }
+    }
+    
+    // Calculate actual duration (constrained to fit)
+    const actualDuration = Math.min(defaultDuration, selectedTimeline.duration - constrainedStartTime);
+    
     if (data.type === 'camera') {
       const camera = cameras.find(c => c.id === data.cameraId);
       if (camera) {
         const newCue: Cue = {
           cue_order: track.cues.length,
-          start_time: Math.max(0, Math.round(dropTime * 2) / 2),
-          duration: 10,
+          start_time: constrainedStartTime,
+          duration: actualDuration,
           action_type: 'show_camera',
           action_params: {
             camera_id: camera.id,
@@ -638,8 +672,8 @@ const TimelineEditor: React.FC = () => {
       if (camera && preset) {
         const newCue: Cue = {
           cue_order: track.cues.length,
-          start_time: Math.max(0, Math.round(dropTime * 2) / 2),
-          duration: 10,
+          start_time: constrainedStartTime,
+          duration: actualDuration,
           action_type: 'show_camera',
           action_params: {
             camera_id: camera.id,
@@ -657,8 +691,8 @@ const TimelineEditor: React.FC = () => {
       if (asset) {
         const newCue: Cue = {
           cue_order: track.cues.length,
-          start_time: Math.max(0, Math.round(dropTime * 2) / 2),
-          duration: 10,
+          start_time: constrainedStartTime,
+          duration: actualDuration,
           action_type: 'overlay',
           action_params: {
             asset_id: asset.id,
