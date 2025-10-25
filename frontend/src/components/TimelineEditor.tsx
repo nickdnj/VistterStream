@@ -308,12 +308,30 @@ const TimelineEditor: React.FC = () => {
 
     const track = selectedTimeline.tracks[trackIndex];
     const lastCue = track.cues[track.cues.length - 1];
-    const newStartTime = lastCue ? lastCue.start_time + lastCue.duration : 0;
+    let newStartTime = lastCue ? lastCue.start_time + lastCue.duration : 0;
+    
+    // Constrain to timeline bounds
+    const defaultDuration = 10;
+    
+    // If the proposed start time would make the cue extend beyond timeline, adjust
+    if (newStartTime + defaultDuration > selectedTimeline.duration) {
+      // Try to fit the default duration by adjusting start time
+      newStartTime = Math.max(0, selectedTimeline.duration - defaultDuration);
+    }
+    
+    // Calculate actual duration that fits
+    const actualDuration = Math.min(defaultDuration, selectedTimeline.duration - newStartTime);
+    
+    // Don't add cue if there's no room (duration would be 0 or negative)
+    if (actualDuration <= 0) {
+      alert('⚠️ No room left in timeline! The timeline is full.');
+      return;
+    }
 
     const newCue: Cue = {
       cue_order: track.cues.length,
       start_time: newStartTime,
-      duration: 10,
+      duration: actualDuration,
       action_type: 'show_camera',
       action_params: {
         camera_id: camera.id,
@@ -369,15 +387,6 @@ const TimelineEditor: React.FC = () => {
     // Ensure the cue doesn't start beyond the timeline duration
     const maxStartTime = Math.max(0, selectedTimeline.duration - cue.duration);
     newStartTime = Math.min(newStartTime, maxStartTime);
-    
-    // Debug logging
-    console.log('Drag:', {
-      duration: cue.duration,
-      oldStart: cue.start_time,
-      newStart: newStartTime,
-      maxStart: maxStartTime,
-      timelineDuration: selectedTimeline.duration
-    });
     
     // Create new timeline object with immutable update for proper React re-render
     const updatedTimeline = {
@@ -1312,28 +1321,14 @@ const TimelineEditor: React.FC = () => {
                           const preset = cue.action_params.preset_id ? getPresetById(cue.action_params.preset_id) : null;
                           const asset = cue.action_params.asset_id ? getAssetById(cue.action_params.asset_id) : null;
                           const cueColor = getTrackColor(track.track_type);
-                          
-                          // Debug: log render values
-                          const leftPx = cue.start_time * zoomLevel;
-                          const widthPx = cue.duration * zoomLevel;
-                          if (cueIndex === 0) { // Only log first cue to avoid spam
-                            console.log('Render cue:', { 
-                              start: cue.start_time, 
-                              duration: cue.duration, 
-                              zoom: zoomLevel,
-                              leftPx, 
-                              widthPx,
-                              timelineDuration: selectedTimeline.duration
-                            });
-                          }
 
                           return (
                             <div
                               key={cueIndex}
                               className={`absolute ${cueColor} text-white rounded border-2 border-white/20 hover:border-white/40 transition-all cursor-move select-none`}
                               style={{
-                                left: `${leftPx}px`,
-                                width: `${widthPx}px`,
+                                left: `${cue.start_time * zoomLevel}px`,
+                                width: `${cue.duration * zoomLevel}px`,
                                 top: '4px',
                                 bottom: '4px',
                                 display: 'flex',
