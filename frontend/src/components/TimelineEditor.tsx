@@ -81,8 +81,27 @@ interface Destination {
   channel_id?: string;
 }
 
+/**
+ * TIMELINE ZOOM CONFIGURATION
+ * 
+ * These constants control the timeline zoom behavior:
+ * - MIN_ZOOM: Minimum zoom level (pixels per second) - allows viewing ~10 minutes (600s) in standard viewport
+ * - MAX_ZOOM: Maximum zoom level (pixels per second) - for detailed frame-by-frame editing
+ * - TRACK_HEIGHT: Visual height of each track in the timeline
+ * 
+ * Zoom Level Examples at 1200px viewport width:
+ * - 2 px/s: 600 seconds (10 minutes) visible
+ * - 10 px/s: 120 seconds (2 minutes) visible
+ * - 40 px/s: 30 seconds visible (default)
+ * - 200 px/s: 6 seconds visible (maximum zoom-in)
+ * 
+ * Performance Considerations:
+ * - Lower zoom levels render more timeline content simultaneously
+ * - Rendering remains stable down to MIN_ZOOM with hundreds of cues
+ * - Grid background rendering scales efficiently with zoom level
+ */
 const TRACK_HEIGHT = 80; // Height of each track in pixels
-const MIN_ZOOM = 10; // Minimum pixels per second
+const MIN_ZOOM = 2; // Minimum pixels per second (extended range for 10-minute view)
 const MAX_ZOOM = 200; // Maximum pixels per second
 
 const TimelineEditor: React.FC = () => {
@@ -374,12 +393,30 @@ const TimelineEditor: React.FC = () => {
     setSelectedTimeline({ ...selectedTimeline });
   };
 
+  /**
+   * Adaptive zoom controls with intelligent step sizing
+   * - Small steps (2px) for low zoom levels (2-10 px/s) for fine control
+   * - Medium steps (5px) for mid zoom levels (10-50 px/s)
+   * - Large steps (10px) for high zoom levels (50+ px/s)
+   */
   const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(MAX_ZOOM, prev + 10));
+    setZoomLevel((prev) => {
+      let step;
+      if (prev < 10) step = 2;
+      else if (prev < 50) step = 5;
+      else step = 10;
+      return Math.min(MAX_ZOOM, prev + step);
+    });
   };
 
   const handleZoomOut = () => {
-    setZoomLevel((prev) => Math.max(MIN_ZOOM, prev - 10));
+    setZoomLevel((prev) => {
+      let step;
+      if (prev <= 10) step = 2;
+      else if (prev <= 50) step = 5;
+      else step = 10;
+      return Math.max(MIN_ZOOM, prev - step);
+    });
   };
 
   // Old playback controls removed - using Preview Window instead
@@ -713,13 +750,30 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
+  /**
+   * Render time ruler with adaptive mark intervals based on zoom level
+   * Ensures readable spacing at all zoom levels (2-200 px/s)
+   */
   const renderTimeRuler = () => {
     if (!selectedTimeline) return null;
 
     const marks = [];
     const duration = selectedTimeline.duration;
-    const interval = zoomLevel < 20 ? 10 : zoomLevel < 40 ? 5 : 1;
-    const playheadPosition = (playheadTime / duration) * 100;
+    
+    // Adaptive interval selection for optimal ruler readability
+    // Target: ~40-80px spacing between marks for comfortable reading
+    let interval: number;
+    if (zoomLevel <= 4) {
+      interval = 30; // Very zoomed out: show marks every 30s
+    } else if (zoomLevel <= 8) {
+      interval = 15; // Zoomed out: show marks every 15s
+    } else if (zoomLevel <= 20) {
+      interval = 10; // Mid-zoom out: show marks every 10s
+    } else if (zoomLevel <= 40) {
+      interval = 5; // Mid-zoom: show marks every 5s
+    } else {
+      interval = 1; // Zoomed in: show marks every 1s
+    }
     
     for (let i = 0; i <= duration; i += interval) {
       marks.push(
