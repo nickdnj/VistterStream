@@ -104,10 +104,28 @@ class StreamRouter:
             
             logger.info(f"🛑 Stopping {self.mode} mode for timeline {self.timeline_id}")
             
-            # Stop timeline executor
+            # Get stream ID before stopping (for watchdog notification)
+            stream_id = None
             if self.timeline_id is not None:
-                executor = get_timeline_executor()
+                try:
+                    executor = get_timeline_executor()
+                    timeline_state = executor.get_timeline_state(self.timeline_id)
+                    if timeline_state and 'stream_id' in timeline_state:
+                        stream_id = timeline_state['stream_id']
+                except Exception as e:
+                    logger.warning(f"Failed to get stream ID: {e}")
+                
+                # Stop timeline executor
                 await executor.stop_timeline(self.timeline_id)
+            
+            # Notify watchdog manager that stream stopped
+            if stream_id:
+                try:
+                    from services.watchdog_manager import get_watchdog_manager
+                    watchdog_manager = get_watchdog_manager()
+                    await watchdog_manager.notify_stream_stopped(stream_id)
+                except Exception as e:
+                    logger.warning(f"Failed to notify watchdog manager: {e}")
             
             # Reset state
             old_mode = self.mode
@@ -190,6 +208,32 @@ class StreamRouter:
             self.mode = PreviewMode.LIVE
             self.timeline_id = timeline_id
             self.destination_ids = destination_ids
+            
+            # Notify watchdog manager about the new stream
+            try:
+                from services.watchdog_manager import get_watchdog_manager
+                from services.timeline_executor import get_timeline_executor
+                
+                watchdog_manager = get_watchdog_manager()
+                executor = get_timeline_executor()
+                
+                # Get the stream ID that was just started
+                timeline_state = executor.get_timeline_state(timeline_id)
+                if timeline_state and 'stream_id' in timeline_state:
+                    stream_id = timeline_state['stream_id']
+                    
+                    # Re-open db session for watchdog notification
+                    db_for_watchdog = SessionLocal()
+                    try:
+                        await watchdog_manager.notify_stream_started(
+                            destination_ids=destination_ids,
+                            stream_id=stream_id,
+                            db_session=db_for_watchdog
+                        )
+                    finally:
+                        db_for_watchdog.close()
+            except Exception as e:
+                logger.warning(f"Failed to notify watchdog manager: {e}")
             
             logger.info(f"✅ NOW LIVE: {', '.join(destination_names)}")
             logger.warning("⚠️  Timeline restarted from beginning (seamless transition coming in future version)")

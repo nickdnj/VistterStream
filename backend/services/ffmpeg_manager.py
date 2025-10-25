@@ -91,6 +91,7 @@ class StreamProcess:
     last_error: Optional[str] = None
     command: List[str] = field(default_factory=list)
     should_auto_restart: bool = True  # Set to False when manually stopped
+    output_urls: List[str] = field(default_factory=list)  # Track destination URLs
 
 
 class FFmpegProcessManager:
@@ -169,7 +170,8 @@ class FFmpegProcessManager:
             stream_id=stream_id,
             status=StreamStatus.STARTING,
             started_at=datetime.utcnow(),
-            command=command
+            command=command,
+            output_urls=output_urls  # Store destination URLs
         )
         
         try:
@@ -625,4 +627,20 @@ class FFmpegProcessManager:
             pass
         except Exception as e:
             logger.error(f"Error shutting down process: {e}")
+    
+    def find_stream_by_destination_url(self, destination_url: str) -> Optional[int]:
+        """
+        Find a running stream that's streaming to a specific destination URL.
+        
+        Args:
+            destination_url: RTMP URL to search for (e.g., rtmp://a.rtmp.youtube.com/live2/key)
+            
+        Returns:
+            Stream ID if found, None otherwise
+        """
+        for stream_id, stream_process in self.processes.items():
+            if stream_process.status == StreamStatus.RUNNING:
+                if destination_url in stream_process.output_urls:
+                    return stream_id
+        return None
 

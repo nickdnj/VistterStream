@@ -46,22 +46,36 @@ class WatchdogManager:
         
         logger.info(f"Found {len(destinations)} destination(s) with watchdog enabled")
         
+        # Try to start watchdogs for each destination
+        # Note: Watchdogs will only start if a stream is actually running to that destination
         for dest in destinations:
-            # Only start if destination has an active stream
-            if hasattr(dest, 'active_stream_id') and dest.active_stream_id:
-                await self.start_watchdog(dest, dest.active_stream_id)
+            await self.start_watchdog(dest)  # stream_id will be auto-detected
         
         logger.info("Watchdog Manager started successfully")
     
-    async def start_watchdog(self, destination: StreamingDestination, stream_id: int):
+    async def start_watchdog(self, destination: StreamingDestination, stream_id: Optional[int] = None):
         """
         Start watchdog for a specific destination stream
         
         Args:
             destination: Destination to monitor
-            stream_id: ID of the stream to monitor
+            stream_id: ID of the stream to monitor (auto-detected if None)
         """
         dest_id = destination.id
+        
+        # Auto-detect stream_id if not provided
+        if stream_id is None:
+            from services.ffmpeg_manager import get_ffmpeg_manager
+            ffmpeg_manager = await get_ffmpeg_manager()
+            destination_url = destination.get_full_rtmp_url()
+            stream_id = ffmpeg_manager.find_stream_by_destination_url(destination_url)
+            
+            if stream_id is None:
+                logger.warning(
+                    f"No active stream found for destination {dest_id} ({destination.name}). "
+                    f"Watchdog will not start until stream is active."
+                )
+                return
         
         # Check if already running
         if dest_id in self.watchdogs:
@@ -132,13 +146,13 @@ class WatchdogManager:
         except Exception as e:
             logger.error(f"Error stopping watchdog for destination {destination_id}: {e}", exc_info=True)
     
-    async def restart_watchdog(self, destination: StreamingDestination, stream_id: int):
+    async def restart_watchdog(self, destination: StreamingDestination, stream_id: Optional[int] = None):
         """
         Restart watchdog for a destination
         
         Args:
             destination: Destination to restart watchdog for
-            stream_id: ID of the stream to monitor
+            stream_id: ID of the stream to monitor (auto-detected if None)
         """
         await self.stop_watchdog(destination.id)
         await asyncio.sleep(1)
@@ -220,6 +234,53 @@ class WatchdogManager:
             dest_id: self.get_watchdog_status(dest_id)
             for dest_id in self.watchdogs.keys()
         }
+    
+    async def notify_stream_started(self, destination_ids: List[int], stream_id: int, db_session: Session):
+        """
+        Notify watchdog manager that a stream has started streaming to destination(s).
+        This will automatically start watchdogs for any enabled destinations.
+        
+        Args:
+            destination_ids: List of destination IDs the stream is streaming to
+            stream_id: ID of the stream that started
+            db_session: Database session
+        """
+        logger.info(f"Stream {stream_id} started to {len(destination_ids)} destination(s)")
+        
+        for dest_id in destination_ids:
+            # Get destination from database
+            destination = db_session.query(StreamingDestination).filter(
+                StreamingDestination.id == dest_id
+            ).first()
+            
+            if not destination:
+                logger.warning(f"Destination {dest_id} not found")
+                continue
+            
+            # Start watchdog if enabled
+            if destination.enable_watchdog:
+                logger.info(f"Starting watchdog for destination {dest_id} ({destination.name})")
+                await self.start_watchdog(destination, stream_id)
+    
+    async def notify_stream_stopped(self, stream_id: int):
+        """
+        Notify watchdog manager that a stream has stopped.
+        This will stop all watchdogs monitoring that stream.
+        
+        Args:
+            stream_id: ID of the stream that stopped
+        """
+        logger.info(f"Stream {stream_id} stopped, stopping associated watchdogs")
+        
+        # Find all watchdogs monitoring this stream
+        to_stop = []
+        for dest_id, watchdog in self.watchdogs.items():
+            if watchdog.stream_id == stream_id:
+                to_stop.append(dest_id)
+        
+        # Stop them
+        for dest_id in to_stop:
+            await self.stop_watchdog(dest_id)
     
     async def stop_all(self):
         """Stop all watchdogs"""
