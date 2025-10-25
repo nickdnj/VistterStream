@@ -205,6 +205,56 @@ const TimelineEditor: React.FC = () => {
 
   // Playback preview (local-only)
 
+  // Validate and fix cues that extend beyond timeline duration
+  useEffect(() => {
+    if (!selectedTimeline) return;
+    
+    let hasInvalidCues = false;
+    const validatedTimeline = {
+      ...selectedTimeline,
+      tracks: selectedTimeline.tracks.map(track => ({
+        ...track,
+        cues: track.cues.map(cue => {
+          const cueEnd = cue.start_time + cue.duration;
+          
+          // Check if cue extends beyond timeline
+          if (cueEnd > selectedTimeline.duration) {
+            hasInvalidCues = true;
+            
+            // Fix: constrain the cue to fit within timeline
+            let fixedStartTime = cue.start_time;
+            let fixedDuration = cue.duration;
+            
+            // If start is beyond duration, move it to the end
+            if (fixedStartTime >= selectedTimeline.duration) {
+              fixedStartTime = Math.max(0, selectedTimeline.duration - 1);
+              fixedDuration = 1;
+            } else {
+              // Trim duration to fit
+              fixedDuration = selectedTimeline.duration - fixedStartTime;
+            }
+            
+            console.log(`🔧 Fixed invalid cue: ${cue.start_time}s + ${cue.duration}s → ${fixedStartTime}s + ${fixedDuration}s`);
+            
+            return {
+              ...cue,
+              start_time: fixedStartTime,
+              duration: fixedDuration
+            };
+          }
+          
+          return cue;
+        })
+      }))
+    };
+    
+    // Only update if we found and fixed invalid cues
+    if (hasInvalidCues) {
+      console.log('⚠️ Found and auto-fixed cues extending beyond timeline duration');
+      setSelectedTimeline(validatedTimeline);
+    }
+  }, [selectedTimeline?.id]); // Only run when timeline changes, not on every render
+
   useEffect(() => {
     // Add global mouse move and mouse up listeners for drag/resize
     const handleMouseMove = (e: MouseEvent) => {
@@ -308,23 +358,24 @@ const TimelineEditor: React.FC = () => {
 
     const track = selectedTimeline.tracks[trackIndex];
     const lastCue = track.cues[track.cues.length - 1];
-    let newStartTime = lastCue ? lastCue.start_time + lastCue.duration : 0;
+    const newStartTime = lastCue ? lastCue.start_time + lastCue.duration : 0;
     
     // Constrain to timeline bounds
     const defaultDuration = 10;
     
-    // If the proposed start time would make the cue extend beyond timeline, adjust
-    if (newStartTime + defaultDuration > selectedTimeline.duration) {
-      // Try to fit the default duration by adjusting start time
-      newStartTime = Math.max(0, selectedTimeline.duration - defaultDuration);
+    // Check if there's any room left in the timeline
+    if (newStartTime >= selectedTimeline.duration) {
+      alert('⚠️ No room left in timeline! The timeline is full.');
+      return;
     }
     
-    // Calculate actual duration that fits
-    const actualDuration = Math.min(defaultDuration, selectedTimeline.duration - newStartTime);
+    // Calculate actual duration that fits in remaining space
+    const remainingTime = selectedTimeline.duration - newStartTime;
+    const actualDuration = Math.min(defaultDuration, remainingTime);
     
-    // Don't add cue if there's no room (duration would be 0 or negative)
+    // Sanity check (should not happen given above check, but defensive programming)
     if (actualDuration <= 0) {
-      alert('⚠️ No room left in timeline! The timeline is full.');
+      alert('⚠️ Cannot add cue - no space remaining.');
       return;
     }
 
