@@ -380,12 +380,12 @@ const StreamingDestinations: React.FC = () => {
                 </p>
               </div>
 
-              {/* YouTube Watchdog Section */}
+              {/* Stream Watchdog Section */}
               {isYoutubeForm && (
                 <div className="border-t border-gray-700 pt-4 mt-4">
-                  <h3 className="text-lg font-semibold text-white mb-3">🐕 YouTube Watchdog (Optional)</h3>
+                  <h3 className="text-lg font-semibold text-white mb-3">🐕 Stream Watchdog (Optional)</h3>
                   <p className="text-sm text-gray-400 mb-4">
-                    Enable automatic stream health monitoring and recovery for 24/7 uptime
+                    Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs. No API keys required!
                   </p>
 
                   {/* Enable Watchdog Toggle */}
@@ -410,79 +410,7 @@ const StreamingDestinations: React.FC = () => {
                   {/* Watchdog Config Fields (show only if enabled) */}
                   {(editingDestination?.enable_watchdog || newDestination.enable_watchdog) && (
                     <div className="space-y-4 pl-6 border-l-2 border-blue-600">
-                      {/* YouTube API Key */}
-                      <div>
-                        <label className="block text-gray-300 mb-2">YouTube API Key</label>
-                        <input
-                          type="password"
-                          value={editingDestination ? (editingDestination.youtube_api_key || '') : (newDestination.youtube_api_key || '')}
-                          onChange={(e) => {
-                            if (editingDestination) {
-                              setEditingDestination({ ...editingDestination, youtube_api_key: e.target.value });
-                            } else {
-                              setNewDestination({ ...newDestination, youtube_api_key: e.target.value });
-                            }
-                          }}
-                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
-                          placeholder="AIzaSy..."
-                        />
-                        <p className="text-xs text-gray-500 mt-1">YouTube Data API v3 key</p>
-                      </div>
-
-                      {/* Stream ID */}
-                      <div>
-                        <label className="block text-gray-300 mb-2">YouTube Stream ID</label>
-                        <input
-                          type="text"
-                          value={editingDestination ? (editingDestination.youtube_stream_id || '') : (newDestination.youtube_stream_id || '')}
-                          onChange={(e) => {
-                            if (editingDestination) {
-                              setEditingDestination({ ...editingDestination, youtube_stream_id: e.target.value });
-                            } else {
-                              setNewDestination({ ...newDestination, youtube_stream_id: e.target.value });
-                            }
-                          }}
-                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
-                          placeholder="abc123..."
-                        />
-                      </div>
-
-                      {/* Broadcast ID */}
-                      <div>
-                        <label className="block text-gray-300 mb-2">YouTube Broadcast ID</label>
-                        <input
-                          type="text"
-                          value={editingDestination ? (editingDestination.youtube_broadcast_id || '') : (newDestination.youtube_broadcast_id || '')}
-                          onChange={(e) => {
-                            if (editingDestination) {
-                              setEditingDestination({ ...editingDestination, youtube_broadcast_id: e.target.value });
-                            } else {
-                              setNewDestination({ ...newDestination, youtube_broadcast_id: e.target.value });
-                            }
-                          }}
-                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
-                          placeholder="xyz789..."
-                        />
-                      </div>
-
-                      {/* Watch URL */}
-                      <div>
-                        <label className="block text-gray-300 mb-2">Watch URL</label>
-                        <input
-                          type="text"
-                          value={editingDestination ? (editingDestination.youtube_watch_url || '') : (newDestination.youtube_watch_url || '')}
-                          onChange={(e) => {
-                            if (editingDestination) {
-                              setEditingDestination({ ...editingDestination, youtube_watch_url: e.target.value });
-                            } else {
-                              setNewDestination({ ...newDestination, youtube_watch_url: e.target.value });
-                            }
-                          }}
-                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
-                          placeholder="https://youtube.com/watch?v=..."
-                        />
-                      </div>
-
+                      
                       {/* Check Interval */}
                       <div>
                         <label className="block text-gray-300 mb-2">Check Interval (seconds)</label>
@@ -504,40 +432,29 @@ const StreamingDestinations: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-1">How often to check stream health (default: 30s)</p>
                       </div>
 
-                      {/* Advanced Options */}
-                      <div className="space-y-2">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editingDestination ? (editingDestination.watchdog_enable_frame_probe || false) : (newDestination.watchdog_enable_frame_probe || false)}
-                            onChange={(e) => {
-                              if (editingDestination) {
-                                setEditingDestination({ ...editingDestination, watchdog_enable_frame_probe: e.target.checked });
-                              } else {
-                                setNewDestination({ ...newDestination, watchdog_enable_frame_probe: e.target.checked });
-                              }
-                            }}
-                            className="w-4 h-4"
-                          />
-                          <span className="text-sm text-gray-300">Enable Frame Probing (requires yt-dlp)</span>
+                      {/* YouTube Channel Live URL (Optional) */}
+                      <div>
+                        <label className="block text-gray-300 mb-2">
+                          YouTube Channel /live URL (Optional)
                         </label>
-
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editingDestination ? (editingDestination.watchdog_enable_daily_reset || false) : (newDestination.watchdog_enable_daily_reset || false)}
-                            onChange={(e) => {
-                              if (editingDestination) {
-                                setEditingDestination({ ...editingDestination, watchdog_enable_daily_reset: e.target.checked });
-                              } else {
-                                setNewDestination({ ...newDestination, watchdog_enable_daily_reset: e.target.checked });
-                              }
-                            }}
-                            className="w-4 h-4"
-                          />
-                          <span className="text-sm text-gray-300">Enable Daily Reset</span>
-                        </label>
+                        <input
+                          type="text"
+                          value={editingDestination ? (editingDestination.youtube_watch_url || '') : (newDestination.youtube_watch_url || '')}
+                          onChange={(e) => {
+                            if (editingDestination) {
+                              setEditingDestination({ ...editingDestination, youtube_watch_url: e.target.value });
+                            } else {
+                              setNewDestination({ ...newDestination, youtube_watch_url: e.target.value });
+                            }
+                          }}
+                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                          placeholder="https://youtube.com/channel/UCxxxxx/live"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          If provided, watchdog will also check if YouTube shows your stream as live (no API key needed!)
+                        </p>
                       </div>
+
                     </div>
                   )}
                 </div>
