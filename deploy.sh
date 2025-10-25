@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# VistterStream Deployment Script
+# VistterStream Smart Deployment Script
 # - Pull latest from GitHub
-# - Stop running containers
-# - Rebuild images
-# - Start containers
+# - Detect which files changed
+# - Only rebuild containers affected by changes
+# - Keep unchanged containers running
 # Supports both docker compose v2 (docker compose) and legacy (docker-compose)
 
 set -euo pipefail
@@ -51,6 +51,10 @@ if [[ ! -f .env ]]; then
   fi
 fi
 
+# Store current commit for change detection
+BEFORE_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+log "Current commit: ${BEFORE_COMMIT:0:8}"
+
 # Pull latest from git
 log "Pulling latest changes from Git..."
 current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)
@@ -73,38 +77,121 @@ if [[ "$STASHED" -eq 1 ]]; then
   git stash pop || log "Warning: Could not restore stashed changes (check 'git stash list')"
 fi
 
-# Stop containers
-log "Stopping containers..."
-"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" down --remove-orphans || true
+AFTER_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 
-# Optional: Run DB migration if script exists
-MIGRATION_SCRIPT="backend/migrations/add_youtube_watchdog_fields.py"
-if [[ -f "$MIGRATION_SCRIPT" ]]; then
-  log "Running database migration (if needed)..."
-  # Use host python if available or run inside backend container after build
-  if command -v python3 >/dev/null 2>&1; then
-    python3 "$MIGRATION_SCRIPT" || log "Migration script failed (will run inside container after start)"
-  else
-    log "Host python3 not found. Will run migration inside container after start."
-    RUN_MIGRATION_IN_CONTAINER=1
+# Detect changed files
+if [[ "$BEFORE_COMMIT" == "$AFTER_COMMIT" ]]; then
+  log "No changes detected (commit ${AFTER_COMMIT:0:8}). Nothing to rebuild."
+  log "All containers are up to date."
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+  exit 0
+fi
+
+log "Changes detected: ${BEFORE_COMMIT:0:8} → ${AFTER_COMMIT:0:8}"
+log "Analyzing changed files..."
+
+# Get list of changed files
+CHANGED_FILES=$(git diff --name-only "${BEFORE_COMMIT}" "${AFTER_COMMIT}" 2>/dev/null || echo "")
+
+if [[ -z "$CHANGED_FILES" ]]; then
+  log "No file changes detected. All containers are up to date."
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+  exit 0
+fi
+
+# Map changed files to services
+SERVICES_TO_REBUILD=()
+
+# Check backend changes
+if echo "$CHANGED_FILES" | grep -qE '^backend/'; then
+  log "✓ Backend changes detected"
+  SERVICES_TO_REBUILD+=("backend")
+  # Also include backend-host if it's in the compose file
+  if grep -q "backend-host:" "$COMPOSE_FILE"; then
+    SERVICES_TO_REBUILD+=("backend-host")
   fi
 fi
 
-# Rebuild images
-log "Building images..."
-"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" build --no-cache
+# Check frontend changes
+if echo "$CHANGED_FILES" | grep -qE '^frontend/'; then
+  log "✓ Frontend changes detected"
+  SERVICES_TO_REBUILD+=("frontend")
+fi
 
-# Start containers
-log "Starting containers..."
+# Check RTMP relay changes
+if echo "$CHANGED_FILES" | grep -qE '^docker/nginx-rtmp/'; then
+  log "✓ RTMP relay changes detected"
+  SERVICES_TO_REBUILD+=("rtmp-relay")
+fi
+
+# Check preview server config changes (MediaMTX)
+if echo "$CHANGED_FILES" | grep -qE '^docker/mediamtx/'; then
+  log "✓ Preview server config changes detected"
+  SERVICES_TO_REBUILD+=("preview-server")
+fi
+
+# Check compose file changes (rebuild all if compose file changed)
+if echo "$CHANGED_FILES" | grep -qE '^docker/docker-compose'; then
+  log "✓ Docker Compose configuration changed - will rebuild all services"
+  SERVICES_TO_REBUILD=("backend" "frontend" "rtmp-relay" "preview-server")
+  if grep -q "backend-host:" "$COMPOSE_FILE"; then
+    SERVICES_TO_REBUILD+=("backend-host")
+  fi
+fi
+
+# Remove duplicates
+SERVICES_TO_REBUILD=($(echo "${SERVICES_TO_REBUILD[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+
+if [[ ${#SERVICES_TO_REBUILD[@]} -eq 0 ]]; then
+  log "No service changes detected (changes in docs/scripts/tests only)."
+  log "All containers are up to date."
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+  exit 0
+fi
+
+log "Services to rebuild: ${SERVICES_TO_REBUILD[*]}"
+
+# Optional: Run DB migration if backend changed and script exists
+if [[ " ${SERVICES_TO_REBUILD[*]} " =~ " backend " ]]; then
+  MIGRATION_SCRIPT="backend/migrations/add_youtube_watchdog_fields.py"
+  if [[ -f "$MIGRATION_SCRIPT" ]]; then
+    log "Running database migration (if needed)..."
+    if command -v python3 >/dev/null 2>&1; then
+      python3 "$MIGRATION_SCRIPT" || log "Migration script failed (will run inside container after start)"
+    else
+      log "Host python3 not found. Will run migration inside container after start."
+      RUN_MIGRATION_IN_CONTAINER=1
+    fi
+  fi
+fi
+
+# Stop only the services that need rebuilding
+log "Stopping affected services: ${SERVICES_TO_REBUILD[*]}"
+for service in "${SERVICES_TO_REBUILD[@]}"; do
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" stop "$service" 2>/dev/null || log "Service $service not running"
+done
+
+# Rebuild only the affected services
+log "Rebuilding affected services..."
+for service in "${SERVICES_TO_REBUILD[@]}"; do
+  log "  → Building $service..."
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" build --no-cache "$service" || {
+    err "Failed to build $service"
+    exit 1
+  }
+done
+
+# Start all services (this will restart rebuilt ones and ensure others are running)
+log "Starting services..."
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d
 
 # If requested, run migration inside backend container
 if [[ "${RUN_MIGRATION_IN_CONTAINER:-0}" -eq 1 ]]; then
   log "Running migration inside backend container..."
-  # Try both service names (vistterstream-backend and vistterstream-backend-host)
+  sleep 3  # Give container time to start
   for svc in vistterstream-backend vistterstream-backend-host; do
     if docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
-      docker exec -it "$svc" python3 /app/backend/migrations/add_youtube_watchdog_fields.py && RUN_MIGRATION_IN_CONTAINER=0 && break
+      docker exec "$svc" python3 /app/backend/migrations/add_youtube_watchdog_fields.py && RUN_MIGRATION_IN_CONTAINER=0 && break
     fi
   done
   if [[ "$RUN_MIGRATION_IN_CONTAINER" -ne 0 ]]; then
@@ -116,4 +203,11 @@ fi
 log "Deployment complete. Current container status:"
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
 
+# Show summary of what was done
+log ""
+log "Summary:"
+log "  Changed commit: ${BEFORE_COMMIT:0:8} → ${AFTER_COMMIT:0:8}"
+log "  Rebuilt services: ${SERVICES_TO_REBUILD[*]}"
+log "  Unchanged services: kept running without interruption"
+log ""
 log "Done."
