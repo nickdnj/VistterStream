@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
+// UI Version for debugging deployment
+const UI_VERSION = 'v1.0.3-constraints';
+
 interface Camera {
   id: number;
   name: string;
@@ -948,6 +951,7 @@ const TimelineEditor: React.FC = () => {
       <div className="flex items-center justify-between px-6 py-4 bg-dark-800 border-b border-dark-700">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-white">🎬 Timeline Editor</h1>
+          <span className="text-xs text-gray-500 font-mono">{UI_VERSION}</span>
           {selectedTimeline && (
             <span className="text-gray-400">| {selectedTimeline.name} • {selectedTimeline.resolution} • {selectedTimeline.fps}fps {selectedTimeline.loop && '• Loop'}</span>
           )}
