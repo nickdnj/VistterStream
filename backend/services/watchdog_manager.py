@@ -5,7 +5,7 @@ Manages multiple stream watchdog instances, one per destination
 
 import asyncio
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from sqlalchemy.orm import Session
 
 from services.local_stream_watchdog import LocalStreamWatchdog
