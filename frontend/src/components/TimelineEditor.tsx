@@ -370,9 +370,24 @@ const TimelineEditor: React.FC = () => {
     const maxStartTime = Math.max(0, selectedTimeline.duration - cue.duration);
     newStartTime = Math.min(newStartTime, maxStartTime);
     
-    cue.start_time = newStartTime;
+    // Create new timeline object with immutable update for proper React re-render
+    const updatedTimeline = {
+      ...selectedTimeline,
+      tracks: selectedTimeline.tracks.map((track, idx) => 
+        idx === draggingCue.trackIndex
+          ? {
+              ...track,
+              cues: track.cues.map((c, cidx) =>
+                cidx === draggingCue.cueIndex
+                  ? { ...c, start_time: newStartTime }
+                  : c
+              )
+            }
+          : track
+      )
+    };
     
-    setSelectedTimeline({ ...selectedTimeline });
+    setSelectedTimeline(updatedTimeline);
   };
 
   const handleCueResize = (e: MouseEvent) => {
@@ -382,26 +397,44 @@ const TimelineEditor: React.FC = () => {
     const deltaTime = deltaX / zoomLevel;
     const cue = selectedTimeline.tracks[resizingCue.trackIndex].cues[resizingCue.cueIndex];
 
+    let newStartTime = cue.start_time;
+    let newDuration = cue.duration;
+
     if (resizingCue.edge === 'left') {
       // Resize from left (change start_time and duration)
-      let newStartTime = Math.max(0, dragStartTime + deltaTime);
+      newStartTime = Math.max(0, dragStartTime + deltaTime);
       newStartTime = Math.round(newStartTime * 2) / 2;
       const endTime = cue.start_time + cue.duration;
-      cue.start_time = newStartTime;
-      cue.duration = Math.max(1, endTime - newStartTime);
+      newDuration = Math.max(1, endTime - newStartTime);
     } else {
       // Resize from right (change duration)
-      let newDuration = cue.duration + deltaTime;
+      newDuration = cue.duration + deltaTime;
       newDuration = Math.round(newDuration * 2) / 2;
       
       // Constrain resize to not exceed timeline duration
       const maxDuration = selectedTimeline.duration - cue.start_time;
       newDuration = Math.min(newDuration, maxDuration);
-      
-      cue.duration = Math.max(1, newDuration);
+      newDuration = Math.max(1, newDuration);
     }
 
-    setSelectedTimeline({ ...selectedTimeline });
+    // Create new timeline object with immutable update for proper React re-render
+    const updatedTimeline = {
+      ...selectedTimeline,
+      tracks: selectedTimeline.tracks.map((track, idx) => 
+        idx === resizingCue.trackIndex
+          ? {
+              ...track,
+              cues: track.cues.map((c, cidx) =>
+                cidx === resizingCue.cueIndex
+                  ? { ...c, start_time: newStartTime, duration: newDuration }
+                  : c
+              )
+            }
+          : track
+      )
+    };
+
+    setSelectedTimeline(updatedTimeline);
   };
 
   /**
