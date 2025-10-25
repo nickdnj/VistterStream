@@ -916,7 +916,7 @@ const TimelineEditor: React.FC = () => {
     
     for (let i = 0; i <= duration; i += interval) {
       marks.push(
-        <div key={i} className="absolute flex flex-col items-center" style={{ left: `${i * zoomLevel}px` }}>
+        <div key={i} className="absolute flex flex-col items-start" style={{ left: `${i * zoomLevel}px` }}>
           <div className="w-px h-3 bg-gray-500"></div>
           <span className="text-xs text-gray-400 mt-1">{i}s</span>
         </div>
