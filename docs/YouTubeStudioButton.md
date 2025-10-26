@@ -40,8 +40,8 @@ To enable the Studio button with full functionality:
 1. Navigate to **Settings → Streaming Destinations**
 2. Select or create a YouTube destination
 3. Fill in one or both of these fields:
-   - **YouTube Stream ID**: The specific video/stream ID (preferred)
-   - **Channel ID**: Your YouTube channel ID (fallback)
+   - **YouTube Stream/Broadcast ID**: The specific video/broadcast ID from your livestream URL (e.g., `s6qs14YByEQ`) - Required for direct access to your specific stream
+   - **YouTube Channel ID**: Your YouTube channel ID (e.g., `UCxxxxxxxxxxxxxxxx`) - Used as fallback if Stream ID not provided
 
 ### Finding Your YouTube IDs
 
