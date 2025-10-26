@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   HomeIcon,
   CameraIcon,
-  PlayIcon,
   FilmIcon,
   Cog6ToothIcon,
   CalendarDaysIcon,
@@ -29,7 +28,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Cameras', href: '/cameras', icon: CameraIcon },
-    { name: 'Streams', href: '/streams', icon: PlayIcon },
     { name: 'Timelines', href: '/timelines', icon: FilmIcon },
     { name: 'Scheduler', href: '/scheduler', icon: CalendarDaysIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },

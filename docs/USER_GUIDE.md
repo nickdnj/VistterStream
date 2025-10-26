@@ -79,7 +79,6 @@ The dashboard shows a quick overview of your cameras with:
 The left sidebar provides easy access to all main sections:
 - 🏠 Dashboard
 - 📷 Cameras
-- ▶️ Streams
 - 🎬 Timelines
 - 📅 Scheduler
 - ⚙️ Settings

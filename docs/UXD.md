@@ -8,7 +8,7 @@
 
 ## 2. Information Architecture
 * **Authentication Layer:** Login, password reset, first-time setup wizard.
-* **Primary Navigation:** Dashboard, Cameras, Presets, Timelines, Segments, Streams, Overlays, System (Settings, Logs, Updates).
+* **Primary Navigation:** Dashboard, Cameras, Presets, Timelines, Segments, Overlays, System (Settings, Logs, Updates).
 * **Secondary Navigation:** Within each section provide tabs (Details, Activity, Diagnostics) to reduce clutter.
 * **Global Elements:** Persistent top bar with health summary, alerts bell, and quick actions (Start Stream, Generate Diagnostics).
 
@@ -57,7 +57,6 @@
 | **Presets** | Split view: left list of presets, right live preview with PTZ controls. | PTZ joystick controls, slider inputs, save/cancel actions, preset tagging. |
 | **Timelines** | Calendar/list toggle, detail drawer showing step sequence. | Timeline progress indicator, overlay thumbnails, override controls, overlay cue timeline scrubber. |
 | **Segments** | Library list with sync status and source (cloud/export). Detail drawer highlights dependencies and offers preview controls. | Segment cards with status badges (Ready, Needs Validation), import/upload button, queue/Play Now actions, execution log panel. |
-| **Streams** | Card layout per destination with status, bitrate graphs, history log. | Start/stop toggle, bitrate sparkline, error log accordion, key management modal. |
 | **Overlays** | Dual-pane view: asset gallery with manifest metadata alongside OCL script preview. | Thumbnail grid, sync status badges, version comparison modal, cue inspector (start time, duration, transition, opacity curve). |
 | **System Settings** | Tabbed interface (General, Network, Updates, Diagnostics). | Form sections, backup/export buttons, OTA update progress widget. |
 

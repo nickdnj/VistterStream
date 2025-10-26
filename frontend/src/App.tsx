@@ -4,7 +4,6 @@ import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import CameraManagement from './components/CameraManagement';
-import StreamManagement from './components/StreamManagement';
 import PresetManagement from './components/PresetManagement';
 import TimelineEditor from './components/TimelineEditor';
 import StreamingDestinations from './components/StreamingDestinations';
@@ -27,7 +26,7 @@ function App() {
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/cameras" element={<CameraManagement />} />
-                    <Route path="/streams" element={<StreamManagement />} />
+                    <Route path="/streams" element={<Navigate to="/timelines" replace />} />
                     <Route path="/timelines" element={<TimelineEditor />} />
                     <Route path="/destinations" element={<StreamingDestinations />} />
                     <Route path="/presets" element={<PresetManagement />} />
@@ -51,13 +50,7 @@ function App() {
                 </Layout>
               </ProtectedRoute>
             } />
-            <Route path="/streams" element={
-              <ProtectedRoute>
-                <Layout>
-                  <StreamManagement />
-                </Layout>
-              </ProtectedRoute>
-            } />
+            <Route path="/streams" element={<Navigate to="/timelines" replace />} />
             <Route path="/presets" element={
               <ProtectedRoute>
                 <Layout>
