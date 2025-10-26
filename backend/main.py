@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 # Import routers
-from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog
+from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog, settings
 from routers import presets as presets_router
 
 # Import health monitor
@@ -69,6 +69,7 @@ app.include_router(destinations.router)  # Streaming destinations (YouTube, Face
 app.include_router(watchdog.router)  # YouTube stream watchdog management
 app.include_router(timelines.router)  # Timeline CRUD
 app.include_router(timeline_execution.router)  # Timeline execution (start/stop/status)
+app.include_router(settings.router)  # System settings
 # Scheduling API
 app.include_router(scheduler.router)
 # Preview disabled per refactor away from local HLS preview

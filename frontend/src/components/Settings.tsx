@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +11,15 @@ import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'presets' | 'assets' | 'destinations' | 'system';
 
+interface GeneralSettings {
+  appliance_name: string;
+  timezone: string;
+  state_name: string;
+  city: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 const Settings: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -20,6 +29,20 @@ const Settings: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // General settings state
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
+    appliance_name: 'VistterStream Appliance',
+    timezone: 'America/New_York',
+    state_name: '',
+    city: '',
+    latitude: null,
+    longitude: null,
+  });
+  const [generalSettingsLoading, setGeneralSettingsLoading] = useState(false);
+  const [generalSettingsSaving, setGeneralSettingsSaving] = useState(false);
+  const [generalSettingsMessage, setGeneralSettingsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [locationDetecting, setLocationDetecting] = useState(false);
 
   const extractErrorDetail = (error: unknown): string | undefined => {
     if (typeof error === 'object' && error && 'response' in error) {
@@ -27,6 +50,104 @@ const Settings: React.FC = () => {
       return response?.data?.detail || response?.data?.message;
     }
     return undefined;
+  };
+
+  // Load general settings on mount
+  useEffect(() => {
+    loadGeneralSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadGeneralSettings = async () => {
+    setGeneralSettingsLoading(true);
+    try {
+      const response = await api.get('/settings');
+      setGeneralSettings({
+        appliance_name: response.data.appliance_name || 'VistterStream Appliance',
+        timezone: response.data.timezone || 'America/New_York',
+        state_name: response.data.state_name || '',
+        city: response.data.city || '',
+        latitude: response.data.latitude || null,
+        longitude: response.data.longitude || null,
+      });
+      
+      // Auto-detect location if not already set
+      if (!response.data.latitude || !response.data.longitude) {
+        detectLocation();
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      // Try to detect location anyway
+      detectLocation();
+    } finally {
+      setGeneralSettingsLoading(false);
+    }
+  };
+
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported by browser');
+      return;
+    }
+
+    setLocationDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        
+        try {
+          // Reverse geocode using OpenStreetMap Nominatim
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          const data = await response.json();
+          
+          const state_name = data.address?.state || '';
+          const city = data.address?.city || data.address?.town || data.address?.village || '';
+          
+          setGeneralSettings((prev) => ({
+            ...prev,
+            latitude,
+            longitude,
+            city,
+            state_name,
+          }));
+          
+          console.log('Location detected:', { city, state_name, latitude, longitude });
+        } catch (error) {
+          console.error('Reverse geocoding failed:', error);
+          // Still set lat/lon even if reverse geocoding fails
+          setGeneralSettings((prev) => ({
+            ...prev,
+            latitude,
+            longitude,
+          }));
+        } finally {
+          setLocationDetecting(false);
+        }
+      },
+      (error) => {
+        console.warn('Location detection failed:', error.message);
+        setLocationDetecting(false);
+      }
+    );
+  };
+
+  const handleSaveGeneralSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setGeneralSettingsMessage(null);
+    setGeneralSettingsSaving(true);
+
+    try {
+      await api.post('/settings', generalSettings);
+      setGeneralSettingsMessage({ type: 'success', text: 'Settings saved successfully. Location synced to all assets.' });
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      const detail = extractErrorDetail(error);
+      setGeneralSettingsMessage({ type: 'error', text: detail || 'Failed to save settings. Please try again.' });
+    } finally {
+      setGeneralSettingsSaving(false);
+    }
   };
 
   const handleEmergencyStop = async () => {
@@ -115,35 +236,161 @@ const Settings: React.FC = () => {
       {/* Tab Content */}
       <div className="mt-6">
         {activeTab === 'general' && (
-          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
-            <h2 className="text-xl font-semibold text-white mb-4">General Settings</h2>
-            <p className="text-gray-400">System configuration options coming soon...</p>
-            
-            <div className="mt-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Appliance Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="VistterStream Appliance"
-                  className="w-full max-w-md px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled
-                />
+          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700 max-w-3xl">
+            <h2 className="text-xl font-semibold text-white mb-2">General Settings</h2>
+            <p className="text-gray-400 mb-6">Configure system-wide settings and location information.</p>
+
+            {generalSettingsMessage && (
+              <div
+                className={`rounded-md p-4 mb-6 border ${generalSettingsMessage.type === 'success' ? 'bg-green-900/20 border-green-500/40 text-green-300' : 'bg-red-900/20 border-red-500/40 text-red-300'}`}
+              >
+                {generalSettingsMessage.text}
               </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Timezone
-                </label>
-                <select
-                  className="w-full max-w-md px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled
-                >
-                  <option>America/New_York</option>
-                </select>
-              </div>
-            </div>
+            )}
+
+            {generalSettingsLoading ? (
+              <div className="text-gray-400 text-center py-8">Loading settings...</div>
+            ) : (
+              <form onSubmit={handleSaveGeneralSettings} className="space-y-6">
+                {/* System Configuration */}
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-4">System Configuration</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="appliance-name" className="block text-sm font-medium text-gray-300 mb-2">
+                        Appliance Name
+                      </label>
+                      <input
+                        id="appliance-name"
+                        type="text"
+                        value={generalSettings.appliance_name}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, appliance_name: e.target.value })}
+                        className="w-full max-w-md px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="timezone" className="block text-sm font-medium text-gray-300 mb-2">
+                        Timezone
+                      </label>
+                      <select
+                        id="timezone"
+                        value={generalSettings.timezone}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, timezone: e.target.value })}
+                        className="w-full max-w-md px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      >
+                        <option value="America/New_York">America/New_York (EST/EDT)</option>
+                        <option value="America/Chicago">America/Chicago (CST/CDT)</option>
+                        <option value="America/Denver">America/Denver (MST/MDT)</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                        <option value="America/Phoenix">America/Phoenix (MST)</option>
+                        <option value="America/Anchorage">America/Anchorage (AKST/AKDT)</option>
+                        <option value="Pacific/Honolulu">Pacific/Honolulu (HST)</option>
+                        <option value="UTC">UTC</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location Information */}
+                <div>
+                  <h3 className="text-lg font-medium text-white mb-2">Location Information</h3>
+                  <p className="text-sm text-gray-400 mb-4">
+                    📍 Location auto-detected where possible. You can override manually. Changes sync to all assets.
+                  </p>
+                  
+                  {locationDetecting && (
+                    <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/40 rounded-md text-blue-300 text-sm">
+                      🔍 Detecting your location...
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-2">
+                        City
+                      </label>
+                      <input
+                        id="city"
+                        type="text"
+                        value={generalSettings.city}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, city: e.target.value })}
+                        placeholder="e.g., San Francisco"
+                        className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="state" className="block text-sm font-medium text-gray-300 mb-2">
+                        State / Province
+                      </label>
+                      <input
+                        id="state"
+                        type="text"
+                        value={generalSettings.state_name}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, state_name: e.target.value })}
+                        placeholder="e.g., California"
+                        className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="latitude" className="block text-sm font-medium text-gray-300 mb-2">
+                        Latitude
+                      </label>
+                      <input
+                        id="latitude"
+                        type="number"
+                        step="any"
+                        value={generalSettings.latitude ?? ''}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, latitude: e.target.value ? parseFloat(e.target.value) : null })}
+                        placeholder="Auto-detected"
+                        className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        readOnly
+                      />
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="longitude" className="block text-sm font-medium text-gray-300 mb-2">
+                        Longitude
+                      </label>
+                      <input
+                        id="longitude"
+                        type="number"
+                        step="any"
+                        value={generalSettings.longitude ?? ''}
+                        onChange={(e) => setGeneralSettings({ ...generalSettings, longitude: e.target.value ? parseFloat(e.target.value) : null })}
+                        placeholder="Auto-detected"
+                        className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={detectLocation}
+                      disabled={locationDetecting}
+                      className="text-sm text-primary-400 hover:text-primary-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {locationDetecting ? '🔍 Detecting...' : '🔄 Re-detect Location'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex items-center gap-3 pt-4 border-t border-dark-700">
+                  <button
+                    type="submit"
+                    disabled={generalSettingsSaving}
+                    className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {generalSettingsSaving ? 'Saving...' : 'Save Settings'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         )}
 

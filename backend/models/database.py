@@ -30,6 +30,24 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 
+class Settings(Base):
+    __tablename__ = "settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    # General settings
+    appliance_name = Column(String, default="VistterStream Appliance")
+    timezone = Column(String, default="America/New_York")
+    
+    # Location information
+    state_name = Column(String)  # State/Province name
+    city = Column(String)  # City name
+    latitude = Column(Float)  # Geographic latitude
+    longitude = Column(Float)  # Geographic longitude
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class Camera(Base):
     __tablename__ = "cameras"
     
@@ -87,6 +105,12 @@ class Asset(Base):
     position_x = Column(Float, default=0.0)  # X position (0-1, 0=left, 1=right)
     position_y = Column(Float, default=0.0)  # Y position (0-1, 0=top, 1=bottom)
     opacity = Column(Float, default=1.0)  # 0-1
+    
+    # Location information (synced with settings)
+    state_name = Column(String)  # State/Province name
+    city = Column(String)  # City name
+    latitude = Column(Float)  # Geographic latitude
+    longitude = Column(Float)  # Geographic longitude
     
     # Metadata
     description = Column(String)
