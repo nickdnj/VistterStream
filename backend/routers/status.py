@@ -6,10 +6,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 import psutil
 import time
+import logging
 from datetime import datetime
+from typing import Optional
 
 from models.database import get_db, Camera, Stream
+from models.timeline import Timeline
+from models.destination import StreamingDestination
 from models.schemas import SystemStatus, CameraStatus
+from services.timeline_executor import get_timeline_executor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,6 +61,29 @@ async def get_system_status(db: Session = Depends(get_db)):
     # Calculate uptime
     uptime = time.time() - start_time
     
+    # Check for active timeline streaming
+    timeline_streaming = False
+    timeline_name = None
+    timeline_destinations = None
+    
+    try:
+        executor = get_timeline_executor()
+        if executor.active_timelines:
+            # Get the first active timeline (typically only one runs at a time)
+            timeline_id = list(executor.active_timelines.keys())[0]
+            timeline = db.query(Timeline).filter(Timeline.id == timeline_id).first()
+            
+            if timeline:
+                timeline_streaming = True
+                timeline_name = timeline.name
+                
+                # Get destination names from timeline metadata if available
+                # Note: We store this when starting the timeline
+                if hasattr(executor, 'timeline_destinations') and timeline_id in executor.timeline_destinations:
+                    timeline_destinations = executor.timeline_destinations[timeline_id]
+    except Exception as e:
+        logger.warning(f"Failed to get timeline status: {e}")
+    
     return SystemStatus(
         status="healthy",
         uptime=uptime,
@@ -62,7 +92,10 @@ async def get_system_status(db: Session = Depends(get_db)):
         disk_usage=disk.percent,
         network_usage=network_usage,
         active_cameras=active_cameras,
-        active_streams=active_streams
+        active_streams=active_streams,
+        timeline_streaming=timeline_streaming,
+        timeline_name=timeline_name,
+        timeline_destinations=timeline_destinations
     )
 
 @router.get("/cameras", response_model=list[CameraStatus])

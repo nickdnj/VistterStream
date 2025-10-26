@@ -62,7 +62,8 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     success = await executor.start_timeline(
         timeline_id=request.timeline_id,
         output_urls=output_urls,
-        encoding_profile=None  # TODO: Support custom encoding profiles
+        encoding_profile=None,  # TODO: Support custom encoding profiles
+        destination_names=destination_names
     )
     
     if not success:

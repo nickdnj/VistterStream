@@ -204,6 +204,9 @@ class SystemStatus(BaseModel):
     network_usage: float
     active_cameras: int
     active_streams: int
+    timeline_streaming: bool
+    timeline_name: Optional[str] = None
+    timeline_destinations: Optional[list[str]] = None
 
 class CameraStatus(BaseModel):
     camera_id: int

@@ -43,12 +43,15 @@ class TimelineExecutor:
         # Track current playback position for each timeline
         self.playback_positions: Dict[int, dict] = {}  # timeline_id -> {current_time, current_cue_id, loop_count}
         self._position_update_tasks: Dict[int, asyncio.Task] = {}  # Tasks for position updates
+        # Track destination names for each active timeline
+        self.timeline_destinations: Dict[int, List[str]] = {}  # timeline_id -> [destination names]
         
     async def start_timeline(
         self,
         timeline_id: int,
         output_urls: list[str],
-        encoding_profile: Optional[EncodingProfile] = None
+        encoding_profile: Optional[EncodingProfile] = None,
+        destination_names: Optional[List[str]] = None
     ) -> bool:
         """
         Start executing a timeline.
@@ -57,6 +60,7 @@ class TimelineExecutor:
             timeline_id: Timeline to execute
             output_urls: List of RTMP destinations
             encoding_profile: Encoding settings
+            destination_names: Names of the destinations for display
             
         Returns:
             bool: Success status
@@ -64,6 +68,10 @@ class TimelineExecutor:
         if timeline_id in self.active_timelines:
             logger.warning(f"Timeline {timeline_id} is already running")
             return False
+            
+        # Store destination names for status display
+        if destination_names:
+            self.timeline_destinations[timeline_id] = destination_names
             
         # Create execution task
         task = asyncio.create_task(
@@ -88,6 +96,10 @@ class TimelineExecutor:
             await task
         except asyncio.CancelledError:
             pass
+            
+        # Clean up destination names
+        if timeline_id in self.timeline_destinations:
+            del self.timeline_destinations[timeline_id]
             
         # Notify watchdog manager that stream is stopping
         try:

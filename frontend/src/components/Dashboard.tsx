@@ -20,6 +20,9 @@ interface SystemStatus {
   network_usage: number;
   active_cameras: number;
   active_streams: number;
+  timeline_streaming: boolean;
+  timeline_name?: string;
+  timeline_destinations?: string[];
 }
 
 const Dashboard: React.FC = () => {
@@ -132,13 +135,26 @@ const Dashboard: React.FC = () => {
           <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <div className="h-8 w-8 bg-green-600 rounded-lg flex items-center justify-center">
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${systemStatus.timeline_streaming ? 'bg-green-600' : 'bg-gray-600'}`}>
                   <PlayIcon className="h-5 w-5 text-white" />
                 </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-400">Active Streams</p>
-                <p className="text-2xl font-bold text-white">{systemStatus.active_streams}</p>
+              <div className="ml-4 flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-400">Timeline Streaming</p>
+                {systemStatus.timeline_streaming ? (
+                  <div>
+                    <p className="text-lg font-bold text-white truncate" title={systemStatus.timeline_name}>
+                      {systemStatus.timeline_name || 'Active'}
+                    </p>
+                    {systemStatus.timeline_destinations && systemStatus.timeline_destinations.length > 0 && (
+                      <p className="text-xs text-gray-400 truncate" title={systemStatus.timeline_destinations.join(', ')}>
+                        → {systemStatus.timeline_destinations.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-white">Idle</p>
+                )}
               </div>
             </div>
           </div>
