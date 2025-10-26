@@ -70,6 +70,9 @@ Technical details about the scheduling system.
 #### 🔌 [Vistter Studio Integration](VistterStudioIntegration.md)
 Integration guide for connecting with Vistter Studio.
 
+#### 📺 [YouTube Studio Button Guide](YouTubeStudioButton.md)
+Quick access to YouTube Live Control Room from the Timeline Editor.
+
 ---
 
 ### Preview System Documentation
@@ -115,6 +118,7 @@ Planned features and improvements.
 | Install VistterStream | [Manual Install](../MANUAL_INSTALL.md) |
 | Set up on Raspberry Pi | [RPi Setup](../RASPBERRY_PI_SETUP.md) |
 | Stream to YouTube | [User Guide - Destinations](USER_GUIDE.md#destinations) |
+| Access YouTube Studio | [YouTube Studio Button](YouTubeStudioButton.md) |
 | Create automated schedules | [User Guide - Scheduler](USER_GUIDE.md#scheduler) |
 | Add camera overlays | [User Guide - Assets](USER_GUIDE.md#assets) |
 | Control PTZ cameras | [User Guide - PTZ Presets](USER_GUIDE.md#ptz-presets) |
@@ -177,7 +181,7 @@ Start with:
 |----------|-----------|--------|
 | User Guides | 2 | ✅ Complete |
 | Installation | 3 | ✅ Complete |
-| Technical Specs | 5 | ✅ Complete |
+| Technical Specs | 6 | ✅ Complete |
 | Preview System | 4 | ✅ Complete |
 | Troubleshooting | 2 | ✅ Complete |
 | Change Logs | 1+ | 🔄 Ongoing |
