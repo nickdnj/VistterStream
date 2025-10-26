@@ -380,6 +380,28 @@ const StreamingDestinations: React.FC = () => {
                 </p>
               </div>
 
+              {/* YouTube Stream/Broadcast ID */}
+              <div>
+                <label className="block text-gray-300 mb-2">YouTube Stream/Broadcast ID</label>
+                <input
+                  type="text"
+                  value={editingDestination ? (editingDestination.youtube_stream_id || '') : (newDestination.youtube_stream_id || '')}
+                  onChange={(e) => {
+                    if (editingDestination) {
+                      setEditingDestination({ ...editingDestination, youtube_stream_id: e.target.value });
+                    } else {
+                      setNewDestination({ ...newDestination, youtube_stream_id: e.target.value });
+                    }
+                  }}
+                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
+                  placeholder="s6qs14YByEQ (from YouTube Studio livestream URL)"
+                  disabled={!isYoutubeForm}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  The video/broadcast ID from your YouTube Studio livestream URL (e.g., studio.youtube.com/video/<strong>s6qs14YByEQ</strong>/livestreaming). Required for Studio button to open your specific stream.
+                </p>
+              </div>
+
               {/* Stream Watchdog Section */}
               {isYoutubeForm && (
                 <div className="border-t border-gray-700 pt-4 mt-4">
