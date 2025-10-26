@@ -1422,7 +1422,7 @@ const TimelineEditor: React.FC = () => {
                 </div>
 
                 {/* Timeline Grid */}
-                <div className="flex-1 overflow-auto" ref={timelineRef}>
+                <div className="overflow-auto" ref={timelineRef}>
                   <div className="min-w-full relative">
                     {/* Time Ruler */}
                     {renderTimeRuler()}
