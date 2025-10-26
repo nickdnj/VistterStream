@@ -92,7 +92,7 @@ interface Destination {
  * These constants control the timeline zoom behavior:
  * - MIN_ZOOM: Minimum zoom level (pixels per second) - allows viewing ~10 minutes (600s) in standard viewport
  * - MAX_ZOOM: Maximum zoom level (pixels per second) - for detailed frame-by-frame editing
- * - TRACK_HEIGHT: Visual height of each track in the timeline (reduced to 60px for better vertical fit)
+ * - TRACK_HEIGHT: Visual height of each track in the timeline (optimized at 60px for compact vertical fit)
  * 
  * Zoom Level Examples at 1200px viewport width:
  * - 2 px/s: 600 seconds (10 minutes) visible
@@ -100,12 +100,16 @@ interface Destination {
  * - 40 px/s: 30 seconds visible (default)
  * - 200 px/s: 6 seconds visible (maximum zoom-in)
  * 
- * Vertical Layout Optimization:
- * - TRACK_HEIGHT reduced from 80px to 60px to minimize vertical scrolling
- * - Top controls and YouTube buttons section condensed
- * - Ensures full timeline visibility at standard resolutions (1200-1400px wide)
+ * Vertical Layout Optimization (v4):
+ * - TRACK_HEIGHT: 60px (reduced from original 80px)
+ * - Top bar: py-2 (reduced from py-2.5)
+ * - YouTube Quick Links: py-1.5 (reduced from py-2.5)
+ * - Track Controls: py-1.5 (reduced from py-2)
+ * - Track Labels: No extra padding, fixed height only
+ * - Supports 2-6 visible tracks without vertical scrolling at 1080p+ resolutions
+ * - Horizontal scrollbar always visible at bottom without requiring extra scroll
  */
-const TRACK_HEIGHT = 60; // Height of each track in pixels (optimized for vertical fit)
+const TRACK_HEIGHT = 60; // Height of each track in pixels (optimized for compact vertical fit)
 const MIN_ZOOM = 2; // Minimum pixels per second (extended range for 10-minute view)
 const MAX_ZOOM = 200; // Maximum pixels per second
 
@@ -974,7 +978,7 @@ const TimelineEditor: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-dark-900">
       {/* Top Bar */}
-      <div className="flex items-center justify-between px-6 py-2.5 bg-dark-800 border-b border-dark-700">
+      <div className="flex items-center justify-between px-6 py-2 bg-dark-800 border-b border-dark-700">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-white">🎬 Timeline Editor</h1>
           <span className="text-xs text-gray-500 font-mono">{UI_VERSION}</span>
@@ -1228,7 +1232,7 @@ const TimelineEditor: React.FC = () => {
           {selectedTimeline ? (
             <>
               {/* Live Control - YouTube Quick Links */}
-              <div className="bg-dark-800 border-b border-dark-700 px-4 py-2.5">
+              <div className="bg-dark-800 border-b border-dark-700 px-4 py-1.5">
                 <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
                   <div className="flex-1 min-w-0">
                     <h2 className="text-sm font-semibold text-white">
@@ -1323,7 +1327,7 @@ const TimelineEditor: React.FC = () => {
               </div>
 
               {/* Track Controls */}
-              <div className="flex items-center justify-between gap-2 px-4 py-2 bg-dark-800 border-b border-dark-700">
+              <div className="flex items-center justify-between gap-2 px-4 py-1.5 bg-dark-800 border-b border-dark-700">
                 <div className="flex items-center gap-2">
                   <span className="text-gray-400 text-xs font-medium">Add Track:</span>
                   <button
@@ -1390,14 +1394,14 @@ const TimelineEditor: React.FC = () => {
               {/* Timeline Container */}
               <div className="flex-1 flex overflow-hidden">
                 {/* Track Labels */}
-                <div className="w-40 bg-dark-800 border-r border-dark-700 flex flex-col">
-                  <div className="h-6 border-b border-dark-700 flex items-center px-3 text-xs text-gray-400 font-semibold">
+                <div className="w-40 bg-dark-800 border-r border-dark-700 flex flex-col flex-shrink-0">
+                  <div className="h-6 border-b border-dark-700 flex items-center px-3 text-xs text-gray-400 font-semibold flex-shrink-0">
                     TRACKS
                   </div>
                   {selectedTimeline.tracks.map((track, trackIndex) => (
                     <div
                       key={trackIndex}
-                      className="border-b border-dark-700 flex items-center justify-between px-3 py-2"
+                      className="border-b border-dark-700 flex items-center justify-between px-3 flex-shrink-0"
                       style={{ height: `${TRACK_HEIGHT}px` }}
                     >
                       <div className="flex items-center gap-2">

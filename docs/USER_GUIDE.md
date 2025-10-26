@@ -219,6 +219,14 @@ Each track has:
 - Track name and icon
 - Remove track button (trash icon)
 - Visual timeline with time markers
+- Optimized 60px height for compact vertical layout
+
+**Layout Optimization:**
+The Timeline Editor uses a compact vertical layout to maximize timeline visibility:
+- Reduced padding in control sections for better space efficiency
+- Supports 2-6 visible tracks without vertical scrolling at 1080p+ resolutions
+- Horizontal scrollbar is always visible at the bottom of the timeline
+- No excessive spacing below tracks - timeline area is properly constrained
 
 ### Timeline Controls
 
