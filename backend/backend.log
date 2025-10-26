@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/Users/nickd/Workspaces/VistterStream/backend/start.py", line 15, in <module>
+    from main import app
+  File "/Users/nickd/Workspaces/VistterStream/backend/main.py", line 15, in <module>
+    from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog
+  File "/Users/nickd/Workspaces/VistterStream/backend/routers/watchdog.py", line 12, in <module>
+    from services.watchdog_manager import get_watchdog_manager
+  File "/Users/nickd/Workspaces/VistterStream/backend/services/watchdog_manager.py", line 11, in <module>
+    from services.local_stream_watchdog import LocalStreamWatchdog
+  File "/Users/nickd/Workspaces/VistterStream/backend/services/local_stream_watchdog.py", line 16, in <module>
+    import aiohttp
+ModuleNotFoundError: No module named 'aiohttp'

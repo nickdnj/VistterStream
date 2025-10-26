@@ -5,9 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 import PresetManagement from './PresetManagement';
 import StreamingDestinations from './StreamingDestinations';
 import AssetManagement from './AssetManagement';
+import CameraManagement from './CameraManagement';
+import Scheduler from './Scheduler';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-type SettingsTab = 'general' | 'account' | 'presets' | 'assets' | 'destinations' | 'system';
+type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'presets' | 'assets' | 'destinations' | 'system';
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
@@ -73,6 +75,8 @@ const Settings: React.FC = () => {
   const tabs = [
     { id: 'general' as SettingsTab, name: 'General', icon: '⚙️' },
     { id: 'account' as SettingsTab, name: 'Account', icon: '👤' },
+    { id: 'cameras' as SettingsTab, name: 'Cameras', icon: '📷' },
+    { id: 'scheduler' as SettingsTab, name: 'Scheduler', icon: '📅' },
     { id: 'presets' as SettingsTab, name: 'PTZ Presets', icon: '🎯' },
     { id: 'assets' as SettingsTab, name: 'Assets', icon: '🎨' },
     { id: 'destinations' as SettingsTab, name: 'Destinations', icon: '📡' },
@@ -218,6 +222,18 @@ const Settings: React.FC = () => {
                 <span className="text-xs text-gray-500">Password must be at least 6 characters.</span>
               </div>
             </form>
+          </div>
+        )}
+
+        {activeTab === 'cameras' && (
+          <div>
+            <CameraManagement />
+          </div>
+        )}
+
+        {activeTab === 'scheduler' && (
+          <div>
+            <Scheduler />
           </div>
         )}
 

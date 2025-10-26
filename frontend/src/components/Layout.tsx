@@ -6,7 +6,6 @@ import {
   CameraIcon,
   FilmIcon,
   Cog6ToothIcon,
-  CalendarDaysIcon,
   Bars3Icon,
   XMarkIcon,
   UserIcon,
@@ -27,9 +26,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-    { name: 'Cameras', href: '/cameras', icon: CameraIcon },
     { name: 'Timelines', href: '/timelines', icon: FilmIcon },
-    { name: 'Scheduler', href: '/scheduler', icon: CalendarDaysIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];
 

@@ -3,12 +3,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
-import CameraManagement from './components/CameraManagement';
 import PresetManagement from './components/PresetManagement';
 import TimelineEditor from './components/TimelineEditor';
 import StreamingDestinations from './components/StreamingDestinations';
 import Settings from './components/Settings';
-import Scheduler from './components/Scheduler';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -25,12 +23,12 @@ function App() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/cameras" element={<CameraManagement />} />
+                    <Route path="/cameras" element={<Navigate to="/settings" replace />} />
                     <Route path="/streams" element={<Navigate to="/timelines" replace />} />
                     <Route path="/timelines" element={<TimelineEditor />} />
                     <Route path="/destinations" element={<StreamingDestinations />} />
                     <Route path="/presets" element={<PresetManagement />} />
-                    <Route path="/scheduler" element={<Scheduler />} />
+                    <Route path="/scheduler" element={<Navigate to="/settings" replace />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </Layout>
@@ -43,13 +41,7 @@ function App() {
                 </Layout>
               </ProtectedRoute>
             } />
-            <Route path="/cameras" element={
-              <ProtectedRoute>
-                <Layout>
-                  <CameraManagement />
-                </Layout>
-              </ProtectedRoute>
-            } />
+            <Route path="/cameras" element={<Navigate to="/settings" replace />} />
             <Route path="/streams" element={<Navigate to="/timelines" replace />} />
             <Route path="/presets" element={
               <ProtectedRoute>
@@ -79,13 +71,7 @@ function App() {
                 </Layout>
               </ProtectedRoute>
             } />
-            <Route path="/scheduler" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Scheduler />
-                </Layout>
-              </ProtectedRoute>
-            } />
+            <Route path="/scheduler" element={<Navigate to="/settings" replace />} />
           </Routes>
         </div>
       </Router>
