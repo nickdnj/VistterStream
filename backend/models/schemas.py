@@ -201,6 +201,7 @@ class SystemStatus(BaseModel):
     cpu_usage: float
     memory_usage: float
     disk_usage: float
+    network_usage: float
     active_cameras: int
     active_streams: int
 

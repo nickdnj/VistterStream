@@ -16,13 +16,36 @@ router = APIRouter()
 # Store start time for uptime calculation
 start_time = time.time()
 
+# Store initial network stats for delta calculation
+initial_net_io = psutil.net_io_counters()
+last_net_check = time.time()
+
 @router.get("/system", response_model=SystemStatus)
 async def get_system_status(db: Session = Depends(get_db)):
     """Get system status and metrics"""
+    global last_net_check
+    
     # Get system metrics
     cpu_usage = psutil.cpu_percent(interval=1)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
+    
+    # Calculate network usage as percentage of typical bandwidth (100 Mbps = 12.5 MB/s)
+    # This measures current throughput as % of a 100 Mbps connection
+    current_time = time.time()
+    net_io = psutil.net_io_counters()
+    time_delta = current_time - last_net_check
+    
+    if time_delta > 0:
+        bytes_sent = net_io.bytes_sent - initial_net_io.bytes_sent
+        bytes_recv = net_io.bytes_recv - initial_net_io.bytes_recv
+        total_bytes_per_sec = (bytes_sent + bytes_recv) / time_delta
+        # Calculate as percentage of 100 Mbps (12.5 MB/s)
+        network_usage = min((total_bytes_per_sec / (12.5 * 1024 * 1024)) * 100, 100.0)
+    else:
+        network_usage = 0.0
+    
+    last_net_check = current_time
     
     # Get database counts
     active_cameras = db.query(Camera).filter(Camera.is_active == True).count()
@@ -37,6 +60,7 @@ async def get_system_status(db: Session = Depends(get_db)):
         cpu_usage=cpu_usage,
         memory_usage=memory.percent,
         disk_usage=disk.percent,
+        network_usage=network_usage,
         active_cameras=active_cameras,
         active_streams=active_streams
     )

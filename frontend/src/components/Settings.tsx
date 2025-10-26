@@ -9,7 +9,7 @@ import CameraManagement from './CameraManagement';
 import Scheduler from './Scheduler';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'presets' | 'assets' | 'destinations' | 'system';
+type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'presets' | 'assets' | 'destinations' | 'dashboard' | 'system';
 
 interface GeneralSettings {
   appliance_name: string;
@@ -201,6 +201,7 @@ const Settings: React.FC = () => {
     { id: 'presets' as SettingsTab, name: 'PTZ Presets', icon: '🎯' },
     { id: 'assets' as SettingsTab, name: 'Assets', icon: '🎨' },
     { id: 'destinations' as SettingsTab, name: 'Destinations', icon: '📡' },
+    { id: 'dashboard' as SettingsTab, name: 'Dashboard', icon: '📊' },
     { id: 'system' as SettingsTab, name: 'System', icon: '💻' },
   ];
 
@@ -499,6 +500,78 @@ const Settings: React.FC = () => {
         {activeTab === 'destinations' && (
           <div>
             <StreamingDestinations />
+          </div>
+        )}
+
+        {activeTab === 'dashboard' && (
+          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700 max-w-3xl">
+            <h2 className="text-xl font-semibold text-white mb-2">Dashboard Metrics</h2>
+            <p className="text-gray-400 mb-6">Customize which metrics are displayed on your dashboard.</p>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between py-3 border-b border-dark-700">
+                <div>
+                  <p className="text-sm font-medium text-white">Show Memory Usage</p>
+                  <p className="text-xs text-gray-400 mt-1">Display system RAM usage percentage</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={localStorage.getItem('dashboard_show_memory') !== 'false'}
+                    onChange={(e) => {
+                      localStorage.setItem('dashboard_show_memory', e.target.checked.toString());
+                      window.location.reload();
+                    }}
+                  />
+                  <div className="w-11 h-6 bg-dark-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3 border-b border-dark-700">
+                <div>
+                  <p className="text-sm font-medium text-white">Show Network Usage</p>
+                  <p className="text-xs text-gray-400 mt-1">Display network throughput as % of 100 Mbps</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={localStorage.getItem('dashboard_show_network') !== 'false'}
+                    onChange={(e) => {
+                      localStorage.setItem('dashboard_show_network', e.target.checked.toString());
+                      window.location.reload();
+                    }}
+                  />
+                  <div className="w-11 h-6 bg-dark-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between py-3 border-b border-dark-700">
+                <div>
+                  <p className="text-sm font-medium text-white">Show Disk Usage</p>
+                  <p className="text-xs text-gray-400 mt-1">Display storage space usage percentage</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={localStorage.getItem('dashboard_show_disk') !== 'false'}
+                    onChange={(e) => {
+                      localStorage.setItem('dashboard_show_disk', e.target.checked.toString());
+                      window.location.reload();
+                    }}
+                  />
+                  <div className="w-11 h-6 bg-dark-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-md">
+              <p className="text-sm text-blue-300">
+                ℹ️ <strong>Note:</strong> Changes to dashboard metrics will take effect after a page refresh.
+              </p>
+            </div>
           </div>
         )}
 

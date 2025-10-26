@@ -17,6 +17,7 @@ interface SystemStatus {
   cpu_usage: number;
   memory_usage: number;
   disk_usage: number;
+  network_usage: number;
   active_cameras: number;
   active_streams: number;
 }
@@ -25,6 +26,20 @@ const Dashboard: React.FC = () => {
   const [cameras, setCameras] = useState<CameraWithStatus[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Dashboard metric visibility preferences (stored in localStorage)
+  const [showMemoryUsage, setShowMemoryUsage] = useState(() => {
+    const saved = localStorage.getItem('dashboard_show_memory');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [showNetworkUsage, setShowNetworkUsage] = useState(() => {
+    const saved = localStorage.getItem('dashboard_show_network');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [showDiskUsage, setShowDiskUsage] = useState(() => {
+    const saved = localStorage.getItem('dashboard_show_disk');
+    return saved !== null ? saved === 'true' : true;
+  });
 
   useEffect(() => {
     loadData();
@@ -99,7 +114,7 @@ const Dashboard: React.FC = () => {
 
       {/* System Status Cards */}
       {systemStatus && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6 mb-8">
           <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -143,6 +158,60 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {showMemoryUsage && (
+            <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-400">Memory Usage</p>
+                  <p className="text-2xl font-bold text-white">{systemStatus.memory_usage.toFixed(1)}%</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showNetworkUsage && (
+            <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 bg-cyan-600 rounded-lg flex items-center justify-center">
+                    <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-400">Network Usage</p>
+                  <p className="text-2xl font-bold text-white">{systemStatus.network_usage.toFixed(1)}%</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showDiskUsage && (
+            <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="h-8 w-8 bg-orange-600 rounded-lg flex items-center justify-center">
+                    <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-400">Disk Usage</p>
+                  <p className="text-2xl font-bold text-white">{systemStatus.disk_usage.toFixed(1)}%</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
             <div className="flex items-center">
