@@ -65,8 +65,8 @@ class WatchdogManager:
         
         # Auto-detect stream_id if not provided
         if stream_id is None:
-            from services.ffmpeg_manager import get_ffmpeg_manager
-            ffmpeg_manager = await get_ffmpeg_manager()
+            from services.ffmpeg_manager import FFmpegProcessManager
+            ffmpeg_manager = FFmpegProcessManager()
             destination_url = destination.get_full_rtmp_url()
             stream_id = ffmpeg_manager.find_stream_by_destination_url(destination_url)
             

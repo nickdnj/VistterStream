@@ -146,9 +146,9 @@ class LocalStreamWatchdog:
         """Main health check and recovery logic"""
         try:
             # Import here to avoid circular imports
-            from services.ffmpeg_manager import get_ffmpeg_manager
+            from services.ffmpeg_manager import FFmpegProcessManager
             
-            ffmpeg_manager = get_ffmpeg_manager()
+            ffmpeg_manager = FFmpegProcessManager()
             
             # Check if stream is running
             is_running = ffmpeg_manager.is_stream_running(self.stream_id)
@@ -307,11 +307,11 @@ class LocalStreamWatchdog:
         
         try:
             # Import here to avoid circular imports
-            from services.ffmpeg_manager import get_ffmpeg_manager
+            from services.ffmpeg_manager import FFmpegProcessManager
             from services.stream_service import StreamService
             from models.database import get_db
             
-            ffmpeg_manager = get_ffmpeg_manager()
+            ffmpeg_manager = FFmpegProcessManager()
             
             # Stop the stream if it's running
             if ffmpeg_manager.is_stream_running(self.stream_id):
