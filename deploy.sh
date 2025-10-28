@@ -87,6 +87,12 @@ if [[ "$BEFORE_COMMIT" == "$AFTER_COMMIT" ]]; then
   exit 0
 fi
 
+# Force rebuild if watchdog files exist but containers might be outdated
+if [[ -f "backend/services/watchdog_manager.py" ]] && [[ -f "backend/services/local_stream_watchdog.py" ]]; then
+  log "Watchdog files detected - ensuring containers are up to date"
+  FORCE_REBUILD_BACKEND=1
+fi
+
 log "Changes detected: ${BEFORE_COMMIT:0:8} → ${AFTER_COMMIT:0:8}"
 log "Analyzing changed files..."
 
@@ -103,7 +109,7 @@ fi
 SERVICES_TO_REBUILD=()
 
 # Check backend changes
-if echo "$CHANGED_FILES" | grep -qE '^backend/'; then
+if echo "$CHANGED_FILES" | grep -qE '^backend/' || [[ "${FORCE_REBUILD_BACKEND:-0}" -eq 1 ]]; then
   log "✓ Backend changes detected"
   SERVICES_TO_REBUILD+=("backend")
   # Also include backend-host if it's in the compose file
