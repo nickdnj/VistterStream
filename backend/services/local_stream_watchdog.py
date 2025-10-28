@@ -146,31 +146,37 @@ class LocalStreamWatchdog:
         """Main health check and recovery logic"""
         try:
             # Import here to avoid circular imports
-            from services.ffmpeg_manager import FFmpegProcessManager
+            from services.timeline_executor import get_timeline_executor
+            from services.ffmpeg_manager import StreamStatus
             
-            ffmpeg_manager = FFmpegProcessManager()
+            # Get the timeline executor instance
+            executor = get_timeline_executor()
             
-            # Check if stream is running
-            is_running = ffmpeg_manager.is_stream_running(self.stream_id)
-            
-            if not is_running:
-                self.logger.warning(f"Stream {self.stream_id} is not running")
+            # Check if the timeline has an FFmpeg manager
+            if self.stream_id not in executor.ffmpeg_managers:
+                self.logger.warning(f"Stream {self.stream_id} has no FFmpeg manager (timeline may have stopped)")
                 is_healthy = False
             else:
-                # Get stream process info
-                process_info = ffmpeg_manager.get_stream_process_info(self.stream_id)
+                ffmpeg_manager = executor.ffmpeg_managers[self.stream_id]
                 
-                if not process_info:
-                    self.logger.warning(f"Could not get process info for stream {self.stream_id}")
+                # Check if stream exists in the manager's processes
+                if self.stream_id not in ffmpeg_manager.processes:
+                    self.logger.warning(f"Stream {self.stream_id} is not in FFmpeg manager processes")
                     is_healthy = False
                 else:
-                    # Check if process is actually alive and responding
-                    pid = process_info.get('pid')
+                    stream_process = ffmpeg_manager.processes[self.stream_id]
                     
-                    if not pid:
-                        self.logger.warning(f"Stream {self.stream_id} has no PID")
+                    # Check stream status
+                    if stream_process.status != StreamStatus.RUNNING:
+                        self.logger.warning(f"Stream {self.stream_id} status is {stream_process.status}")
+                        is_healthy = False
+                    elif not stream_process.process:
+                        self.logger.warning(f"Stream {self.stream_id} has no process object")
                         is_healthy = False
                     else:
+                        # Get PID from the process
+                        pid = stream_process.process.pid
+                        
                         # Check if process exists and is responsive
                         try:
                             process = psutil.Process(pid)
@@ -296,9 +302,12 @@ class LocalStreamWatchdog:
         Attempt to recover the stream
         
         Recovery strategy:
-        1. Stop the existing stream (if still running)
+        1. Stop the existing FFmpeg process
         2. Wait a moment for cleanup
-        3. Restart the stream
+        3. The timeline executor will automatically restart it
+        
+        Note: For timeline-based streams, we just restart the FFmpeg process.
+        The timeline executor manages the overall timeline execution.
         """
         self.health_state.mark_recovery()
         recovery_num = self.health_state.recovery_count
@@ -307,39 +316,25 @@ class LocalStreamWatchdog:
         
         try:
             # Import here to avoid circular imports
-            from services.ffmpeg_manager import FFmpegProcessManager
-            from services.stream_service import StreamService
-            from models.database import get_db
+            from services.timeline_executor import get_timeline_executor
             
-            ffmpeg_manager = FFmpegProcessManager()
+            executor = get_timeline_executor()
+            
+            # Check if the timeline has an FFmpeg manager
+            if self.stream_id not in executor.ffmpeg_managers:
+                self.logger.error(f"Stream {self.stream_id} has no FFmpeg manager - cannot recover")
+                return
+            
+            ffmpeg_manager = executor.ffmpeg_managers[self.stream_id]
             
             # Stop the stream if it's running
-            if ffmpeg_manager.is_stream_running(self.stream_id):
-                self.logger.info(f"Stopping stream {self.stream_id}")
-                ffmpeg_manager.stop_stream(self.stream_id)
-                await asyncio.sleep(2)
-            
-            # Get stream configuration from database
-            db = next(get_db())
-            try:
-                stream_service = StreamService(db)
-                stream_data = stream_service.get_stream(self.stream_id)
-                
-                if not stream_data:
-                    self.logger.error(f"Stream {self.stream_id} not found in database")
-                    return
-                
-                # Restart the stream
-                self.logger.info(f"Restarting stream {self.stream_id}")
-                await stream_service.start_stream(self.stream_id)
-                
-                self.logger.info(f"Stream {self.stream_id} restarted successfully")
-                
-                # Give it some time to stabilize
-                await asyncio.sleep(10)
-                
-            finally:
-                db.close()
+            if self.stream_id in ffmpeg_manager.processes:
+                self.logger.info(f"Stopping FFmpeg process for stream {self.stream_id}")
+                await ffmpeg_manager.stop_stream(self.stream_id, graceful=False)
+                await asyncio.sleep(3)
+                self.logger.info(f"FFmpeg process stopped, timeline executor will restart it")
+            else:
+                self.logger.warning(f"Stream {self.stream_id} not in ffmpeg_manager.processes")
                 
         except Exception as e:
             self.logger.error(f"Failed to recover stream: {e}", exc_info=True)
