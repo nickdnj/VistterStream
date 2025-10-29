@@ -4,6 +4,7 @@ Streaming destination models
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from datetime import datetime
+from typing import Optional
 from .database import Base
 
 
@@ -31,6 +32,11 @@ class StreamingDestination(Base):
     youtube_stream_id = Column(String)  # YouTube stream resource ID
     youtube_broadcast_id = Column(String)  # YouTube broadcast ID
     youtube_watch_url = Column(String)  # Public watch URL for frame probing
+    youtube_access_token = Column(String)  # Short-lived OAuth access token
+    youtube_refresh_token = Column(String)  # Long-lived OAuth refresh token
+    youtube_token_expiry = Column(DateTime)  # Access token expiry timestamp
+    youtube_oauth_scope = Column(String)  # Granted OAuth scopes
+    youtube_oauth_state = Column(String)  # Latest OAuth handshake state/nonce
     
     # Watchdog settings (defaults match watchdog service)
     watchdog_check_interval = Column(Integer, default=30)  # Seconds between health checks
@@ -46,4 +52,19 @@ class StreamingDestination(Base):
     def get_full_rtmp_url(self) -> str:
         """Get the complete RTMP URL with stream key"""
         return f"{self.rtmp_url}/{self.stream_key}"
+
+    @property
+    def youtube_oauth_connected(self) -> bool:
+        """Return True when the destination has an OAuth refresh token."""
+        return bool(self.youtube_refresh_token)
+
+    @property
+    def youtube_token_expires_at(self) -> Optional[datetime]:
+        """Expose the access token expiry for API responses."""
+        return self.youtube_token_expiry
+
+    @property
+    def youtube_oauth_scopes(self) -> Optional[str]:
+        """Return granted scopes in a response-friendly attribute name."""
+        return self.youtube_oauth_scope
 

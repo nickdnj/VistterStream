@@ -87,12 +87,6 @@ if [[ "$BEFORE_COMMIT" == "$AFTER_COMMIT" ]]; then
   exit 0
 fi
 
-# Force rebuild if watchdog files exist but containers might be outdated
-if [[ -f "backend/services/watchdog_manager.py" ]] && [[ -f "backend/services/local_stream_watchdog.py" ]]; then
-  log "Watchdog files detected - ensuring containers are up to date"
-  FORCE_REBUILD_BACKEND=1
-fi
-
 log "Changes detected: ${BEFORE_COMMIT:0:8} → ${AFTER_COMMIT:0:8}"
 log "Analyzing changed files..."
 
