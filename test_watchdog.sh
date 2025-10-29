@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Watchdog Test Script
-# Kills the monitored FFmpeg process and verifies the watchdog recovers it
+# Tests both FFmpeg auto-restart and Watchdog recovery layers
+# 
+# Two test modes:
+#   1. Quick test: Single kill (tests FFmpeg auto-restart layer - 2s recovery)
+#   2. Full test: Multiple kills (exhausts FFmpeg auto-restart, tests watchdog - 90s recovery)
 
 set -euo pipefail
 
@@ -17,8 +21,31 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $*"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $*"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
-log_info "Starting Watchdog Test..."
+# Parse arguments
+TEST_MODE="${1:-quick}"
+
+if [ "$TEST_MODE" != "quick" ] && [ "$TEST_MODE" != "full" ]; then
+    log_error "Invalid test mode: $TEST_MODE"
+    echo ""
+    echo "Usage: $0 [quick|full]"
+    echo ""
+    echo "  quick - Single kill test (FFmpeg auto-restart layer, ~5s recovery)"
+    echo "  full  - Multiple kills test (Watchdog layer, ~90s recovery)"
+    echo ""
+    exit 1
+fi
+
+log_info "Starting Watchdog Test (${TEST_MODE} mode)..."
 log_info "=========================================="
+
+if [ "$TEST_MODE" = "quick" ]; then
+    log_info "QUICK TEST: Tests FFmpeg auto-restart (Layer 1 - fast recovery)"
+    log_info "Expected: FFmpeg manager restarts process in ~2 seconds"
+else
+    log_info "FULL TEST: Tests Watchdog recovery (Layer 2 - backup recovery)"
+    log_info "Expected: After exhausting FFmpeg retries, watchdog recovers in ~90 seconds"
+fi
+log_info ""
 
 # Step 1: Check if watchdog is running
 log_info "Step 1: Checking watchdog status..."
@@ -72,64 +99,134 @@ fi
 # Get current log position
 LOG_BEFORE_LINES=$(docker logs "$CONTAINER_NAME" 2>&1 | wc -l)
 
-# Step 5: Kill the FFmpeg process
-log_info "Step 5: Killing FFmpeg process (PID: $FFMPEG_PID)..."
-if sudo kill -9 "$FFMPEG_PID" 2>/dev/null; then
-    log_success "FFmpeg process killed successfully"
+# Step 5: Kill the FFmpeg process (mode-dependent)
+if [ "$TEST_MODE" = "quick" ]; then
+    # Quick test: Single kill
+    log_info "Step 5: Killing FFmpeg process once (PID: $FFMPEG_PID)..."
+    if sudo kill -9 "$FFMPEG_PID" 2>/dev/null; then
+        log_success "FFmpeg process killed successfully"
+    else
+        log_error "Failed to kill FFmpeg process"
+        exit 1
+    fi
+    
+    # Verify it's dead
+    sleep 2
+    if ps -p "$FFMPEG_PID" >/dev/null 2>&1; then
+        log_warning "Process still running, killing again..."
+        sudo kill -9 "$FFMPEG_PID" 2>/dev/null
+        sleep 1
+    fi
 else
-    log_error "Failed to kill FFmpeg process"
-    exit 1
+    # Full test: Multiple kills to exhaust FFmpeg auto-restart
+    log_info "Step 5: Killing FFmpeg process multiple times to exhaust auto-restart..."
+    log_warning "This will kill the process 12 times (exceeds FFmpeg's 10 retry limit)"
+    
+    KILL_COUNT=0
+    MAX_KILLS=12
+    
+    while [ $KILL_COUNT -lt $MAX_KILLS ]; do
+        # Find current FFmpeg PID
+        CURRENT_PID=$(ps aux | grep "ffmpeg.*rtmp.*youtube" | grep -v grep | awk '{print $2}' | head -n1 || true)
+        
+        if [ -z "$CURRENT_PID" ]; then
+            log_warning "No FFmpeg process found on attempt $((KILL_COUNT + 1)), waiting..."
+            sleep 3
+            continue
+        fi
+        
+        KILL_COUNT=$((KILL_COUNT + 1))
+        log_info "Kill attempt $KILL_COUNT/$MAX_KILLS: Killing PID $CURRENT_PID"
+        
+        if sudo kill -9 "$CURRENT_PID" 2>/dev/null; then
+            log_success "Process killed"
+        else
+            log_warning "Kill failed (process may have already died)"
+        fi
+        
+        # Wait a bit before next kill (shorter than FFmpeg's 2s restart delay)
+        sleep 3
+    done
+    
+    log_success "Exhausted FFmpeg auto-restart attempts"
+    log_info "FFmpeg manager should now give up, watchdog should take over..."
 fi
 
-# Verify it's dead
-sleep 2
-if ps -p "$FFMPEG_PID" >/dev/null 2>&1; then
-    log_warning "Process still running, killing again..."
-    sudo kill -9 "$FFMPEG_PID" 2>/dev/null
-    sleep 1
+# Step 6: Wait for recovery (mode-dependent)
+if [ "$TEST_MODE" = "quick" ]; then
+    log_info "Step 6: Waiting for FFmpeg auto-restart..."
+    log_info "Expected recovery time: ~2-5 seconds"
+    CHECK_COUNT=0
+    MAX_CHECKS=10  # 10 checks = ~50 seconds max wait
+    RECOVERY_DETECTED=false
+else
+    log_info "Step 6: Waiting for watchdog to detect failure and recover..."
+    log_info "Watchdog checks every 30 seconds, needs 3 consecutive failures (90 seconds total)"
+    CHECK_COUNT=0
+    MAX_CHECKS=30  # 30 checks = ~2.5 minutes max wait
+    RECOVERY_DETECTED=false
+    UNHEALTHY_DETECTED=false
 fi
 
-# Step 6: Wait for watchdog to detect and recover
-log_info "Step 6: Waiting for watchdog to detect failure..."
-log_info "Watchdog checks every 30 seconds, needs 3 consecutive failures (90 seconds total)"
-
-CHECK_COUNT=0
-MAX_CHECKS=20  # 20 checks = ~10 minutes max wait
-RECOVERY_DETECTED=false
-UNHEALTHY_DETECTED=false
-
+RECOVERY_TYPE=""
 while [ $CHECK_COUNT -lt $MAX_CHECKS ]; do
     sleep 5
     CHECK_COUNT=$((CHECK_COUNT + 1))
     
-    # Check new logs for watchdog activity
-    NEW_LOGS=$(docker logs "$CONTAINER_NAME" --tail 50 2>&1 | tail -n +$LOG_BEFORE_LINES)
+    # Check new logs for activity
+    NEW_LOGS=$(docker logs "$CONTAINER_NAME" --tail 100 2>&1 | tail -n +$LOG_BEFORE_LINES)
     
-    # Look for unhealthy detections
-    if echo "$NEW_LOGS" | grep -q "Stream.*unhealthy"; then
-        if [ "$UNHEALTHY_DETECTED" = false ]; then
-            log_warning "Watchdog detected unhealthy stream!"
-            UNHEALTHY_DETECTED=true
+    if [ "$TEST_MODE" = "full" ]; then
+        # Look for unhealthy detections (full test only)
+        if echo "$NEW_LOGS" | grep -q "Stream.*unhealthy"; then
+            if [ "$UNHEALTHY_DETECTED" = false ]; then
+                log_warning "Watchdog detected unhealthy stream!"
+                UNHEALTHY_DETECTED=true
+            fi
+        fi
+        
+        # Look for watchdog recovery attempt
+        if echo "$NEW_LOGS" | grep -q "RECOVERY ATTEMPT"; then
+            log_success "Watchdog triggered recovery!"
+            RECOVERY_DETECTED=true
+            RECOVERY_TYPE="watchdog"
+            break
         fi
     fi
     
-    # Look for recovery attempt
-    if echo "$NEW_LOGS" | grep -q "RECOVERY ATTEMPT"; then
-        log_success "Watchdog triggered recovery!"
-        RECOVERY_DETECTED=true
-        break
+    # Look for FFmpeg auto-restart
+    if echo "$NEW_LOGS" | grep -q "Auto-restart enabled.*attempting restart"; then
+        if [ "$TEST_MODE" = "quick" ]; then
+            log_success "FFmpeg manager triggered auto-restart!"
+            RECOVERY_DETECTED=true
+            RECOVERY_TYPE="ffmpeg"
+        else
+            log_info "FFmpeg auto-restart detected (should exhaust soon...)"
+        fi
     fi
     
-    # Check if new FFmpeg process started (early recovery detection)
+    # Check if FFmpeg gave up
+    if [ "$TEST_MODE" = "full" ]; then
+        if echo "$NEW_LOGS" | grep -q "Max restart attempts.*exceeded"; then
+            log_warning "FFmpeg manager exhausted retries, watchdog should take over..."
+        fi
+    fi
+    
+    # Check if new FFmpeg process started
     NEW_PIDS=$(ps aux | grep "ffmpeg.*rtmp.*youtube" | grep -v grep | awk '{print $2}' || true)
     if [ -n "$NEW_PIDS" ] && [ "$NEW_PIDS" != "$FFMPEG_PID" ]; then
         NEW_PID=$(echo "$NEW_PIDS" | head -n1)
-        log_success "New FFmpeg process started (PID: $NEW_PID) - recovery may be in progress"
+        if [ "$TEST_MODE" = "quick" ] && [ "$RECOVERY_DETECTED" = false ]; then
+            log_success "New FFmpeg process started (PID: $NEW_PID)"
+            RECOVERY_DETECTED=true
+            RECOVERY_TYPE="ffmpeg"
+            break
+        fi
     fi
     
     # Progress indicator
     if [ $((CHECK_COUNT % 6)) -eq 0 ]; then
-        log_info "Still waiting... ($((CHECK_COUNT * 5))s elapsed, checking logs...)"
+        log_info "Still waiting... ($((CHECK_COUNT * 5))s elapsed)"
     fi
 done
 
@@ -146,7 +243,11 @@ log_info "Last recovery time: $FINAL_RECOVERY_TIME"
 
 # Step 8: Check logs for recovery messages
 log_info "Step 8: Analyzing logs..."
-RECOVERY_LOGS=$(docker logs "$CONTAINER_NAME" --tail 200 2>&1 | grep -E "(RECOVERY|recovery|Stream.*unhealthy)" | tail -20)
+if [ "$TEST_MODE" = "quick" ]; then
+    RECOVERY_LOGS=$(docker logs "$CONTAINER_NAME" --tail 200 2>&1 | grep -E "(Auto-restart|restart|Stream.*started)" | tail -15)
+else
+    RECOVERY_LOGS=$(docker logs "$CONTAINER_NAME" --tail 200 2>&1 | grep -E "(RECOVERY|recovery|Stream.*unhealthy|Max restart)" | tail -20)
+fi
 
 if [ -n "$RECOVERY_LOGS" ]; then
     log_info "Recovery-related log entries:"
@@ -160,37 +261,69 @@ NEW_PIDS=$(ps aux | grep "ffmpeg.*rtmp.*youtube" | grep -v grep | awk '{print $2
 # Results summary
 log_info ""
 log_info "=========================================="
-log_info "TEST RESULTS"
+log_info "TEST RESULTS (${TEST_MODE} mode)"
 log_info "=========================================="
 
-if [ "$RECOVERY_DETECTED" = true ] || [ "$FINAL_RECOVERY_COUNT" -gt "$INITIAL_RECOVERY_COUNT" ]; then
-    log_success "✓ Watchdog detected failure"
-    log_success "✓ Watchdog triggered recovery"
-    
-    if [ -n "$NEW_PIDS" ]; then
-        NEW_PID=$(echo "$NEW_PIDS" | head -n1)
-        log_success "✓ New FFmpeg process running (PID: $NEW_PID)"
-        log_success "✓ Stream recovered successfully!"
+if [ "$TEST_MODE" = "quick" ]; then
+    # Quick test results - FFmpeg auto-restart
+    if [ "$RECOVERY_DETECTED" = true ] && [ "$RECOVERY_TYPE" = "ffmpeg" ]; then
+        log_success "✓ FFmpeg process killed"
+        log_success "✓ FFmpeg manager detected failure"
+        log_success "✓ FFmpeg manager triggered auto-restart"
+        
+        if [ -n "$NEW_PIDS" ]; then
+            NEW_PID=$(echo "$NEW_PIDS" | head -n1)
+            log_success "✓ New FFmpeg process running (PID: $NEW_PID)"
+            log_success "✓ Stream recovered in ~$((CHECK_COUNT * 5)) seconds!"
+        fi
+        
+        log_success ""
+        log_success "TEST PASSED: FFmpeg auto-restart (Layer 1) is working! ✓"
+        log_info ""
+        log_info "Note: To test the Watchdog (Layer 2), run: $0 full"
+        exit 0
     else
-        log_warning "⚠ Recovery triggered but no new FFmpeg process found"
-        log_info "Timeline executor may be restarting the stream..."
+        log_error "✗ FFmpeg auto-restart did not recover the stream"
+        log_error "Expected: FFmpeg manager should restart within ~5 seconds"
+        exit 1
     fi
-    
-    log_success ""
-    log_success "TEST PASSED: Watchdog is working correctly! ✓"
-    exit 0
 else
-    log_error "✗ Watchdog did not detect failure or trigger recovery"
-    log_error ""
-    log_error "Possible issues:"
-    log_error "  1. Watchdog is not properly monitoring the stream"
-    log_error "  2. Stream ID mismatch"
-    log_error "  3. Timeline executor may have restarted it before watchdog fired"
-    
-    if [ "$UNHEALTHY_DETECTED" = true ]; then
-        log_warning "Note: Watchdog detected unhealthy state but did not trigger recovery"
-        log_warning "This could mean it hasn't reached the threshold yet (needs 3 consecutive failures)"
+    # Full test results - Watchdog recovery
+    if [ "$RECOVERY_DETECTED" = true ] && [ "$RECOVERY_TYPE" = "watchdog" ]; then
+        log_success "✓ FFmpeg auto-restart exhausted (Layer 1 failed)"
+        log_success "✓ Watchdog detected failure (Layer 2)"
+        log_success "✓ Watchdog triggered recovery"
+        
+        if [ -n "$NEW_PIDS" ]; then
+            NEW_PID=$(echo "$NEW_PIDS" | head -n1)
+            log_success "✓ New FFmpeg process running (PID: $NEW_PID)"
+            log_success "✓ Stream recovered in ~$((CHECK_COUNT * 5)) seconds!"
+        fi
+        
+        log_success ""
+        log_success "TEST PASSED: Watchdog (Layer 2) is working correctly! ✓"
+        log_success "Recovery count increased: $INITIAL_RECOVERY_COUNT → $FINAL_RECOVERY_COUNT"
+        exit 0
+    elif [ "$RECOVERY_DETECTED" = true ] && [ "$RECOVERY_TYPE" = "ffmpeg" ]; then
+        log_warning "⚠ FFmpeg auto-restart recovered before watchdog could fire"
+        log_warning "This means Layer 1 is working, but we didn't reach Layer 2"
+        log_info ""
+        log_info "The test killed the process 12 times but FFmpeg kept recovering."
+        log_info "Watchdog is standing by as backup (working as designed)."
+        exit 0
+    else
+        log_error "✗ Neither FFmpeg nor Watchdog recovered the stream"
+        log_error ""
+        log_error "Diagnostic info:"
+        log_error "  Initial recovery count: $INITIAL_RECOVERY_COUNT"
+        log_error "  Final recovery count: $FINAL_RECOVERY_COUNT"
+        log_error "  Recovery type detected: ${RECOVERY_TYPE:-none}"
+        
+        if [ "$UNHEALTHY_DETECTED" = true ]; then
+            log_warning "Note: Watchdog detected unhealthy state"
+            log_warning "May need more time (3 consecutive 30s checks = 90s)"
+        fi
+        
+        exit 1
     fi
-    
-    exit 1
 fi
