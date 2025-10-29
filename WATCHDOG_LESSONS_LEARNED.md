@@ -234,6 +234,8 @@ If true 24/7 automation is required:
 - Properly manage broadcast lifecycle
 - Handle "Stream Finished" state programmatically
 
+➡️ **Update:** The repository now includes a complete OAuth integration. Follow `docs/YOUTUBE_OAUTH_SETUP.md` to connect your Google Cloud project, authorize each destination, and call the new broadcast control endpoints directly from VistterStream.
+
 ### 2. Recovery Metrics
 - Track time-to-recovery for each layer
 - Alert on excessive recovery attempts

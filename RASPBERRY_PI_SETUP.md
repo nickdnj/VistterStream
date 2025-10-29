@@ -64,6 +64,67 @@ cd VistterStream
 
 **That's it!** All the Docker files are now on your Pi.
 
+### Optional: Auto-deploy helper for future updates
+
+If you regularly push changes from your development machine and want the Pi to
+stay in sync, use the new helper script:
+
+```bash
+# From inside the repository on the Pi
+./scripts/raspi_auto_deploy.sh
+```
+
+The script will:
+
+- Fetch the latest commits from GitHub.
+- Read optional instructions from `deploy/auto-deploy.conf` before changing
+  branches or picking a deploy command.
+- Honor host-specific overrides so that different environments (e.g., the Pi
+  vs. a Codex workspace) can track different branches simultaneously.
+- Switch branches (if instructed), pull the latest changes, and then execute
+  `deploy.sh` (or the script you specify).
+
+You can trigger this manually or wire it into `cron`/`systemd` for scheduled
+checks. To redirect a host to a new branch, commit an instruction such as
+`branch[raspi]=feature/youtube-oauth` (replace `raspi` with the Pi's hostname)
+on the control branch (defaults to `origin/main`). Other helpers can keep
+following `branch[codex]=work` or any branch you want them to test.
+
+> Tip: If you want to preview a different instruction set temporarily, run the
+> helper with `AUTO_DEPLOY_CONTROL_BRANCH=<branch>` to read the directives from
+> another branch (e.g., `AUTO_DEPLOY_CONTROL_BRANCH=feature/workflow ./scripts/raspi_auto_deploy.sh`).
+
+### Coordinating with Codex or other agents
+
+When you develop inside the Codex web workspace (or any other AI-assisted
+environment), commit your work to a Git branch (for example `work`) and push it
+to GitHub. Update `deploy/auto-deploy.conf` with something like:
+
+```
+branch[raspi]=feature/youtube-oauth
+branch[codex]=work
+```
+
+Now, when the Pi runs `./scripts/raspi_auto_deploy.sh`, it checks out the
+feature branch you want to validate, while the Codex workspace keeps its own
+branch focused on the ongoing work. This makes it easy to involve multiple
+agents simultaneously—each helper follows the instructions tailored to its
+hostname—and you only need to merge to `main` when the feature is ready. If you
+need a custom label for a host (instead of the system hostname), export
+`AUTO_DEPLOY_ID=<name>` before running the helper and use that name in the
+instruction file.
+
+Quick reference for the Codex → Raspberry Pi loop:
+
+1. Push your Codex branch to GitHub.
+2. Commit an instruction update so `branch[raspi]` points at that branch.
+3. On the Pi, run `./scripts/raspi_auto_deploy.sh` and wait for it to finish.
+4. Verify container health with `docker compose -f docker/docker-compose.rpi.yml ps`
+   and the API/frontend checks below.
+
+See [`docs/CODEX_DEPLOY_WORKFLOW.md`](docs/CODEX_DEPLOY_WORKFLOW.md) for a full
+end-to-end example that covers multi-agent collaboration in more detail.
+
 ---
 
 ## Step 3: Configure Environment
