@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import type { AxiosError } from 'axios';
 import { api } from '../services/api';
 
 interface Destination {
@@ -22,6 +23,9 @@ interface Destination {
   watchdog_enable_frame_probe?: boolean;
   watchdog_enable_daily_reset?: boolean;
   watchdog_daily_reset_hour?: number;
+  youtube_oauth_connected?: boolean;
+  youtube_token_expires_at?: string | null;
+  youtube_oauth_scopes?: string | null;
 }
 
 interface PlatformPreset {
@@ -30,12 +34,33 @@ interface PlatformPreset {
   description: string;
 }
 
+const TooltipIcon: React.FC<{ label: string; tooltip: string }> = ({ label, tooltip }) => (
+  <div className="relative group flex items-center justify-center">
+    <button
+      type="button"
+      className="text-gray-400 hover:text-gray-200 focus:text-gray-200 focus:outline-none"
+      aria-label={tooltip}
+    >
+      {label}
+    </button>
+    <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden w-64 -translate-x-1/2 rounded bg-black px-3 py-2 text-xs text-gray-100 shadow-lg group-hover:block group-focus-within:block">
+      {tooltip}
+    </div>
+  </div>
+);
+
 const StreamingDestinations: React.FC = () => {
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [presets, setPresets] = useState<Record<string, PlatformPreset>>({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingDestination, setEditingDestination] = useState<Destination | null>(null);
   const [showStreamKey, setShowStreamKey] = useState<Record<number, boolean>>({});
+  const pollingRef = useRef<Record<number, number>>({});
+  const [oauthEnvDraft, setOauthEnvDraft] = useState({
+    clientId: '',
+    clientSecret: '',
+    redirectUri: '',
+  });
 
   const [newDestination, setNewDestination] = useState<Destination>({
     name: '',
@@ -44,6 +69,10 @@ const StreamingDestinations: React.FC = () => {
     stream_key: '',
     description: '',
     channel_id: '',
+    youtube_stream_id: '',
+    youtube_broadcast_id: '',
+    youtube_watch_url: '',
+    youtube_api_key: '',
     enable_watchdog: false,
     watchdog_check_interval: 30,
     watchdog_enable_frame_probe: false,
@@ -53,10 +82,25 @@ const StreamingDestinations: React.FC = () => {
 
   const isYoutubeForm = (editingDestination?.platform ?? newDestination.platform) === 'youtube';
 
+  const clearOAuthPolling = () => {
+    Object.values(pollingRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
+    pollingRef.current = {};
+  };
+
   useEffect(() => {
     loadDestinations();
     loadPresets();
+
+    return () => {
+      clearOAuthPolling();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!showAddModal && !editingDestination) {
+      setOauthEnvDraft({ clientId: '', clientSecret: '', redirectUri: '' });
+    }
+  }, [showAddModal, editingDestination]);
 
   const loadDestinations = async () => {
     try {
@@ -100,7 +144,16 @@ const StreamingDestinations: React.FC = () => {
         rtmp_url: '',
         stream_key: '',
         description: '',
-        channel_id: ''
+        channel_id: '',
+        youtube_stream_id: '',
+        youtube_broadcast_id: '',
+        youtube_watch_url: '',
+        youtube_api_key: '',
+        enable_watchdog: false,
+        watchdog_check_interval: 30,
+        watchdog_enable_frame_probe: false,
+        watchdog_enable_daily_reset: false,
+        watchdog_daily_reset_hour: 3
       });
       loadDestinations();
     } catch (error) {
@@ -136,6 +189,80 @@ const StreamingDestinations: React.FC = () => {
 
   const toggleStreamKey = (id: number) => {
     setShowStreamKey(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const refreshOAuthStatus = async (id: number): Promise<boolean> => {
+    try {
+      const response = await api.get(`/destinations/${id}/youtube/oauth-status`);
+      const { connected, expires_at, scopes } = response.data;
+      setDestinations(prev => prev.map(dest => (
+        dest.id === id
+          ? {
+              ...dest,
+              youtube_oauth_connected: connected,
+              youtube_token_expires_at: expires_at,
+              youtube_oauth_scopes: scopes,
+            }
+          : dest
+      )));
+      return connected;
+    } catch (error) {
+      console.error('Failed to refresh OAuth status:', error);
+      return false;
+    }
+  };
+
+  const pollOAuthStatus = (id: number, attempt = 0) => {
+    if (attempt > 12) {
+      return;
+    }
+
+    if (pollingRef.current[id]) {
+      window.clearTimeout(pollingRef.current[id]);
+    }
+
+    pollingRef.current[id] = window.setTimeout(async () => {
+      const connected = await refreshOAuthStatus(id);
+      if (!connected) {
+        pollOAuthStatus(id, attempt + 1);
+      } else {
+        delete pollingRef.current[id];
+      }
+    }, 5000);
+  };
+
+  const startOAuthFlow = async (destination: Destination) => {
+    if (!destination.id) return;
+
+    try {
+      const response = await api.post(`/destinations/${destination.id}/youtube/oauth-start`, {
+        prompt_consent: !destination.youtube_oauth_connected,
+      });
+      const { authorization_url } = response.data;
+      window.open(authorization_url, '_blank', 'width=600,height=700');
+      pollOAuthStatus(destination.id);
+    } catch (error) {
+      console.error('Failed to start OAuth flow:', error);
+      const axiosError = error as AxiosError<{ detail?: string }>;
+      const detail = axiosError.response?.data?.detail;
+      const message = detail
+        ? `Failed to start YouTube OAuth flow: ${detail}`
+        : 'Failed to start YouTube OAuth flow. Check backend logs for details.';
+      alert(message);
+    }
+  };
+
+  const disconnectOAuth = async (id: number) => {
+    if (!window.confirm('Disconnect YouTube OAuth for this destination?')) return;
+
+    try {
+      await api.delete(`/destinations/${id}/youtube/oauth`);
+      await refreshOAuthStatus(id);
+      clearOAuthPolling();
+    } catch (error) {
+      console.error('Failed to disconnect OAuth:', error);
+      alert('Failed to disconnect YouTube OAuth.');
+    }
   };
 
   const getPlatformIcon = (platform: string) => {
@@ -197,6 +324,55 @@ const StreamingDestinations: React.FC = () => {
             {/* Name & Description */}
             <h3 className="text-xl font-bold text-white mb-2">{dest.name}</h3>
             <p className="text-gray-400 text-sm mb-4">{dest.description}</p>
+
+            {dest.platform === 'youtube' && (
+              <div className="mt-4 p-4 bg-gray-900 border border-gray-700 rounded-lg">
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-200">YouTube OAuth</p>
+                    <p className={`text-sm ${dest.youtube_oauth_connected ? 'text-green-400' : 'text-yellow-400'}`}>
+                      {dest.youtube_oauth_connected ? 'Connected' : 'Not connected'}
+                    </p>
+                    {dest.youtube_token_expires_at && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Token expires {new Date(dest.youtube_token_expires_at).toLocaleString()}
+                      </p>
+                    )}
+                    {dest.youtube_oauth_scopes && (
+                      <p className="text-xs text-gray-500 mt-1 break-words">
+                        Scopes: {dest.youtube_oauth_scopes}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => startOAuthFlow(dest)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm"
+                    >
+                      {dest.youtube_oauth_connected ? 'Reconnect OAuth' : 'Connect OAuth'}
+                    </button>
+                    <button
+                      onClick={() => refreshOAuthStatus(dest.id!)}
+                      className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
+                    >
+                      Refresh Status
+                    </button>
+                    {dest.youtube_oauth_connected && (
+                      <button
+                        onClick={() => disconnectOAuth(dest.id!)}
+                        className="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-md text-sm"
+                      >
+                        Disconnect
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Complete the Google authorization in the new window, then click "Refresh Status" if the badge does not turn
+                    green automatically.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* RTMP URL */}
             <div className="mb-3">
@@ -380,9 +556,9 @@ const StreamingDestinations: React.FC = () => {
                 </p>
               </div>
 
-              {/* YouTube Stream/Broadcast ID */}
+              {/* YouTube Stream ID */}
               <div>
-                <label className="block text-gray-300 mb-2">YouTube Stream/Broadcast ID</label>
+                <label className="block text-gray-300 mb-2">YouTube Stream ID</label>
                 <input
                   type="text"
                   value={editingDestination ? (editingDestination.youtube_stream_id || '') : (newDestination.youtube_stream_id || '')}
@@ -398,16 +574,117 @@ const StreamingDestinations: React.FC = () => {
                   disabled={!isYoutubeForm}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  The video/broadcast ID from your YouTube Studio livestream URL (e.g., studio.youtube.com/video/<strong>s6qs14YByEQ</strong>/livestreaming). Required for Studio button to open your specific stream.
+                  Primary ingestion stream identifier (studio.youtube.com/video/<strong>ID</strong>/livestreaming).
                 </p>
               </div>
+
+              {/* YouTube Broadcast ID */}
+              <div>
+                <label className="block text-gray-300 mb-2">YouTube Broadcast ID</label>
+                <input
+                  type="text"
+                  value={editingDestination ? (editingDestination.youtube_broadcast_id || '') : (newDestination.youtube_broadcast_id || '')}
+                  onChange={(e) => {
+                    if (editingDestination) {
+                      setEditingDestination({ ...editingDestination, youtube_broadcast_id: e.target.value });
+                    } else {
+                      setNewDestination({ ...newDestination, youtube_broadcast_id: e.target.value });
+                    }
+                  }}
+                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
+                  placeholder="ab12cd34ef56gh78"
+                  disabled={!isYoutubeForm}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Optional liveBroadcast ID for API-driven transitions. Required for automatic OAuth recovery flows.
+                </p>
+              </div>
+
+              {isYoutubeForm && (
+                <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-md font-semibold text-white">YouTube OAuth Environment</h3>
+                    <TooltipIcon
+                      label="ℹ️"
+                      tooltip="Create OAuth 2.0 Web application credentials in Google Cloud Console, then copy the generated values into your backend .env file."
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    These fields are a scratch pad for the values that ultimately belong in your backend <code>.env</code>. Update the file and redeploy after copying the finished values.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    <strong>Note:</strong> Values entered below are not saved to the server—they simply help you collect the correct strings before updating your environment.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
+                      <label className="block text-xs font-semibold text-gray-300 mb-2" htmlFor="youtube-oauth-client-id">
+                        YOUTUBE_OAUTH_CLIENT_ID
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="youtube-oauth-client-id"
+                          type="text"
+                          className="flex-1 rounded bg-gray-800 px-3 py-2 text-sm text-gray-100 font-mono"
+                          placeholder="xxxxxxxx.apps.googleusercontent.com"
+                          value={oauthEnvDraft.clientId}
+                          onChange={(e) => setOauthEnvDraft((prev) => ({ ...prev, clientId: e.target.value }))}
+                        />
+                        <TooltipIcon
+                          label="❔"
+                          tooltip="In Google Cloud Console, open APIs & Services → Credentials, create an OAuth client ID (Web application), and paste the generated Client ID here before updating your backend .env."
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
+                      <label className="block text-xs font-semibold text-gray-300 mb-2" htmlFor="youtube-oauth-client-secret">
+                        YOUTUBE_OAUTH_CLIENT_SECRET
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="youtube-oauth-client-secret"
+                          type="text"
+                          className="flex-1 rounded bg-gray-800 px-3 py-2 text-sm text-gray-100 font-mono"
+                          placeholder="xxxxxxx"
+                          value={oauthEnvDraft.clientSecret}
+                          onChange={(e) => setOauthEnvDraft((prev) => ({ ...prev, clientSecret: e.target.value }))}
+                        />
+                        <TooltipIcon
+                          label="❔"
+                          tooltip="Download the OAuth client JSON or copy the Client secret from the Credentials page and keep it secure. Paste it into your backend environment variable before redeploying."
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
+                      <label className="block text-xs font-semibold text-gray-300 mb-2" htmlFor="youtube-oauth-redirect-uri">
+                        YOUTUBE_OAUTH_REDIRECT_URI
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="youtube-oauth-redirect-uri"
+                          type="text"
+                          className="flex-1 rounded bg-gray-800 px-3 py-2 text-sm text-gray-100 font-mono"
+                          placeholder="https://your-domain.example.com/api/destinations/youtube/oauth/callback"
+                          value={oauthEnvDraft.redirectUri}
+                          onChange={(e) => setOauthEnvDraft((prev) => ({ ...prev, redirectUri: e.target.value }))}
+                        />
+                        <TooltipIcon
+                          label="❔"
+                          tooltip="Add this callback URL to the Authorized redirect URIs for your OAuth client. Replace the domain with the address where your backend is accessible."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Stream Watchdog Section */}
               {isYoutubeForm && (
                 <div className="border-t border-gray-700 pt-4 mt-4">
                   <h3 className="text-lg font-semibold text-white mb-3">🐕 Stream Watchdog (Optional)</h3>
                   <p className="text-sm text-gray-400 mb-4">
-                    Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs. No API keys required!
+                    Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs.
+                    If you still rely on the legacy API-key polling, toggle the watchdog on to reveal the
+                    field where you can paste your YouTube Data API key.
                   </p>
 
                   {/* Enable Watchdog Toggle */}
@@ -432,7 +709,29 @@ const StreamingDestinations: React.FC = () => {
                   {/* Watchdog Config Fields (show only if enabled) */}
                   {(editingDestination?.enable_watchdog || newDestination.enable_watchdog) && (
                     <div className="space-y-4 pl-6 border-l-2 border-blue-600">
-                      
+
+                      {/* YouTube API Key */}
+                      <div>
+                        <label className="block text-gray-300 mb-2">YouTube API Key (Optional)</label>
+                        <input
+                          type="text"
+                          value={editingDestination ? (editingDestination.youtube_api_key || '') : (newDestination.youtube_api_key || '')}
+                          onChange={(e) => {
+                            if (editingDestination) {
+                              setEditingDestination({ ...editingDestination, youtube_api_key: e.target.value });
+                            } else {
+                              setNewDestination({ ...newDestination, youtube_api_key: e.target.value });
+                            }
+                          }}
+                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                          placeholder="AIza..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Enter the same API key you previously configured in the backend (.env) if you want the
+                          watchdog to keep calling the YouTube Data API. Leave this blank when relying solely on OAuth.
+                        </p>
+                      </div>
+
                       {/* Check Interval */}
                       <div>
                         <label className="block text-gray-300 mb-2">Check Interval (seconds)</label>
@@ -454,6 +753,71 @@ const StreamingDestinations: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-1">How often to check stream health (default: 30s)</p>
                       </div>
 
+                      {/* Frame Probe Toggle */}
+                      <div className="space-y-1">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editingDestination ? (editingDestination.watchdog_enable_frame_probe || false) : (newDestination.watchdog_enable_frame_probe || false)}
+                            onChange={(e) => {
+                              if (editingDestination) {
+                                setEditingDestination({ ...editingDestination, watchdog_enable_frame_probe: e.target.checked });
+                              } else {
+                                setNewDestination({ ...newDestination, watchdog_enable_frame_probe: e.target.checked });
+                              }
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-gray-300">Enable Frame Probe</span>
+                        </label>
+                        <p className="text-xs text-gray-500">
+                          Requires the /live URL or OAuth to verify that fresh video frames are available on YouTube.
+                        </p>
+                      </div>
+
+                      {/* Daily Reset Toggle */}
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editingDestination ? (editingDestination.watchdog_enable_daily_reset || false) : (newDestination.watchdog_enable_daily_reset || false)}
+                            onChange={(e) => {
+                              if (editingDestination) {
+                                setEditingDestination({ ...editingDestination, watchdog_enable_daily_reset: e.target.checked });
+                              } else {
+                                setNewDestination({ ...newDestination, watchdog_enable_daily_reset: e.target.checked });
+                              }
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <span className="text-gray-300">Enable Daily Broadcast Reset</span>
+                        </label>
+
+                        {(editingDestination?.watchdog_enable_daily_reset || newDestination.watchdog_enable_daily_reset) && (
+                          <div className="pl-6 space-y-1">
+                            <label className="block text-gray-300 mb-1">Reset Hour (UTC)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="23"
+                              value={editingDestination ? (editingDestination.watchdog_daily_reset_hour ?? 3) : (newDestination.watchdog_daily_reset_hour ?? 3)}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value || '0', 10);
+                                if (editingDestination) {
+                                  setEditingDestination({ ...editingDestination, watchdog_daily_reset_hour: val });
+                                } else {
+                                  setNewDestination({ ...newDestination, watchdog_daily_reset_hour: val });
+                                }
+                              }}
+                              className="w-full bg-gray-700 text-white px-4 py-2 rounded"
+                            />
+                            <p className="text-xs text-gray-500">
+                              Choose a low-traffic hour (UTC) for proactive YouTube event transitions.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
                       {/* YouTube Channel Live URL (Optional) */}
                       <div>
                         <label className="block text-gray-300 mb-2">
@@ -473,7 +837,7 @@ const StreamingDestinations: React.FC = () => {
                           placeholder="https://youtube.com/channel/UCxxxxx/live"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          If provided, watchdog will also check if YouTube shows your stream as live (no API key needed!)
+                          If provided, watchdog will also check if YouTube shows your stream as live (no API key needed!).
                         </p>
                       </div>
 
