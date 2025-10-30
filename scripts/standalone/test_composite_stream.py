@@ -84,10 +84,10 @@ async def test_composite_stream(timeline_id: int, stream_key: str):
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print("Usage: python test_composite_stream.py <timeline_id> <youtube_stream_key>")
+        print("Usage: python scripts/standalone/test_composite_stream.py <timeline_id> <youtube_stream_key>")
         print()
         print("Example:")
-        print("  python test_composite_stream.py 1 xxxx-xxxx-xxxx-xxxx")
+        print("  python scripts/standalone/test_composite_stream.py 1 xxxx-xxxx-xxxx-xxxx")
         sys.exit(1)
         
     timeline_id = int(sys.argv[1])

@@ -77,13 +77,18 @@ VistterStream is designed to run on hardware like the Raspberry Pi in a Docker c
 
 ```
 VistterStream/
-├── docs/                    # Documentation
-│   ├── PRD.md              # Product Requirements Document
-│   ├── SAD.md              # Software Architecture Document
-│   ├── UXD.md              # User Experience Design Document
-│   └── Local Test Cameras.md # Test camera configurations
-├── README.md               # This file
-└── [additional directories to be created]
+├── docs/                        # Documentation
+│   ├── status_notes/            # Historical reports and setup guides (moved from repo root)
+│   ├── screenshots/             # UI reference images
+│   ├── PRD.md                   # Product Requirements Document
+│   ├── SAD.md                   # Software Architecture Document
+│   ├── UXD.md                   # User Experience Design Document
+│   └── Local Test Cameras.md    # Test camera configurations
+├── scripts/
+│   ├── standalone/              # Ad-hoc debugging and testing scripts
+│   └── README.md                # Script catalog
+├── README.md                    # This file
+└── …                            # Backend, frontend, deploy tooling, etc.
 ```
 
 ## Test Cameras

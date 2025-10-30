@@ -135,7 +135,7 @@ def main():
     online_camera = next((c for c in cameras if c['status'] == 'online'), None)
     if not online_camera:
         print("❌ No online cameras available!")
-        print("   Run: python fix_cameras.py")
+        print("   Run: python scripts/standalone/fix_cameras.py")
         return
     
     print(f"✅ Using camera: {online_camera['name']} (ID: {online_camera['id']})\n")

@@ -212,7 +212,7 @@ grep "Auto-restart enabled"
 
 ### Quick Test (Layer 1)
 ```bash
-./test_watchdog.sh quick
+./scripts/standalone/test_watchdog.sh quick
 ```
 - Tests FFmpeg auto-restart
 - Kills process once
@@ -220,7 +220,7 @@ grep "Auto-restart enabled"
 
 ### Full Test (Layer 2)
 ```bash
-./test_watchdog.sh full
+./scripts/standalone/test_watchdog.sh full
 ```
 - Tests Watchdog recovery
 - Kills process 12 times (exceeds FFmpeg's 10 retry limit)
