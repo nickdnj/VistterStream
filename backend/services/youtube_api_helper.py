@@ -8,7 +8,7 @@ import os
 import logging
 import aiohttp
 import asyncio
-from typing import Dict, Optional, Literal
+from typing import Any, Dict, Optional, Literal
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -24,14 +24,22 @@ class YouTubeAPIHelper:
     
     BASE_URL = "https://youtube.googleapis.com/youtube/v3"
     
-    def __init__(self, api_key: str):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        token_provider: Optional[Any] = None
+    ):
         """
         Initialize YouTube API helper
         
         Args:
             api_key: YouTube Data API v3 key
         """
+        if not api_key and not token_provider:
+            raise ValueError("YouTubeAPIHelper requires either an API key or an OAuth token provider")
+
         self.api_key = api_key
+        self._token_provider = token_provider
         self.session: Optional[aiohttp.ClientSession] = None
     
     async def __aenter__(self):
@@ -71,19 +79,39 @@ class YouTubeAPIHelper:
         
         url = f"{self.BASE_URL}/{endpoint}"
         params = params or {}
-        params['key'] = self.api_key
+
+        headers = {}
+        if self._token_provider:
+            token = await self._get_access_token(force_refresh_token)
+            headers['Authorization'] = f'Bearer {token}'
+        elif self.api_key:
+            params['key'] = self.api_key
+        else:
+            raise YouTubeAPIError('No authentication method configured for YouTube API helper')
         
         try:
             async with self.session.request(
                 method, 
                 url, 
                 params=params,
+                headers=headers,
                 json=json_data,
                 timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
                 data = await response.json()
-                
+
                 if response.status >= 400:
+                    if response.status == 401 and self._token_provider and retry_on_unauthorized:
+                        await self._invalidate_token()
+                        return await self._make_request(
+                            method,
+                            endpoint,
+                            params=params,
+                            json_data=json_data,
+                            retry_on_unauthorized=False,
+                            force_refresh_token=True
+                        )
+
                     error_msg = data.get('error', {}).get('message', 'Unknown error')
                     logger.error(f"YouTube API error: {response.status} - {error_msg}")
                     raise YouTubeAPIError(f"API returned {response.status}: {error_msg}")
@@ -96,6 +124,32 @@ class YouTubeAPIHelper:
         except asyncio.TimeoutError:
             logger.error("YouTube API request timed out")
             raise YouTubeAPIError("Request timed out")
+
+    async def _get_access_token(self, force_refresh: bool) -> str:
+        if not self._token_provider:
+            raise YouTubeAPIError("OAuth token provider is not configured")
+
+        provider = getattr(self._token_provider, "get_access_token", None)
+        if callable(provider):
+            try:
+                return await provider(force_refresh=force_refresh)
+            except TypeError:
+                return await provider()
+
+        # Allow passing a raw callable for backwards compatibility
+        callable_provider = self._token_provider
+        try:
+            return await callable_provider(force_refresh=force_refresh)
+        except TypeError:
+            return await callable_provider()
+
+    async def _invalidate_token(self) -> None:
+        if not self._token_provider:
+            return
+
+        invalidate = getattr(self._token_provider, 'invalidate', None)
+        if callable(invalidate):
+            await invalidate()
     
     async def get_stream_health(self, stream_id: str) -> Dict:
         """

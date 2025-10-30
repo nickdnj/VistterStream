@@ -4,13 +4,16 @@ Startup script for VistterStream backend
 
 import sys
 import os
+import shutil
 from pathlib import Path
 
 # Add the backend directory to Python path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
-from models.database import create_tables, SessionLocal, User, engine
+from sqlalchemy.engine import make_url
+
+from models.database import create_tables, SessionLocal, User, engine, DATABASE_URL
 from routers.auth import get_user_by_username, get_password_hash
 from main import app
 import uvicorn
@@ -67,7 +70,66 @@ def ensure_default_admin():
         db.close()
 
 
+def ensure_sqlite_database_seeded() -> None:
+    """Ensure the SQLite database file exists when running inside Docker.
+
+    Older deployments stored the SQLite file inside the application directory
+    (e.g. ``/app/backend/vistterstream.db``). When we moved to mounting
+    ``/data`` as a persistent volume, the new location can start empty on the
+    first boot which caused previously defined destinations to disappear after
+    a rebuild.
+
+    When the configured ``DATABASE_URL`` points at a SQLite file that does not
+    yet exist, we try to copy the legacy database into the new location before
+    creating tables. This keeps existing data intact for users upgrading from
+    the old layout.
+    """
+
+    try:
+        url = make_url(DATABASE_URL)
+        if url.get_backend_name() != "sqlite":
+            return
+
+        database = url.database
+        if not database:
+            return
+
+        raw_path = Path(database)
+        if not raw_path.is_absolute():
+            target_path = (Path.cwd() / raw_path).resolve()
+        else:
+            target_path = raw_path
+
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if target_path.exists():
+            return
+
+        legacy_candidates = [
+            Path("/app/backend/vistterstream.db"),
+            Path("/app/vistterstream.db"),
+            Path.cwd() / "vistterstream.db",
+        ]
+
+        for legacy_path in legacy_candidates:
+            try:
+                if legacy_path == target_path:
+                    continue
+                if legacy_path.exists() and legacy_path.is_file():
+                    shutil.copy2(legacy_path, target_path)
+                    print(
+                        "📦 Copied existing SQLite database from"
+                        f" {legacy_path} to {target_path}"
+                    )
+                    return
+            except Exception as exc:  # noqa: BLE001
+                print(f"⚠️ Unable to copy legacy database from {legacy_path}: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ SQLite database bootstrap failed: {exc}")
+
+
 if __name__ == "__main__":
+    ensure_sqlite_database_seeded()
     # Create database tables
     create_tables()
     ensure_preset_token_column()
