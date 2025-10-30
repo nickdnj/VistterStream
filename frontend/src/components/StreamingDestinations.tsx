@@ -579,7 +579,9 @@ const StreamingDestinations: React.FC = () => {
                 <div className="border-t border-gray-700 pt-4 mt-4">
                   <h3 className="text-lg font-semibold text-white mb-3">🐕 Stream Watchdog (Optional)</h3>
                   <p className="text-sm text-gray-400 mb-4">
-                    Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs. No API keys required!
+                    Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs.
+                    If you still rely on the legacy API-key polling, toggle the watchdog on to reveal the
+                    field where you can paste your YouTube Data API key.
                   </p>
 
                   {/* Enable Watchdog Toggle */}
@@ -622,7 +624,8 @@ const StreamingDestinations: React.FC = () => {
                           placeholder="AIza..."
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Legacy API polling continues to use this key until OAuth is configured. Leave blank to disable API-key checks.
+                          Enter the same API key you previously configured in the backend (.env) if you want the
+                          watchdog to keep calling the YouTube Data API. Leave this blank when relying solely on OAuth.
                         </p>
                       </div>
 

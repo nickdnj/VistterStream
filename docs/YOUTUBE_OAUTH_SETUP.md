@@ -28,6 +28,7 @@ YOUTUBE_OAUTH_REDIRECT_URI=https://your-domain.example.com/api/destinations/yout
 ```
 
 The legacy `YOUTUBE_API_KEY` can stay in place for backwards compatibility, but OAuth will be used for any destinations that complete the handshake.
+If you still depend on the watchdog's API-key polling, toggle **Enable Watchdog Monitoring** inside the Streaming Destination dialog and paste the key into the **YouTube API Key** field that appears. Leaving the field blank disables API-key polling for that destination.
 
 ## 3. Run the database migration
 
