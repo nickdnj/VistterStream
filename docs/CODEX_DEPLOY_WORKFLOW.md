@@ -88,3 +88,52 @@ branch specified in the instruction file.
 This workflow makes it easy to incorporate contributions from many agents: each
 one pushes their branch, updates the coordination file, and the Raspberry Pi
 fetches and deploys the correct code automatically.
+
+## 6. Recovering from conflicting cleanup edits
+
+Occasionally a "cleanup" pass lands in parallel with feature development and
+overwrites the same files (for example, documentation or deployment scripts).
+When that happens, keep the feature branch as the source of truth and discard
+the cleanup edits with the following approach:
+
+1. **Fetch the latest refs** so you can compare against the remote state:
+
+   ```bash
+   git fetch origin
+   ```
+
+2. **Reapply your feature commit(s)** on top of the current base. If the
+   cleanup branch lives in `origin/main`, run an interactive rebase and keep
+   your commits while dropping the cleanup ones:
+
+   ```bash
+   git checkout work                # switch to your feature branch
+   git rebase origin/main           # replay your commits onto the latest base
+   ```
+
+   During the rebase Git stops on every conflict. Open each conflicted file and
+   keep the sections labelled `<<<<<<< ours`—they contain the feature changes
+   you want to preserve. You can accept "ours" explicitly with:
+
+   ```bash
+   git checkout --ours RASPBERRY_PI_SETUP.md deploy.sh scripts/raspi_auto_deploy.sh
+   ```
+
+   (Add any other conflicted files to the command.)
+
+3. **Mark the conflicts as resolved** and continue the rebase:
+
+   ```bash
+   git add .
+   git rebase --continue
+   ```
+
+4. **Force-push the corrected branch** once the rebase finishes so GitHub sees
+   only the feature commits:
+
+   ```bash
+   git push --force-with-lease origin work
+   ```
+
+The Raspberry Pi auto-deploy helper will pick up the updated branch on the next
+run, ensuring the feature code (not the cleanup edits) is deployed.
