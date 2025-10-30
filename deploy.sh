@@ -87,12 +87,6 @@ if [[ "$BEFORE_COMMIT" == "$AFTER_COMMIT" ]]; then
   exit 0
 fi
 
-# Force rebuild if watchdog files exist but containers might be outdated
-if [[ -f "backend/services/watchdog_manager.py" ]] && [[ -f "backend/services/local_stream_watchdog.py" ]]; then
-  log "Watchdog files detected - ensuring containers are up to date"
-  FORCE_REBUILD_BACKEND=1
-fi
-
 log "Changes detected: ${BEFORE_COMMIT:0:8} → ${AFTER_COMMIT:0:8}"
 log "Analyzing changed files..."
 
@@ -107,6 +101,7 @@ fi
 
 # Map changed files to services
 SERVICES_TO_REBUILD=()
+MIGRATION_SCRIPTS=()
 
 # Check backend changes
 if echo "$CHANGED_FILES" | grep -qE '^backend/' || [[ "${FORCE_REBUILD_BACKEND:-0}" -eq 1 ]]; then
@@ -159,16 +154,25 @@ log "Services to rebuild: ${SERVICES_TO_REBUILD[*]}"
 
 # Optional: Run DB migration if backend changed and script exists
 if [[ " ${SERVICES_TO_REBUILD[*]} " =~ " backend " ]]; then
-  MIGRATION_SCRIPT="backend/migrations/add_youtube_watchdog_fields.py"
-  if [[ -f "$MIGRATION_SCRIPT" ]]; then
-    log "Running database migration (if needed)..."
-    if command -v python3 >/dev/null 2>&1; then
-      python3 "$MIGRATION_SCRIPT" || log "Migration script failed (will run inside container after start)"
-    else
-      log "Host python3 not found. Will run migration inside container after start."
-      RUN_MIGRATION_IN_CONTAINER=1
+  MIGRATION_SCRIPTS=(
+    "backend/migrations/add_youtube_watchdog_fields.py"
+    "backend/migrations/add_youtube_oauth_fields.py"
+  )
+
+  for MIGRATION_SCRIPT in "${MIGRATION_SCRIPTS[@]}"; do
+    if [[ -f "$MIGRATION_SCRIPT" ]]; then
+      log "Running database migration (if needed): ${MIGRATION_SCRIPT}"
+      if command -v python3 >/dev/null 2>&1; then
+        if ! python3 "$MIGRATION_SCRIPT"; then
+          log "Migration script failed (will run inside container after start)"
+          RUN_MIGRATION_IN_CONTAINER=1
+        fi
+      else
+        log "Host python3 not found. Will run migration inside container after start."
+        RUN_MIGRATION_IN_CONTAINER=1
+      fi
     fi
-  fi
+  done
 fi
 
 # Stop only the services that need rebuilding
@@ -192,16 +196,26 @@ log "Starting services..."
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d
 
 # If requested, run migration inside backend container
-if [[ "${RUN_MIGRATION_IN_CONTAINER:-0}" -eq 1 ]]; then
-  log "Running migration inside backend container..."
+if [[ "${RUN_MIGRATION_IN_CONTAINER:-0}" -eq 1 && ${#MIGRATION_SCRIPTS[@]} -gt 0 ]]; then
+  log "Running migration(s) inside backend container..."
   sleep 3  # Give container time to start
   for svc in vistterstream-backend vistterstream-backend-host; do
     if docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
-      docker exec "$svc" python3 /app/backend/migrations/add_youtube_watchdog_fields.py && RUN_MIGRATION_IN_CONTAINER=0 && break
+      ALL_MIGRATIONS_OK=1
+      for script in "${MIGRATION_SCRIPTS[@]}"; do
+        if ! docker exec "$svc" python3 "/app/${script}"; then
+          ALL_MIGRATIONS_OK=0
+          break
+        fi
+      done
+      if [[ "$ALL_MIGRATIONS_OK" -eq 1 ]]; then
+        RUN_MIGRATION_IN_CONTAINER=0
+        break
+      fi
     fi
   done
   if [[ "$RUN_MIGRATION_IN_CONTAINER" -ne 0 ]]; then
-    err "Failed to run migration in container. Run manually inside backend container."
+    err "Failed to run migration scripts in container. Run them manually inside backend container."
   fi
 fi
 
