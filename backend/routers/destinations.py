@@ -160,7 +160,7 @@ def _get_oauth_manager() -> YouTubeOAuthManager:
     try:
         return YouTubeOAuthManager()
     except YouTubeOAuthError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 def _serialize_destination(destination: StreamingDestination) -> DestinationResponse:

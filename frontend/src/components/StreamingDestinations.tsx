@@ -216,7 +216,13 @@ const StreamingDestinations: React.FC = () => {
       pollOAuthStatus(destination.id);
     } catch (error) {
       console.error('Failed to start OAuth flow:', error);
-      alert('Failed to start YouTube OAuth flow. Check backend logs for details.');
+      const axiosError = error as AxiosError<{ detail?: string }>;
+      const detail = axiosError.response?.data?.detail;
+      const message = detail
+        ? `Failed to start YouTube OAuth flow: ${detail}`
+        : 'Failed to start YouTube OAuth flow. Check backend logs for details.';
+      alert(message);
+>>>>>>> origin/codex/investigate-oauth-configuration-for-youtube-api-bk8kua
     }
   };
 
@@ -568,12 +574,75 @@ const StreamingDestinations: React.FC = () => {
                 </p>
               </div>
 
+              {isYoutubeForm && (
+                <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-md font-semibold text-white">YouTube OAuth Environment</h3>
+                    <span
+                      className="text-sm text-gray-400 cursor-help"
+                      title="Create OAuth 2.0 Web application credentials in Google Cloud Console, then copy the generated values into your backend .env file."
+                    >
+                      ℹ️
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    These settings live in your backend <code>.env</code>. Update them before attempting the OAuth handshake.
+                  </p>
+                  <div className="space-y-3">
+                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-gray-300">YOUTUBE_OAUTH_CLIENT_ID</div>
+                          <div className="text-xs text-gray-400 break-all">xxxxxxxx.apps.googleusercontent.com</div>
+                        </div>
+                        <span
+                          className="text-gray-400 cursor-help"
+                          title="In Google Cloud Console, go to APIs & Services → Credentials, create OAuth client ID (Web application), and use the generated Client ID here."
+                        >
+                          ❔
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-gray-300">YOUTUBE_OAUTH_CLIENT_SECRET</div>
+                          <div className="text-xs text-gray-400 break-all">xxxxxxx</div>
+                        </div>
+                        <span
+                          className="text-gray-400 cursor-help"
+                          title="Download the OAuth client JSON or copy the Client secret from the same credentials page and store it securely in your backend environment."
+                        >
+                          ❔
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-semibold text-gray-300">YOUTUBE_OAUTH_REDIRECT_URI</div>
+                          <div className="text-xs text-gray-400 break-all">https://your-domain.example.com/api/destinations/youtube/oauth/callback</div>
+                        </div>
+                        <span
+                          className="text-gray-400 cursor-help"
+                          title="Add this exact callback URL to the Authorized redirect URIs list for your OAuth client. Update the domain to match where the backend is hosted."
+                        >
+                          ❔
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Stream Watchdog Section */}
               {isYoutubeForm && (
                 <div className="border-t border-gray-700 pt-4 mt-4">
                   <h3 className="text-lg font-semibold text-white mb-3">🐕 Stream Watchdog (Optional)</h3>
                   <p className="text-sm text-gray-400 mb-4">
-                    Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs. No API keys required!
+                    Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs.
+                    If you still rely on the legacy API-key polling, toggle the watchdog on to reveal the
+                    field where you can paste your YouTube Data API key.
                   </p>
 
                   {/* Enable Watchdog Toggle */}
@@ -616,7 +685,6 @@ const StreamingDestinations: React.FC = () => {
                           placeholder="AIza..."
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Legacy API polling continues to use this key until OAuth is configured. Leave blank to disable API-key checks.
                         </p>
                       </div>
 
