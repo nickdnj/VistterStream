@@ -35,6 +35,21 @@ interface PlatformPreset {
   description: string;
 }
 
+const TooltipIcon: React.FC<{ label: string; tooltip: string }> = ({ label, tooltip }) => (
+  <div className="relative group flex items-center justify-center">
+    <button
+      type="button"
+      className="text-gray-400 hover:text-gray-200 focus:text-gray-200 focus:outline-none"
+      aria-label={tooltip}
+    >
+      {label}
+    </button>
+    <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden w-64 -translate-x-1/2 rounded bg-black px-3 py-2 text-xs text-gray-100 shadow-lg group-hover:block group-focus-within:block">
+      {tooltip}
+    </div>
+  </div>
+);
+
 const StreamingDestinations: React.FC = () => {
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [presets, setPresets] = useState<Record<string, PlatformPreset>>({});
@@ -76,6 +91,12 @@ const StreamingDestinations: React.FC = () => {
       clearOAuthPolling();
     };
   }, []);
+
+  useEffect(() => {
+    if (!showAddModal && !editingDestination) {
+      setOauthEnvDraft({ clientId: '', clientSecret: '', redirectUri: '' });
+    }
+  }, [showAddModal, editingDestination]);
 
   const loadDestinations = async () => {
     try {
@@ -579,57 +600,6 @@ const StreamingDestinations: React.FC = () => {
                 <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-md font-semibold text-white">YouTube OAuth Environment</h3>
-                    <span
-                      className="text-sm text-gray-400 cursor-help"
-                      title="Create OAuth 2.0 Web application credentials in Google Cloud Console, then copy the generated values into your backend .env file."
-                    >
-                      ℹ️
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    These settings live in your backend <code>.env</code>. Update them before attempting the OAuth handshake.
-                  </p>
-                  <div className="space-y-3">
-                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold text-gray-300">YOUTUBE_OAUTH_CLIENT_ID</div>
-                          <div className="text-xs text-gray-400 break-all">xxxxxxxx.apps.googleusercontent.com</div>
-                        </div>
-                        <span
-                          className="text-gray-400 cursor-help"
-                          title="In Google Cloud Console, go to APIs & Services → Credentials, create OAuth client ID (Web application), and use the generated Client ID here."
-                        >
-                          ❔
-                        </span>
-                      </div>
-                    </div>
-                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold text-gray-300">YOUTUBE_OAUTH_CLIENT_SECRET</div>
-                          <div className="text-xs text-gray-400 break-all">xxxxxxx</div>
-                        </div>
-                        <span
-                          className="text-gray-400 cursor-help"
-                          title="Download the OAuth client JSON or copy the Client secret from the same credentials page and store it securely in your backend environment."
-                        >
-                          ❔
-                        </span>
-                      </div>
-                    </div>
-                    <div className="bg-gray-900 border border-gray-800 rounded-md p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold text-gray-300">YOUTUBE_OAUTH_REDIRECT_URI</div>
-                          <div className="text-xs text-gray-400 break-all">https://your-domain.example.com/api/destinations/youtube/oauth/callback</div>
-                        </div>
-                        <span
-                          className="text-gray-400 cursor-help"
-                          title="Add this exact callback URL to the Authorized redirect URIs list for your OAuth client. Update the domain to match where the backend is hosted."
-                        >
-                          ❔
-                        </span>
                       </div>
                     </div>
                   </div>
