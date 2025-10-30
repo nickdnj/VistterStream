@@ -184,21 +184,26 @@ class YouTubeOAuthManager:
 class DatabaseYouTubeTokenProvider:
     """Async helper that hands out valid access tokens from the database."""
 
-    def __init__(self, destination_id: int) -> None:
-        self.destination_id = destination_id
-        self.manager = YouTubeOAuthManager()
+    def __init__(self, destination: StreamingDestination) -> None:
+        self.destination = destination
 
     def _refresh_sync(self, force_refresh: bool) -> str:
         session = SessionLocal()
         try:
             destination = (
                 session.query(StreamingDestination)
-                .filter(StreamingDestination.id == self.destination_id)
+                .filter(StreamingDestination.id == self.destination.id)
                 .first()
             )
             if not destination:
                 raise HTTPException(status_code=404, detail="Destination not found")
-            token = self.manager.ensure_valid_access_token(session, destination, force_refresh=force_refresh)
+            # Recreate manager with current destination credentials
+            manager = YouTubeOAuthManager(
+                client_id=destination.youtube_oauth_client_id,
+                client_secret=destination.youtube_oauth_client_secret,
+                redirect_uri=destination.youtube_oauth_redirect_uri
+            )
+            token = manager.ensure_valid_access_token(session, destination, force_refresh=force_refresh)
             session.refresh(destination)
             return token
         finally:
@@ -213,7 +218,7 @@ class DatabaseYouTubeTokenProvider:
             try:
                 destination = (
                     session.query(StreamingDestination)
-                    .filter(StreamingDestination.id == self.destination_id)
+                    .filter(StreamingDestination.id == self.destination.id)
                     .first()
                 )
                 if not destination:

@@ -53,6 +53,10 @@ class DestinationCreate(BaseModel):
     watchdog_enable_frame_probe: bool = False
     watchdog_enable_daily_reset: bool = False
     watchdog_daily_reset_hour: int = 3
+    # YouTube OAuth credentials (per-destination)
+    youtube_oauth_client_id: Optional[str] = None
+    youtube_oauth_client_secret: Optional[str] = None
+    youtube_oauth_redirect_uri: Optional[str] = None
 
 
 class DestinationUpdate(BaseModel):
@@ -74,6 +78,10 @@ class DestinationUpdate(BaseModel):
     watchdog_enable_frame_probe: Optional[bool] = None
     watchdog_enable_daily_reset: Optional[bool] = None
     watchdog_daily_reset_hour: Optional[int] = None
+    # YouTube OAuth credentials (per-destination)
+    youtube_oauth_client_id: Optional[str] = None
+    youtube_oauth_client_secret: Optional[str] = None
+    youtube_oauth_redirect_uri: Optional[str] = None
 
 
 class DestinationResponse(BaseModel):
@@ -102,6 +110,10 @@ class DestinationResponse(BaseModel):
     youtube_oauth_connected: bool = False
     youtube_token_expires_at: Optional[datetime] = None
     youtube_oauth_scopes: Optional[str] = None
+    # YouTube OAuth credentials (per-destination)
+    youtube_oauth_client_id: Optional[str] = None
+    youtube_oauth_client_secret: Optional[str] = None
+    youtube_oauth_redirect_uri: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -156,9 +168,23 @@ PLATFORM_PRESETS = {
 }
 
 
-def _get_oauth_manager() -> YouTubeOAuthManager:
+def _get_oauth_manager(destination: Optional[StreamingDestination] = None) -> YouTubeOAuthManager:
+    """Get OAuth manager using destination credentials if available, else fall back to env vars."""
     try:
-        return YouTubeOAuthManager()
+        client_id = None
+        client_secret = None
+        redirect_uri = None
+        
+        if destination and destination.youtube_oauth_client_id:
+            client_id = destination.youtube_oauth_client_id
+            client_secret = destination.youtube_oauth_client_secret
+            redirect_uri = destination.youtube_oauth_redirect_uri
+        
+        return YouTubeOAuthManager(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri
+        )
     except YouTubeOAuthError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -221,7 +247,11 @@ def create_destination(destination_data: DestinationCreate, db: Session = Depend
             watchdog_check_interval=destination_data.watchdog_check_interval,
             watchdog_enable_frame_probe=destination_data.watchdog_enable_frame_probe,
             watchdog_enable_daily_reset=destination_data.watchdog_enable_daily_reset,
-            watchdog_daily_reset_hour=destination_data.watchdog_daily_reset_hour
+            watchdog_daily_reset_hour=destination_data.watchdog_daily_reset_hour,
+            # YouTube OAuth credentials
+            youtube_oauth_client_id=destination_data.youtube_oauth_client_id,
+            youtube_oauth_client_secret=destination_data.youtube_oauth_client_secret,
+            youtube_oauth_redirect_uri=destination_data.youtube_oauth_redirect_uri
         )
         db.add(destination)
         db.commit()
@@ -278,6 +308,14 @@ def update_destination(
         destination.watchdog_enable_daily_reset = destination_data.watchdog_enable_daily_reset
     if destination_data.watchdog_daily_reset_hour is not None:
         destination.watchdog_daily_reset_hour = destination_data.watchdog_daily_reset_hour
+    
+    # Update YouTube OAuth credentials
+    if destination_data.youtube_oauth_client_id is not None:
+        destination.youtube_oauth_client_id = destination_data.youtube_oauth_client_id
+    if destination_data.youtube_oauth_client_secret is not None:
+        destination.youtube_oauth_client_secret = destination_data.youtube_oauth_client_secret
+    if destination_data.youtube_oauth_redirect_uri is not None:
+        destination.youtube_oauth_redirect_uri = destination_data.youtube_oauth_redirect_uri
     
     destination.updated_at = datetime.utcnow()
     
@@ -387,7 +425,7 @@ def start_youtube_oauth(
     if destination.platform != "youtube":
         raise HTTPException(status_code=400, detail="OAuth is only available for YouTube destinations")
 
-    manager = _get_oauth_manager()
+    manager = _get_oauth_manager(destination)
     authorization_url, state = manager.generate_authorization_url(destination, prompt_consent=request.prompt_consent)
     db.add(destination)
     db.commit()
@@ -404,7 +442,7 @@ def complete_youtube_oauth(
     if not destination:
         raise HTTPException(status_code=404, detail="Destination not found")
 
-    manager = _get_oauth_manager()
+    manager = _get_oauth_manager(destination)
     manager.exchange_code(db, destination, code=payload.code, state=payload.state)
     db.refresh(destination)
     return _build_oauth_status(destination)
@@ -416,7 +454,7 @@ def disconnect_youtube_oauth(destination_id: int, db: Session = Depends(get_db))
     if not destination:
         raise HTTPException(status_code=404, detail="Destination not found")
 
-    manager = _get_oauth_manager()
+    manager = _get_oauth_manager(destination)
     manager.clear_tokens(db, destination)
     db.refresh(destination)
     return _build_oauth_status(destination)
@@ -435,7 +473,7 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
             content="<html><body><h1>Authorization Failed</h1><p>Invalid or expired OAuth state.</p></body></html>",
         )
 
-    manager = _get_oauth_manager()
+    manager = _get_oauth_manager(destination)
     manager.exchange_code(db, destination, code=code, state=state)
     return HTMLResponse(
         "<html><body><h1>Authorization Complete</h1><p>You may close this window and return to VistterStream.</p></body></html>"
@@ -443,7 +481,7 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
 
 
 def _get_tokenized_helper(destination: StreamingDestination) -> YouTubeAPIHelper:
-    provider = DatabaseYouTubeTokenProvider(destination.id)
+    provider = DatabaseYouTubeTokenProvider(destination)
     return YouTubeAPIHelper(token_provider=provider)
 
 

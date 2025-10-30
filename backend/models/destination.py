@@ -32,6 +32,10 @@ class StreamingDestination(Base):
     youtube_stream_id = Column(String)  # YouTube stream resource ID
     youtube_broadcast_id = Column(String)  # YouTube broadcast ID
     youtube_watch_url = Column(String)  # Public watch URL for frame probing
+    # OAuth credentials (per-destination, stored in DB)
+    youtube_oauth_client_id = Column(String)  # OAuth client ID for this destination
+    youtube_oauth_client_secret = Column(String)  # OAuth client secret for this destination
+    youtube_oauth_redirect_uri = Column(String)  # OAuth redirect URI for this destination
     youtube_access_token = Column(String)  # Short-lived OAuth access token
     youtube_refresh_token = Column(String)  # Long-lived OAuth refresh token
     youtube_token_expiry = Column(DateTime)  # Access token expiry timestamp

@@ -27,6 +27,10 @@ interface Destination {
   youtube_oauth_connected?: boolean;
   youtube_token_expires_at?: string | null;
   youtube_oauth_scopes?: string | null;
+  // OAuth credentials (per-destination)
+  youtube_oauth_client_id?: string;
+  youtube_oauth_client_secret?: string;
+  youtube_oauth_redirect_uri?: string;
 }
 
 interface PlatformPreset {
@@ -79,7 +83,10 @@ const StreamingDestinations: React.FC = () => {
     watchdog_check_interval: 30,
     watchdog_enable_frame_probe: false,
     watchdog_enable_daily_reset: false,
-    watchdog_daily_reset_hour: 3
+    watchdog_daily_reset_hour: 3,
+    youtube_oauth_client_id: '',
+    youtube_oauth_client_secret: '',
+    youtube_oauth_redirect_uri: ''
   });
 
   const isYoutubeForm = (editingDestination?.platform ?? newDestination.platform) === 'youtube';
@@ -603,37 +610,82 @@ const StreamingDestinations: React.FC = () => {
               </div>
 
               {isYoutubeForm && (
-                <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-3">
+                <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-md font-semibold text-white">YouTube OAuth Environment</h3>
+                    <h3 className="text-md font-semibold text-white">YouTube OAuth Credentials</h3>
                   </div>
                   <p className="text-sm text-gray-400">
-                    OAuth uses server environment variables. Configure them on the backend host and redeploy.
+                    Configure OAuth credentials for this destination. These are stored in the database per destination.
                   </p>
-                  <ul className="list-disc list-inside text-xs text-gray-400 space-y-1">
-                    <li><code className="font-mono">YOUTUBE_OAUTH_CLIENT_ID</code></li>
-                    <li><code className="font-mono">YOUTUBE_OAUTH_CLIENT_SECRET</code></li>
-                    <li><code className="font-mono">YOUTUBE_OAUTH_REDIRECT_URI</code></li>
-                  </ul>
-                  <div className="space-y-2">
-                    <label className="block text-gray-300 text-sm">Redirect URI (use this exact path)</label>
+                  {/* OAuth Client ID */}
+                  <div>
+                    <label className="block text-gray-300 mb-2">OAuth Client ID</label>
+                    <input
+                      type="text"
+                      value={editingDestination ? (editingDestination.youtube_oauth_client_id || '') : (newDestination.youtube_oauth_client_id || '')}
+                      onChange={(e) => {
+                        if (editingDestination) {
+                          setEditingDestination({ ...editingDestination, youtube_oauth_client_id: e.target.value });
+                        } else {
+                          setNewDestination({ ...newDestination, youtube_oauth_client_id: e.target.value });
+                        }
+                      }}
+                      className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                      placeholder="xxxxxx.apps.googleusercontent.com"
+                    />
+                  </div>
+
+                  {/* OAuth Client Secret */}
+                  <div>
+                    <label className="block text-gray-300 mb-2">OAuth Client Secret</label>
+                    <input
+                      type="password"
+                      value={editingDestination ? (editingDestination.youtube_oauth_client_secret || '') : (newDestination.youtube_oauth_client_secret || '')}
+                      onChange={(e) => {
+                        if (editingDestination) {
+                          setEditingDestination({ ...editingDestination, youtube_oauth_client_secret: e.target.value });
+                        } else {
+                          setNewDestination({ ...newDestination, youtube_oauth_client_secret: e.target.value });
+                        }
+                      }}
+                      className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                      placeholder="GOCSPX-..."
+                    />
+                  </div>
+                  {/* OAuth Redirect URI */}
+                  <div>
+                    <label className="block text-gray-300 mb-2">OAuth Redirect URI</label>
                     <div className="flex gap-2 items-center">
                       <input
                         type="text"
-                        readOnly
-                        value={`${window.location.origin}/api/destinations/youtube/oauth/callback`}
-                        className="flex-1 bg-gray-800 text-gray-100 px-3 py-2 rounded font-mono text-xs"
+                        value={editingDestination ? (editingDestination.youtube_oauth_redirect_uri || '') : (newDestination.youtube_oauth_redirect_uri || `${window.location.origin}/api/destinations/youtube/oauth/callback`)}
+                        onChange={(e) => {
+                          if (editingDestination) {
+                            setEditingDestination({ ...editingDestination, youtube_oauth_redirect_uri: e.target.value });
+                          } else {
+                            setNewDestination({ ...newDestination, youtube_oauth_redirect_uri: e.target.value });
+                          }
+                        }}
+                        className="flex-1 bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                        placeholder="https://your-domain/api/destinations/youtube/oauth/callback"
                       />
                       <button
                         type="button"
-                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/destinations/youtube/oauth/callback`)}
-                        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs"
+                        onClick={() => {
+                          const defaultUri = `${window.location.origin}/api/destinations/youtube/oauth/callback`;
+                          if (editingDestination) {
+                            setEditingDestination({ ...editingDestination, youtube_oauth_redirect_uri: defaultUri });
+                          } else {
+                            setNewDestination({ ...newDestination, youtube_oauth_redirect_uri: defaultUri });
+                          }
+                        }}
+                        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs whitespace-nowrap"
                       >
-                        Copy
+                        Use Default
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      Add this URI to your Google Cloud OAuth client and set it as <code className="font-mono">YOUTUBE_OAUTH_REDIRECT_URI</code>.
+                    <p className="text-xs text-gray-500 mt-1">
+                      Add this exact URI to your Google Cloud OAuth client's authorized redirect URIs.
                     </p>
                   </div>
                 </div>
