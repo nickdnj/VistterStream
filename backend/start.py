@@ -43,6 +43,40 @@ def ensure_streaming_destination_channel_column() -> None:
         print(f"⚠️ Unable to update streaming_destinations schema: {exc}")
 
 
+def ensure_streaming_destination_oauth_columns() -> None:
+    """Ensure the streaming_destinations table has the OAuth columns."""
+
+    columns_to_add = [
+        ("youtube_access_token", "TEXT"),
+        ("youtube_refresh_token", "TEXT"),
+        ("youtube_token_expiry", "DATETIME"),
+        ("youtube_oauth_scope", "TEXT"),
+        ("youtube_oauth_state", "TEXT"),
+    ]
+
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("PRAGMA table_info(streaming_destinations)"))
+            existing_columns = {row[1] for row in result}
+
+            for column_name, column_type in columns_to_add:
+                if column_name in existing_columns:
+                    continue
+
+                try:
+                    sql = f"ALTER TABLE streaming_destinations ADD COLUMN {column_name} {column_type}"
+                    connection.execute(text(sql))
+                    print(
+                        f"✅ Added missing column '{column_name}' to streaming_destinations"
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    print(
+                        f"⚠️ Unable to add column '{column_name}' to streaming_destinations: {exc}"
+                    )
+    except Exception as exc:
+        print(f"⚠️ Unable to update streaming_destinations OAuth schema: {exc}")
+
+
 def ensure_default_admin():
     """Create a default admin user if none exists."""
     username = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
@@ -134,6 +168,7 @@ if __name__ == "__main__":
     create_tables()
     ensure_preset_token_column()
     ensure_streaming_destination_channel_column()
+    ensure_streaming_destination_oauth_columns()
     ensure_default_admin()
 
     # Start the server
