@@ -41,11 +41,31 @@ app = FastAPI(
 
 # CORS middleware for frontend communication
 # CORS configuration (configurable via env)
-cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000,http://localhost:5173")
-cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS")
+default_cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://0.0.0.0:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://0.0.0.0:5173",
+]
+cors_origins = [o.strip() for o in (cors_origins_env or "").split(",") if o.strip()]
+if not cors_origins:
+    cors_origins = default_cors_origins
+
+cors_origin_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
+if not cors_origin_regex:
+    # Allow any HTTP origin on the local network (IPv4) by default so the
+    # frontend served from the Pi (e.g. http://192.168.x.x:3000) can reach the
+    # API without additional configuration. This still keeps the regex scoped
+    # to HTTP origins and matches the common dev ports used by the project.
+    cors_origin_regex = r"http://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3})(?::\\d+)?"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
