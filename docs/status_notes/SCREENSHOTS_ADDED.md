@@ -96,7 +96,7 @@ Add screenshots to User Guide
 ```
 - 12 screenshots in docs/screenshots/
 - Updated USER_GUIDE.md with image references
-- capture_screenshots.py utility script
+- scripts/standalone/capture_screenshots.py utility script
 - Resolved env.sample merge conflict
 
 ---
@@ -173,7 +173,7 @@ Your documentation is now live at:
 
 ## Utility Script
 
-Created `capture_screenshots.py` for future use:
+Created `scripts/standalone/capture_screenshots.py` for future use:
 
 **Features:**
 - Automated screenshot capture
@@ -186,7 +186,7 @@ Created `capture_screenshots.py` for future use:
 ```bash
 cd /Users/nickd/Workspaces/VistterStream
 source venv/bin/activate
-python capture_screenshots.py
+python scripts/standalone/capture_screenshots.py
 ```
 
 This script can be run anytime to refresh screenshots after UI updates!
@@ -206,7 +206,7 @@ The documentation is now complete with:
 1. **Review the screenshots** - Check GitHub to see how they look
 2. **Test the guide** - Have a new user try following it
 3. **Share the docs** - Point users to the USER_GUIDE.md
-4. **Update as needed** - Run capture_screenshots.py when UI changes
+4. **Update as needed** - Run `python scripts/standalone/capture_screenshots.py` when UI changes
 
 ---
 
@@ -226,7 +226,7 @@ docs/screenshots/08-settings-ptz-presets.png
 docs/screenshots/09-settings-assets.png
 docs/screenshots/10-settings-destinations.png
 docs/screenshots/11-settings-system.png
-capture_screenshots.py
+scripts/standalone/capture_screenshots.py
 SCREENSHOTS_ADDED.md (this file)
 ```
 
