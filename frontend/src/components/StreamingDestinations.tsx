@@ -58,6 +58,12 @@ const StreamingDestinations: React.FC = () => {
   const [showStreamKey, setShowStreamKey] = useState<Record<number, boolean>>({});
   const pollingRef = useRef<Record<number, number>>({});
 
+  const [oauthEnvDraft, setOauthEnvDraft] = useState<{ clientId: string; clientSecret: string; redirectUri: string }>({
+    clientId: '',
+    clientSecret: '',
+    redirectUri: ''
+  });
+
   const [newDestination, setNewDestination] = useState<Destination>({
     name: '',
     platform: 'youtube',
@@ -600,8 +606,35 @@ const StreamingDestinations: React.FC = () => {
                 <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-md font-semibold text-white">YouTube OAuth Environment</h3>
-                      </div>
+                  </div>
+                  <p className="text-sm text-gray-400">
+                    OAuth uses server environment variables. Configure them on the backend host and redeploy.
+                  </p>
+                  <ul className="list-disc list-inside text-xs text-gray-400 space-y-1">
+                    <li><code className="font-mono">YOUTUBE_OAUTH_CLIENT_ID</code></li>
+                    <li><code className="font-mono">YOUTUBE_OAUTH_CLIENT_SECRET</code></li>
+                    <li><code className="font-mono">YOUTUBE_OAUTH_REDIRECT_URI</code></li>
+                  </ul>
+                  <div className="space-y-2">
+                    <label className="block text-gray-300 text-sm">Redirect URI (use this exact path)</label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${window.location.origin}/api/destinations/youtube/oauth/callback`}
+                        className="flex-1 bg-gray-800 text-gray-100 px-3 py-2 rounded font-mono text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard.writeText(`${window.location.origin}/api/destinations/youtube/oauth/callback`)}
+                        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs"
+                      >
+                        Copy
+                      </button>
                     </div>
+                    <p className="text-xs text-gray-500">
+                      Add this URI to your Google Cloud OAuth client and set it as <code className="font-mono">YOUTUBE_OAUTH_REDIRECT_URI</code>.
+                    </p>
                   </div>
                 </div>
               )}
