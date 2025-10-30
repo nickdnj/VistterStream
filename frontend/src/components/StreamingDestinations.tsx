@@ -222,7 +222,6 @@ const StreamingDestinations: React.FC = () => {
         ? `Failed to start YouTube OAuth flow: ${detail}`
         : 'Failed to start YouTube OAuth flow. Check backend logs for details.';
       alert(message);
->>>>>>> origin/codex/investigate-oauth-configuration-for-youtube-api-bk8kua
     }
   };
 
