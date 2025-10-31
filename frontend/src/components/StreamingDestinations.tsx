@@ -100,8 +100,22 @@ const StreamingDestinations: React.FC = () => {
     loadDestinations();
     loadPresets();
 
+    // Listen for OAuth completion messages from popup window
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'oauth_complete' && event.data.success) {
+        console.log('OAuth completed, refreshing destinations...');
+        // Refresh all destinations to get updated OAuth status
+        loadDestinations();
+        // Clear any active polling
+        clearOAuthPolling();
+      }
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+
     return () => {
       clearOAuthPolling();
+      window.removeEventListener('message', handleOAuthMessage);
     };
   }, []);
 
@@ -243,13 +257,41 @@ const StreamingDestinations: React.FC = () => {
   const startOAuthFlow = async (destination: Destination) => {
     if (!destination.id) return;
 
+    // Validate OAuth credentials are configured
+    const hasDestinationCreds = destination.youtube_oauth_client_id && destination.youtube_oauth_client_secret && destination.youtube_oauth_redirect_uri;
+    const hasEnvCreds = true; // Assume env vars might be set on backend
+
+    if (!hasDestinationCreds && !hasEnvCreds) {
+      const shouldConfigure = window.confirm(
+        'OAuth credentials are not configured for this destination.\n\n' +
+        'You need to set:\n' +
+        '• OAuth Client ID\n' +
+        '• OAuth Client Secret\n' +
+        '• OAuth Redirect URI\n\n' +
+        'Would you like to edit this destination to add credentials?'
+      );
+      if (shouldConfigure) {
+        setEditingDestination(destination);
+      }
+      return;
+    }
+
     try {
       const response = await api.post(`/destinations/${destination.id}/youtube/oauth-start`, {
         prompt_consent: !destination.youtube_oauth_connected,
       });
       const { authorization_url } = response.data;
-      window.open(authorization_url, '_blank', 'width=600,height=700');
+      
+      // Open OAuth popup
+      const popup = window.open(authorization_url, 'YouTubeOAuth', 'width=600,height=700,scrollbars=yes');
+      
+      // Start polling as fallback in case postMessage doesn't work
       pollOAuthStatus(destination.id);
+      
+      // Optional: Check if popup was blocked
+      if (!popup || popup.closed) {
+        alert('Popup was blocked! Please allow popups for this site and try again.');
+      }
     } catch (error) {
       console.error('Failed to start OAuth flow:', error);
       const axiosError = error as AxiosError<{ detail?: string }>;
@@ -375,10 +417,21 @@ const StreamingDestinations: React.FC = () => {
                       </button>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500">
-                    Complete the Google authorization in the new window, then click "Refresh Status" if the badge does not turn
-                    green automatically.
-                  </p>
+                  <div className="bg-gray-950 border border-gray-700 rounded p-3">
+                    <p className="text-xs text-gray-400 mb-2">
+                      <strong>How it works:</strong>
+                    </p>
+                    <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
+                      <li>Click "Connect OAuth" to open Google authorization</li>
+                      <li>Sign in with your YouTube account</li>
+                      <li>Grant the requested permissions</li>
+                      <li>The popup will auto-close and status will update automatically</li>
+                      <li>If status doesn't update, click "Refresh Status"</li>
+                    </ol>
+                    <p className="text-xs text-yellow-400 mt-2">
+                      ⚠️ Make sure OAuth credentials are configured above or set in backend environment variables.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -614,9 +667,17 @@ const StreamingDestinations: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <h3 className="text-md font-semibold text-white">YouTube OAuth Credentials</h3>
                   </div>
-                  <p className="text-sm text-gray-400">
-                    Configure OAuth credentials for this destination. These are stored in the database per destination.
-                  </p>
+                  <div className="bg-blue-900/30 border border-blue-700 rounded p-3 space-y-2">
+                    <p className="text-sm text-blue-200 font-medium">🔐 Required for YouTube API Integration</p>
+                    <p className="text-xs text-gray-300">
+                      These credentials allow VistterStream to manage your YouTube live streams automatically. 
+                      You can configure them per destination or use environment variables on the backend.
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      <strong>To get credentials:</strong> Visit <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Google Cloud Console</a>, 
+                      create a project, enable YouTube Data API v3, and create OAuth 2.0 credentials.
+                    </p>
+                  </div>
                   {/* OAuth Client ID */}
                   <div>
                     <label className="block text-gray-300 mb-2">OAuth Client ID</label>

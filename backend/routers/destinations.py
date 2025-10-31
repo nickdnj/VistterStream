@@ -462,6 +462,10 @@ def disconnect_youtube_oauth(destination_id: int, db: Session = Depends(get_db))
 
 @router.get("/youtube/oauth/callback", response_class=HTMLResponse)
 def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    OAuth callback endpoint that Google redirects to after user authorization.
+    This endpoint exchanges the authorization code for access/refresh tokens.
+    """
     destination = (
         db.query(StreamingDestination)
         .filter(StreamingDestination.youtube_oauth_state == state)
@@ -470,14 +474,131 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
     if not destination:
         return HTMLResponse(
             status_code=400,
-            content="<html><body><h1>Authorization Failed</h1><p>Invalid or expired OAuth state.</p></body></html>",
+            content="""
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
+                    h1 { color: #dc2626; }
+                    .error-box { background: #fee2e2; border: 1px solid #dc2626; padding: 20px; border-radius: 8px; max-width: 500px; margin: 20px auto; }
+                </style>
+            </head>
+            <body>
+                <h1>❌ Authorization Failed</h1>
+                <div class="error-box">
+                    <p><strong>Invalid or expired OAuth state.</strong></p>
+                    <p>Please close this window and start the authorization process again from VistterStream.</p>
+                </div>
+            </body>
+            </html>
+            """,
         )
 
-    manager = _get_oauth_manager(destination)
-    manager.exchange_code(db, destination, code=code, state=state)
-    return HTMLResponse(
-        "<html><body><h1>Authorization Complete</h1><p>You may close this window and return to VistterStream.</p></body></html>"
-    )
+    try:
+        manager = _get_oauth_manager(destination)
+        manager.exchange_code(db, destination, code=code, state=state)
+        
+        # Success! Show a friendly message and auto-close script
+        return HTMLResponse(
+            content="""
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
+                    h1 { color: #16a34a; }
+                    .success-box { background: #dcfce7; border: 1px solid #16a34a; padding: 20px; border-radius: 8px; max-width: 500px; margin: 20px auto; }
+                    .instructions { margin-top: 20px; color: #4b5563; }
+                </style>
+            </head>
+            <body>
+                <h1>✅ Authorization Complete!</h1>
+                <div class="success-box">
+                    <p><strong>Your YouTube account has been successfully connected.</strong></p>
+                    <p>You may close this window and return to VistterStream.</p>
+                    <div class="instructions">
+                        <small>This window will automatically close in 3 seconds...</small>
+                    </div>
+                </div>
+                <script>
+                    // Notify parent window that OAuth completed successfully
+                    if (window.opener && !window.opener.closed) {
+                        try {
+                            // Try to call a callback function if it exists
+                            if (window.opener.oauthComplete) {
+                                window.opener.oauthComplete();
+                            }
+                            // Also try postMessage for cross-origin scenarios
+                            window.opener.postMessage({ type: 'oauth_complete', success: true }, '*');
+                        } catch (e) {
+                            console.log('Could not notify parent window:', e);
+                        }
+                    }
+                    
+                    // Auto-close after 3 seconds
+                    setTimeout(function() {
+                        window.close();
+                    }, 3000);
+                </script>
+            </body>
+            </html>
+            """
+        )
+        
+    except HTTPException as http_exc:
+        # Handle HTTP exceptions (from OAuth manager or exchange_code)
+        return HTMLResponse(
+            status_code=http_exc.status_code,
+            content=f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; padding: 40px; text-align: center; }}
+                    h1 {{ color: #dc2626; }}
+                    .error-box {{ background: #fee2e2; border: 1px solid #dc2626; padding: 20px; border-radius: 8px; max-width: 600px; margin: 20px auto; }}
+                    .error-detail {{ background: #fef2f2; padding: 10px; margin-top: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; }}
+                </style>
+            </head>
+            <body>
+                <h1>❌ Authorization Failed</h1>
+                <div class="error-box">
+                    <p><strong>Error during OAuth token exchange:</strong></p>
+                    <div class="error-detail">{http_exc.detail}</div>
+                    <p style="margin-top: 20px;">Please close this window and try again. Make sure OAuth credentials are properly configured in your destination settings.</p>
+                </div>
+            </body>
+            </html>
+            """,
+        )
+        
+    except Exception as exc:
+        # Handle any other unexpected errors
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Unexpected error in OAuth callback: {error_trace}")
+        
+        return HTMLResponse(
+            status_code=500,
+            content=f"""
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; padding: 40px; text-align: center; }}
+                    h1 {{ color: #dc2626; }}
+                    .error-box {{ background: #fee2e2; border: 1px solid #dc2626; padding: 20px; border-radius: 8px; max-width: 600px; margin: 20px auto; }}
+                    .error-detail {{ background: #fef2f2; padding: 10px; margin-top: 10px; border-radius: 4px; font-family: monospace; font-size: 12px; text-align: left; }}
+                </style>
+            </head>
+            <body>
+                <h1>❌ Unexpected Error</h1>
+                <div class="error-box">
+                    <p><strong>An unexpected error occurred during authorization:</strong></p>
+                    <div class="error-detail">{str(exc)}</div>
+                    <p style="margin-top: 20px;">Please close this window and contact support if the problem persists.</p>
+                </div>
+            </body>
+            </html>
+            """,
+        )
 
 
 def _get_tokenized_helper(destination: StreamingDestination) -> YouTubeAPIHelper:
