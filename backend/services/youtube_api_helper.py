@@ -57,7 +57,9 @@ class YouTubeAPIHelper:
         method: str, 
         endpoint: str, 
         params: Optional[Dict] = None,
-        json_data: Optional[Dict] = None
+        json_data: Optional[Dict] = None,
+        retry_on_unauthorized: bool = True,
+        force_refresh_token: bool = False
     ) -> Dict:
         """
         Make an authenticated request to YouTube API
