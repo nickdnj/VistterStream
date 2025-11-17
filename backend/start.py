@@ -78,7 +78,7 @@ def ensure_streaming_destination_oauth_columns() -> None:
 
 
 def ensure_default_admin():
-    """Create a default admin user if none exists."""
+    """Create or reset a default admin user."""
     username = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     password = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin")
 
@@ -88,18 +88,26 @@ def ensure_default_admin():
 
     db = SessionLocal()
     try:
-        if get_user_by_username(db, username):
-            print(f"ℹ️ Admin user '{username}' already exists; skipping bootstrap")
-            return
-
+        existing_user = get_user_by_username(db, username)
         password_hash = get_password_hash(password)
-        admin_user = User(username=username, password_hash=password_hash)
-        db.add(admin_user)
-        db.commit()
-        print(f"✅ Created default admin user '{username}'")
+        
+        if existing_user:
+            # Reset password for existing admin user
+            existing_user.password_hash = password_hash
+            existing_user.is_active = True
+            db.commit()
+            print(f"✅ Reset password for admin user '{username}'")
+        else:
+            # Create new admin user
+            admin_user = User(username=username, password_hash=password_hash)
+            db.add(admin_user)
+            db.commit()
+            print(f"✅ Created default admin user '{username}'")
     except Exception as exc:
         db.rollback()
-        print(f"❌ Failed to create default admin user: {exc}")
+        print(f"❌ Failed to create/reset default admin user: {exc}")
+        import traceback
+        traceback.print_exc()
     finally:
         db.close()
 
