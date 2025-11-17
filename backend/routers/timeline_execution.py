@@ -13,9 +13,13 @@ from models.destination import StreamingDestination
 from services.timeline_executor import get_timeline_executor
 from services.seamless_timeline_executor import get_seamless_timeline_executor
 from services.ffmpeg_manager import EncodingProfile
+from services.youtube_api_helper import YouTubeAPIHelper, YouTubeAPIError
+from services.youtube_oauth import DatabaseYouTubeTokenProvider
 from datetime import datetime
+import logging
 
 router = APIRouter(prefix="/api/timeline-execution", tags=["timeline-execution"])
+logger = logging.getLogger(__name__)
 
 
 class StartTimelineRequest(BaseModel):
@@ -54,6 +58,57 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     for dest in destinations:
         dest.last_used = datetime.utcnow()
     db.commit()
+    
+    # Auto-reset YouTube broadcasts if they're in "complete" state
+    # This allows streams to restart without manual intervention
+    for dest in destinations:
+        if (dest.platform == "youtube" and 
+            dest.youtube_oauth_connected and 
+            dest.youtube_broadcast_id):
+            try:
+                logger.info(f"Checking YouTube broadcast status for destination {dest.id} ({dest.name})")
+                provider = DatabaseYouTubeTokenProvider(dest)
+                helper = YouTubeAPIHelper(token_provider=provider)
+                
+                async with helper:
+                    # Check current broadcast status
+                    status = await helper.get_broadcast_status(dest.youtube_broadcast_id)
+                    current_status = status.get('life_cycle_status', 'unknown')
+                    
+                    logger.info(f"Broadcast {dest.youtube_broadcast_id} status: {current_status}")
+                    
+                    # If broadcast is "complete", reset it to allow new stream
+                    if current_status == 'complete':
+                        logger.warning(
+                            f"Broadcast {dest.youtube_broadcast_id} is in 'complete' state. "
+                            f"Auto-resetting to allow stream restart..."
+                        )
+                        # Reset broadcast (complete → testing → live)
+                        reset_result = await helper.reset_broadcast(dest.youtube_broadcast_id)
+                        logger.info(
+                            f"Broadcast reset successful. New status: {reset_result.get('life_cycle_status')}"
+                        )
+                    elif current_status == 'live':
+                        logger.info(f"Broadcast is already live, no reset needed")
+                    elif current_status == 'testing':
+                        # Transition from testing to live
+                        logger.info(f"Broadcast is in testing, transitioning to live...")
+                        await helper.transition_broadcast(dest.youtube_broadcast_id, 'live')
+                        logger.info("Broadcast transitioned to live")
+                    else:
+                        logger.info(f"Broadcast status is '{current_status}', no action needed")
+                        
+            except YouTubeAPIError as e:
+                logger.warning(
+                    f"Failed to check/reset YouTube broadcast for destination {dest.id}: {e}. "
+                    f"Stream will attempt to start anyway."
+                )
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error checking YouTube broadcast for destination {dest.id}: {e}",
+                    exc_info=True
+                )
+                # Don't fail the timeline start if broadcast check fails
     
     # TEMP: Back to old executor - seamless needs more debugging
     executor = get_timeline_executor()
