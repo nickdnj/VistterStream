@@ -139,6 +139,16 @@ class YouTubeOAuthCallbackRequest(BaseModel):
     state: str
 
 
+class CreateBroadcastRequest(BaseModel):
+    """Request to create a new YouTube broadcast"""
+    title: str
+    description: str = ""
+    privacy_status: str = "public"  # "public", "unlisted", "private"
+    create_stream: bool = False  # If True, also create and bind a new stream
+    frame_rate: str = "30fps"
+    resolution: str = "1080p"
+
+
 class YouTubeBroadcastTransitionRequest(BaseModel):
     status: Literal['testing', 'live', 'complete']
 
@@ -495,8 +505,8 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
         )
 
     try:
-        manager = _get_oauth_manager(destination)
-        manager.exchange_code(db, destination, code=code, state=state)
+    manager = _get_oauth_manager(destination)
+    manager.exchange_code(db, destination, code=code, state=state)
         
         # Success! Show a friendly message and auto-close script
         return HTMLResponse(
@@ -546,7 +556,7 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
         
     except HTTPException as http_exc:
         # Handle HTTP exceptions (from OAuth manager or exchange_code)
-        return HTMLResponse(
+    return HTMLResponse(
             status_code=http_exc.status_code,
             content=f"""
             <html>
@@ -598,7 +608,7 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
             </body>
             </html>
             """,
-        )
+    )
 
 
 def _get_tokenized_helper(destination: StreamingDestination) -> YouTubeAPIHelper:
@@ -680,6 +690,100 @@ async def reset_youtube_broadcast(destination_id: int, db: Session = Depends(get
             return await helper.reset_broadcast(destination.youtube_broadcast_id)
     except YouTubeAPIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.post("/{destination_id}/youtube/create-broadcast")
+async def create_youtube_broadcast(
+    destination_id: int,
+    request: CreateBroadcastRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new YouTube broadcast (and optionally create/bind a stream)
+    
+    This will:
+    1. Create a new broadcast
+    2. Optionally create a new stream and bind it
+    3. Update the destination with the new broadcast ID and stream ID
+    """
+    destination = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
+    if not destination:
+        raise HTTPException(status_code=404, detail="Destination not found")
+    
+    if destination.platform != "youtube":
+        raise HTTPException(status_code=400, detail="Destination is not a YouTube destination")
+    
+    if not destination.youtube_oauth_connected:
+        raise HTTPException(
+            status_code=400,
+            detail="Destination is not connected to YouTube via OAuth. Please connect OAuth first."
+        )
+    
+    helper = _get_tokenized_helper(destination)
+    
+    try:
+        async with helper:
+            # Create the broadcast
+            broadcast_result = await helper.create_broadcast(
+                title=request.title,
+                description=request.description,
+                privacy_status=request.privacy_status
+            )
+            
+            broadcast_id = broadcast_result['broadcast_id']
+            video_id = broadcast_result['video_id']
+            stream_id = None
+            stream_key = None
+            rtmp_url = None
+            
+            # Optionally create and bind a stream
+            if request.create_stream:
+                stream_result = await helper.create_stream(
+                    title=request.title,
+                    description=request.description,
+                    frame_rate=request.frame_rate,
+                    resolution=request.resolution
+                )
+                
+                stream_id = stream_result['stream_id']
+                stream_key = stream_result['stream_key']
+                rtmp_url = stream_result['rtmp_url']
+                
+                # Bind the stream to the broadcast
+                await helper.bind_stream_to_broadcast(broadcast_id, stream_id)
+            
+            # Update the destination with the new IDs
+            destination.youtube_broadcast_id = broadcast_id
+            if stream_id:
+                destination.youtube_stream_id = stream_id
+            if stream_key:
+                destination.stream_key = stream_key
+            if rtmp_url:
+                destination.rtmp_url = rtmp_url
+            
+            db.commit()
+            db.refresh(destination)
+            
+            return {
+                "success": True,
+                "broadcast_id": broadcast_id,
+                "video_id": video_id,  # For Studio URL
+                "stream_id": stream_id,
+                "stream_key": stream_key,
+                "rtmp_url": rtmp_url,
+                "title": broadcast_result['title'],
+                "privacy_status": broadcast_result['privacy_status'],
+                "life_cycle_status": broadcast_result['life_cycle_status'],
+                "studio_url": f"https://studio.youtube.com/video/{video_id}/livestreaming",
+                "watch_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else None,
+                "destination": _serialize_destination(destination)
+            }
+            
+    except YouTubeAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create broadcast: {str(exc)}") from exc
 
 
 @router.post("/{destination_id}/validate-watchdog")

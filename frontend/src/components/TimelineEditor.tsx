@@ -143,15 +143,17 @@ const TimelineEditor: React.FC = () => {
     selectedDestinations.includes(dest.id) && 
     dest.platform === 'youtube'
   );
-  const youtubeStreamId = selectedYoutubeDestination?.youtube_stream_id || 
-                          selectedYoutubeDestination?.youtube_broadcast_id || 
-                          null;
+  // For YouTube live streams, broadcast_id = video_id (use broadcast_id for Studio URL)
+  // Fallback to stream_id if broadcast_id not available
+  const youtubeVideoId = selectedYoutubeDestination?.youtube_broadcast_id || 
+                         selectedYoutubeDestination?.youtube_stream_id || 
+                         null;
   const youtubeChannelId = selectedYoutubeDestination?.channel_id || null;
   const hasYoutubeDestination = !!selectedYoutubeDestination;
   
-  // Studio URL with fallback: video ID > channel ID > homepage
-  const youtubeStudioUrl = youtubeStreamId
-    ? `https://studio.youtube.com/video/${youtubeStreamId}/livestreaming`
+  // Studio URL with fallback: video ID (from broadcast) > channel ID > homepage
+  const youtubeStudioUrl = youtubeVideoId
+    ? `https://studio.youtube.com/video/${youtubeVideoId}/livestreaming`
     : youtubeChannelId
     ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming`
     : 'https://studio.youtube.com';
@@ -1239,9 +1241,9 @@ const TimelineEditor: React.FC = () => {
                       {hasYoutubeDestination ? (
                         <>
                           📺 {selectedYoutubeDestination?.name}
-                          {youtubeStreamId && (
-                            <span className="ml-2 font-mono text-xs text-gray-400" title="Stream ID">
-                              ({youtubeStreamId.substring(0, 12)}...)
+                          {youtubeVideoId && (
+                            <span className="ml-2 font-mono text-xs text-gray-400" title="Broadcast/Video ID">
+                              ({youtubeVideoId.substring(0, 12)}...)
                             </span>
                           )}
                         </>
@@ -1254,23 +1256,23 @@ const TimelineEditor: React.FC = () => {
                         Select a YouTube destination above to enable quick links
                       </p>
                     )}
-                    {hasYoutubeDestination && !youtubeStreamId && !youtubeChannelId && (
+                    {hasYoutubeDestination && !youtubeVideoId && !youtubeChannelId && (
                       <p className="text-yellow-500 text-xs mt-0.5">
-                        ⚠️ Add Stream ID or Channel ID to destination to enable Studio link
+                        ⚠️ Add Broadcast ID or Channel ID to destination to enable Studio link
                       </p>
                     )}
                   </div>
                   <div className="flex gap-2">
                     {hasYoutubeDestination ? (
                       <>
-                        {youtubeStreamId || youtubeChannelId ? (
+                        {youtubeVideoId || youtubeChannelId ? (
                           <a
                             href={youtubeStudioUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                            title={youtubeStreamId 
-                              ? "Open YouTube Live Studio for this stream" 
+                            title={youtubeVideoId 
+                              ? "Open YouTube Live Studio for this broadcast" 
                               : "Open YouTube Live Studio for this channel"}
                           >
                             Studio ↗
@@ -1279,7 +1281,7 @@ const TimelineEditor: React.FC = () => {
                           <button
                             disabled
                             className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                            title="Add Stream ID or Channel ID to destination to enable Studio link"
+                            title="Add Broadcast ID or Channel ID to destination to enable Studio link"
                           >
                             Studio ↗
                           </button>

@@ -316,6 +316,58 @@ const StreamingDestinations: React.FC = () => {
     }
   };
 
+  const createNewBroadcast = async (destination: Destination) => {
+    if (!destination.id) return;
+
+    if (!destination.youtube_oauth_connected) {
+      alert('Please connect OAuth first before creating a broadcast.');
+      return;
+    }
+
+    const title = prompt('Enter broadcast title:', destination.name || 'VistterStream Live');
+    if (!title) return;
+
+    const description = prompt('Enter broadcast description (optional):', destination.description || '');
+    const createStream = window.confirm(
+      'Create a new stream and bind it to the broadcast?\n\n' +
+      'Yes: Create broadcast + stream + bind them (updates RTMP URL and stream key)\n' +
+      'No: Create broadcast only (use existing stream key)'
+    );
+
+    try {
+      const response = await api.post(`/destinations/${destination.id}/youtube/create-broadcast`, {
+        title,
+        description: description || '',
+        privacy_status: 'public',
+        create_stream: createStream,
+        frame_rate: '30fps',
+        resolution: '1080p'
+      });
+
+      const { broadcast_id, video_id, stream_id, stream_key, rtmp_url, studio_url, watch_url } = response.data;
+
+      alert(
+        `Broadcast created successfully!\n\n` +
+        `Broadcast ID: ${broadcast_id}\n` +
+        `Video ID: ${video_id}\n` +
+        (stream_id ? `Stream ID: ${stream_id}\n` : '') +
+        (stream_key ? `New Stream Key: ${stream_key}\n` : '') +
+        `\nThe destination has been updated with the new broadcast ID.`
+      );
+
+      // Reload destinations to get updated info
+      loadDestinations();
+    } catch (error) {
+      console.error('Failed to create broadcast:', error);
+      const axiosError = error as AxiosError<{ detail?: string }>;
+      const detail = axiosError.response?.data?.detail;
+      const message = detail
+        ? `Failed to create broadcast: ${detail}`
+        : 'Failed to create broadcast. Check backend logs for details.';
+      alert(message);
+    }
+  };
+
   const getPlatformIcon = (platform: string) => {
     const icons: Record<string, string> = {
       youtube: '📺',
@@ -409,12 +461,21 @@ const StreamingDestinations: React.FC = () => {
                       Refresh Status
                     </button>
                     {dest.youtube_oauth_connected && (
-                      <button
-                        onClick={() => disconnectOAuth(dest.id!)}
-                        className="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-md text-sm"
-                      >
-                        Disconnect
-                      </button>
+                      <>
+                        <button
+                          onClick={() => createNewBroadcast(dest)}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm"
+                          title="Create a new YouTube broadcast and update this destination"
+                        >
+                          Create New Broadcast
+                        </button>
+                        <button
+                          onClick={() => disconnectOAuth(dest.id!)}
+                          className="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-md text-sm"
+                        >
+                          Disconnect
+                        </button>
+                      </>
                     )}
                   </div>
                   <div className="bg-gray-950 border border-gray-700 rounded p-3">
@@ -430,7 +491,7 @@ const StreamingDestinations: React.FC = () => {
                     </ol>
                     <p className="text-xs text-yellow-400 mt-2">
                       ⚠️ Make sure OAuth credentials are configured above or set in backend environment variables.
-                    </p>
+                  </p>
                   </div>
                 </div>
               </div>
@@ -676,7 +737,7 @@ const StreamingDestinations: React.FC = () => {
                     <p className="text-xs text-gray-400">
                       <strong>To get credentials:</strong> Visit <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Google Cloud Console</a>, 
                       create a project, enable YouTube Data API v3, and create OAuth 2.0 credentials.
-                    </p>
+                  </p>
                   </div>
                   {/* OAuth Client ID */}
                   <div>

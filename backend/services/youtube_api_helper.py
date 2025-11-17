@@ -229,8 +229,12 @@ class YouTubeAPIHelper:
         broadcast = data['items'][0]
         status = broadcast.get('status', {})
         
+        # The broadcast ID is also the video ID for live streams
+        video_id = broadcast.get('id') or broadcast_id
+        
         result = {
             'broadcast_id': broadcast_id,
+            'video_id': video_id,  # For Studio URL - broadcast ID = video ID for live streams
             'title': broadcast.get('snippet', {}).get('title', 'Unknown'),
             'life_cycle_status': status.get('lifeCycleStatus', 'unknown'),
             'privacy_status': status.get('privacyStatus', 'unknown'),
@@ -319,6 +323,170 @@ class YouTubeAPIHelper:
         
         logger.info(f"Broadcast reset complete: {result['life_cycle_status']}")
         return result
+    
+    async def create_stream(
+        self,
+        title: str,
+        description: str = "",
+        frame_rate: str = "30fps",
+        resolution: str = "1080p",
+        ingestion_type: str = "rtmp"
+    ) -> Dict:
+        """
+        Create a new YouTube live stream
+        
+        Args:
+            title: Stream title
+            description: Stream description
+            frame_rate: Frame rate (e.g., "30fps", "60fps")
+            resolution: Resolution (e.g., "1080p", "720p")
+            ingestion_type: Ingestion type (typically "rtmp")
+            
+        Returns:
+            Dictionary containing stream information including stream_id
+        """
+        logger.info(f"Creating YouTube stream: {title}")
+        
+        stream_data = {
+            'snippet': {
+                'title': title,
+                'description': description
+            },
+            'cdn': {
+                'frameRate': frame_rate,
+                'ingestionType': ingestion_type,
+                'resolution': resolution
+            }
+        }
+        
+        data = await self._make_request(
+            'POST',
+            'liveStreams',
+            params={'part': 'snippet,cdn,status'},
+            json_data=stream_data
+        )
+        
+        if not data.get('items'):
+            raise YouTubeAPIError("Failed to create stream - no items in response")
+        
+        stream = data['items'][0]
+        stream_id = stream.get('id')
+        stream_key = stream.get('cdn', {}).get('ingestionInfo', {}).get('streamName', '')
+        
+        logger.info(f"Stream created: {stream_id} (key: {stream_key})")
+        
+        return {
+            'stream_id': stream_id,
+            'stream_key': stream_key,
+            'rtmp_url': stream.get('cdn', {}).get('ingestionInfo', {}).get('ingestionAddress', ''),
+            'title': stream.get('snippet', {}).get('title', ''),
+            'status': stream.get('status', {}).get('streamStatus', 'unknown')
+        }
+    
+    async def create_broadcast(
+        self,
+        title: str,
+        description: str = "",
+        privacy_status: str = "public",
+        scheduled_start_time: Optional[str] = None,
+        enable_auto_start: bool = True,
+        enable_auto_stop: bool = False
+    ) -> Dict:
+        """
+        Create a new YouTube live broadcast
+        
+        Args:
+            title: Broadcast title
+            description: Broadcast description
+            privacy_status: Privacy status ("public", "unlisted", "private")
+            scheduled_start_time: ISO 8601 timestamp for scheduled start (optional)
+            enable_auto_start: Automatically start when stream begins
+            enable_auto_stop: Automatically stop when stream ends
+            
+        Returns:
+            Dictionary containing broadcast information including broadcast_id (which is also the video_id)
+        """
+        logger.info(f"Creating YouTube broadcast: {title}")
+        
+        broadcast_data = {
+            'snippet': {
+                'title': title,
+                'description': description
+            },
+            'status': {
+                'privacyStatus': privacy_status,
+                'selfDeclaredMadeForKids': False
+            },
+            'contentDetails': {
+                'enableAutoStart': enable_auto_start,
+                'enableAutoStop': enable_auto_stop
+            }
+        }
+        
+        if scheduled_start_time:
+            broadcast_data['snippet']['scheduledStartTime'] = scheduled_start_time
+        
+        data = await self._make_request(
+            'POST',
+            'liveBroadcasts',
+            params={'part': 'snippet,status,contentDetails'},
+            json_data=broadcast_data
+        )
+        
+        if not data.get('items'):
+            raise YouTubeAPIError("Failed to create broadcast - no items in response")
+        
+        broadcast = data['items'][0]
+        broadcast_id = broadcast.get('id')
+        # For live streams, broadcast ID = video ID
+        video_id = broadcast_id
+        
+        logger.info(f"Broadcast created: {broadcast_id}")
+        
+        return {
+            'broadcast_id': broadcast_id,
+            'video_id': video_id,  # Same as broadcast_id for live streams
+            'title': broadcast.get('snippet', {}).get('title', ''),
+            'privacy_status': broadcast.get('status', {}).get('privacyStatus', ''),
+            'life_cycle_status': broadcast.get('status', {}).get('lifeCycleStatus', 'unknown')
+        }
+    
+    async def bind_stream_to_broadcast(self, broadcast_id: str, stream_id: str) -> Dict:
+        """
+        Bind a stream to a broadcast
+        
+        Args:
+            broadcast_id: YouTube broadcast ID
+            stream_id: YouTube stream ID
+            
+        Returns:
+            Updated broadcast information
+        """
+        logger.info(f"Binding stream {stream_id} to broadcast {broadcast_id}")
+        
+        data = await self._make_request(
+            'POST',
+            'liveBroadcasts/bind',
+            params={
+                'id': broadcast_id,
+                'streamId': stream_id,
+                'part': 'snippet,status,contentDetails'
+            }
+        )
+        
+        if not data.get('items'):
+            raise YouTubeAPIError(f"Failed to bind stream {stream_id} to broadcast {broadcast_id}")
+        
+        broadcast = data['items'][0]
+        logger.info(f"Stream bound successfully")
+        
+        return {
+            'broadcast_id': broadcast_id,
+            'video_id': broadcast_id,  # Same as broadcast_id
+            'stream_id': stream_id,
+            'bound_stream_id': broadcast.get('contentDetails', {}).get('boundStreamId'),
+            'life_cycle_status': broadcast.get('status', {}).get('lifeCycleStatus', 'unknown')
+        }
     
     async def probe_stream_frames(self, watch_url: str, timeout: int = 30) -> bool:
         """
