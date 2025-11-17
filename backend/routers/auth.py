@@ -9,11 +9,13 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import jwt
 import bcrypt
+import logging
 
 from models.database import get_db, User
 from models.schemas import UserCreate, User as UserSchema, Token, PasswordChangeRequest
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
@@ -50,8 +52,17 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     """Authenticate a user"""
     user = get_user_by_username(db, username)
     if not user:
+        logger.warning(f"Login attempt failed: user '{username}' not found")
         return None
-    if not verify_password(password, user.password_hash):
+    if not user.is_active:
+        logger.warning(f"Login attempt failed: user '{username}' is inactive")
+        return None
+    try:
+        if not verify_password(password, user.password_hash):
+            logger.warning(f"Login attempt failed: incorrect password for user '{username}'")
+            return None
+    except Exception as e:
+        logger.error(f"Password verification error for user '{username}': {e}")
         return None
     return user
 
@@ -102,20 +113,52 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 async def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login user and return access token"""
+    logger.info(f"Login attempt for username: '{form_data.username}'")
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
+        logger.warning(f"Login failed for username: '{form_data.username}'")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    logger.info(f"Login successful for user: '{user.username}' (id: {user.id}, active: {user.is_active})")
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/diagnose")
+async def diagnose_auth(db: Session = Depends(get_db)):
+    """Diagnostic endpoint to check admin user status (for debugging)"""
+    admin_user = get_user_by_username(db, "admin")
+    
+    if not admin_user:
+        return {
+            "admin_exists": False,
+            "message": "Admin user does not exist"
+        }
+    
+    # Test password verification (without exposing the hash)
+    test_result = None
+    try:
+        test_result = verify_password("admin", admin_user.password_hash)
+    except Exception as e:
+        test_result = f"ERROR: {str(e)}"
+    
+    return {
+        "admin_exists": True,
+        "user_id": admin_user.id,
+        "username": admin_user.username,
+        "is_active": admin_user.is_active,
+        "has_password_hash": bool(admin_user.password_hash),
+        "password_hash_length": len(admin_user.password_hash) if admin_user.password_hash else 0,
+        "test_password_verification": test_result,
+        "message": "Admin user found"
+    }
 
 @router.post("/change-password")
 async def change_password(
