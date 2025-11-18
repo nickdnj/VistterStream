@@ -448,12 +448,14 @@ class YouTubeAPIHelper:
             logger.info("YouTube API request successful")
             logger.info(f"Response data: {data}")
             
-            if not data.get('items'):
-                logger.error(f"No items in response. Full response: {data}")
-                raise YouTubeAPIError("Failed to create broadcast - no items in response")
-            
-            broadcast = data['items'][0]
+            # YouTube API returns the broadcast object directly (not wrapped in 'items')
+            broadcast = data
             broadcast_id = broadcast.get('id')
+            
+            if not broadcast_id:
+                logger.error(f"No broadcast ID in response. Full response: {data}")
+                raise YouTubeAPIError("Failed to create broadcast - no ID in response")
+            
             # For live streams, broadcast ID = video ID
             video_id = broadcast_id
             
