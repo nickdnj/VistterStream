@@ -275,10 +275,14 @@ class YouTubeAPIHelper:
             }
         )
         
-        if not data.get('items'):
+        # YouTube API returns the broadcast object directly (not wrapped in 'items')
+        broadcast = data
+        broadcast_id_check = broadcast.get('id')
+        
+        if not broadcast_id_check:
+            logger.error(f"No broadcast ID in transition response. Full response: {data}")
             raise YouTubeAPIError(f"Failed to transition broadcast {broadcast_id}")
         
-        broadcast = data['items'][0]
         new_status = broadcast.get('status', {}).get('lifeCycleStatus', 'unknown')
         
         logger.info(f"Broadcast transitioned to: {new_status}")
@@ -366,11 +370,14 @@ class YouTubeAPIHelper:
             json_data=stream_data
         )
         
-        if not data.get('items'):
-            raise YouTubeAPIError("Failed to create stream - no items in response")
-        
-        stream = data['items'][0]
+        # YouTube API returns the stream object directly (not wrapped in 'items')
+        stream = data
         stream_id = stream.get('id')
+        
+        if not stream_id:
+            logger.error(f"No stream ID in response. Full response: {data}")
+            raise YouTubeAPIError("Failed to create stream - no ID in response")
+        
         stream_key = stream.get('cdn', {}).get('ingestionInfo', {}).get('streamName', '')
         
         logger.info(f"Stream created: {stream_id} (key: {stream_key})")
@@ -499,10 +506,14 @@ class YouTubeAPIHelper:
             }
         )
         
-        if not data.get('items'):
+        # YouTube API returns the broadcast object directly (not wrapped in 'items')
+        broadcast = data
+        broadcast_id_check = broadcast.get('id')
+        
+        if not broadcast_id_check:
+            logger.error(f"No broadcast ID in bind response. Full response: {data}")
             raise YouTubeAPIError(f"Failed to bind stream {stream_id} to broadcast {broadcast_id}")
         
-        broadcast = data['items'][0]
         logger.info(f"Stream bound successfully")
         
         return {
