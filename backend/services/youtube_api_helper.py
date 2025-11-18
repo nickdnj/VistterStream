@@ -446,27 +446,33 @@ class YouTubeAPIHelper:
             )
             
             logger.info("YouTube API request successful")
+            logger.info(f"Response data: {data}")
+            
+            if not data.get('items'):
+                logger.error(f"No items in response. Full response: {data}")
+                raise YouTubeAPIError("Failed to create broadcast - no items in response")
+            
+            broadcast = data['items'][0]
+            broadcast_id = broadcast.get('id')
+            # For live streams, broadcast ID = video ID
+            video_id = broadcast_id
+            
+            logger.info(f"Broadcast created: {broadcast_id}")
+            
+            result = {
+                'broadcast_id': broadcast_id,
+                'video_id': video_id,  # Same as broadcast_id for live streams
+                'title': broadcast.get('snippet', {}).get('title', ''),
+                'privacy_status': broadcast.get('status', {}).get('privacyStatus', ''),
+                'life_cycle_status': broadcast.get('status', {}).get('lifeCycleStatus', 'unknown')
+            }
+            
+            logger.info(f"Returning result: {result}")
+            return result
+            
         except Exception as e:
             logger.error(f"Exception in create_broadcast: {type(e).__name__}: {e}", exc_info=True)
             raise
-        
-        if not data.get('items'):
-            raise YouTubeAPIError("Failed to create broadcast - no items in response")
-        
-        broadcast = data['items'][0]
-        broadcast_id = broadcast.get('id')
-        # For live streams, broadcast ID = video ID
-        video_id = broadcast_id
-        
-        logger.info(f"Broadcast created: {broadcast_id}")
-        
-        return {
-            'broadcast_id': broadcast_id,
-            'video_id': video_id,  # Same as broadcast_id for live streams
-            'title': broadcast.get('snippet', {}).get('title', ''),
-            'privacy_status': broadcast.get('status', {}).get('privacyStatus', ''),
-            'life_cycle_status': broadcast.get('status', {}).get('lifeCycleStatus', 'unknown')
-        }
     
     async def bind_stream_to_broadcast(self, broadcast_id: str, stream_id: str) -> Dict:
         """
