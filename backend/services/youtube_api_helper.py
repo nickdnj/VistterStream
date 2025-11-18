@@ -415,6 +415,8 @@ class YouTubeAPIHelper:
             from datetime import datetime, timedelta, timezone
             scheduled_start_time = (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat()
         
+        logger.debug(f"Using scheduled start time: {scheduled_start_time}")
+        
         broadcast_data = {
             'snippet': {
                 'title': title,
@@ -431,6 +433,8 @@ class YouTubeAPIHelper:
                 'enableDvr': enable_dvr
             }
         }
+        
+        logger.debug(f"Broadcast request data: {broadcast_data}")
         
         data = await self._make_request(
             'POST',
