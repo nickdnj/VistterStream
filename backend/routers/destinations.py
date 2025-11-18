@@ -505,8 +505,8 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
         )
 
     try:
-    manager = _get_oauth_manager(destination)
-    manager.exchange_code(db, destination, code=code, state=state)
+        manager = _get_oauth_manager(destination)
+        manager.exchange_code(db, destination, code=code, state=state)
         
         # Success! Show a friendly message and auto-close script
         return HTMLResponse(
@@ -556,7 +556,7 @@ def youtube_oauth_callback(code: str, state: str, db: Session = Depends(get_db))
         
     except HTTPException as http_exc:
         # Handle HTTP exceptions (from OAuth manager or exchange_code)
-    return HTMLResponse(
+        return HTMLResponse(
             status_code=http_exc.status_code,
             content=f"""
             <html>
