@@ -408,40 +408,47 @@ class YouTubeAPIHelper:
         Returns:
             Dictionary containing broadcast information including broadcast_id (which is also the video_id)
         """
-        logger.info(f"Creating YouTube broadcast: {title} (DVR: {enable_dvr})")
-        
-        # YouTube now requires scheduledStartTime - default to current time + 10 seconds
-        if not scheduled_start_time:
-            from datetime import datetime, timedelta, timezone
-            scheduled_start_time = (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat()
-        
-        logger.debug(f"Using scheduled start time: {scheduled_start_time}")
-        
-        broadcast_data = {
-            'snippet': {
-                'title': title,
-                'description': description,
-                'scheduledStartTime': scheduled_start_time
-            },
-            'status': {
-                'privacyStatus': privacy_status,
-                'selfDeclaredMadeForKids': False
-            },
-            'contentDetails': {
-                'enableAutoStart': enable_auto_start,
-                'enableAutoStop': enable_auto_stop,
-                'enableDvr': enable_dvr
+        try:
+            logger.info(f"Creating YouTube broadcast: {title} (DVR: {enable_dvr})")
+            
+            # YouTube now requires scheduledStartTime - default to current time + 10 seconds
+            if not scheduled_start_time:
+                from datetime import datetime, timedelta, timezone
+                scheduled_start_time = (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat()
+            
+            logger.info(f"Using scheduled start time: {scheduled_start_time}")
+            
+            broadcast_data = {
+                'snippet': {
+                    'title': title,
+                    'description': description,
+                    'scheduledStartTime': scheduled_start_time
+                },
+                'status': {
+                    'privacyStatus': privacy_status,
+                    'selfDeclaredMadeForKids': False
+                },
+                'contentDetails': {
+                    'enableAutoStart': enable_auto_start,
+                    'enableAutoStop': enable_auto_stop,
+                    'enableDvr': enable_dvr
+                }
             }
-        }
-        
-        logger.debug(f"Broadcast request data: {broadcast_data}")
-        
-        data = await self._make_request(
-            'POST',
-            'liveBroadcasts',
-            params={'part': 'snippet,status,contentDetails'},
-            json_data=broadcast_data
-        )
+            
+            logger.info(f"Broadcast request data: {broadcast_data}")
+            logger.info("Making request to YouTube API...")
+            
+            data = await self._make_request(
+                'POST',
+                'liveBroadcasts',
+                params={'part': 'snippet,status,contentDetails'},
+                json_data=broadcast_data
+            )
+            
+            logger.info("YouTube API request successful")
+        except Exception as e:
+            logger.error(f"Exception in create_broadcast: {type(e).__name__}: {e}", exc_info=True)
+            raise
         
         if not data.get('items'):
             raise YouTubeAPIError("Failed to create broadcast - no items in response")
