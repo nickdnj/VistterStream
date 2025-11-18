@@ -390,7 +390,8 @@ class YouTubeAPIHelper:
         privacy_status: str = "public",
         scheduled_start_time: Optional[str] = None,
         enable_auto_start: bool = True,
-        enable_auto_stop: bool = False
+        enable_auto_stop: bool = False,
+        enable_dvr: bool = False
     ) -> Dict:
         """
         Create a new YouTube live broadcast
@@ -402,11 +403,12 @@ class YouTubeAPIHelper:
             scheduled_start_time: ISO 8601 timestamp for scheduled start (optional)
             enable_auto_start: Automatically start when stream begins
             enable_auto_stop: Automatically stop when stream ends
+            enable_dvr: Enable DVR (allows viewers to rewind/replay)
             
         Returns:
             Dictionary containing broadcast information including broadcast_id (which is also the video_id)
         """
-        logger.info(f"Creating YouTube broadcast: {title}")
+        logger.info(f"Creating YouTube broadcast: {title} (DVR: {enable_dvr})")
         
         broadcast_data = {
             'snippet': {
@@ -419,7 +421,8 @@ class YouTubeAPIHelper:
             },
             'contentDetails': {
                 'enableAutoStart': enable_auto_start,
-                'enableAutoStop': enable_auto_stop
+                'enableAutoStop': enable_auto_stop,
+                'enableDvr': enable_dvr
             }
         }
         

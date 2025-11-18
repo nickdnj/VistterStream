@@ -334,6 +334,12 @@ const StreamingDestinations: React.FC = () => {
       'No: Create broadcast only (use existing stream key)'
     );
 
+    const enableDvr = window.confirm(
+      'Enable DVR (Digital Video Recording)?\n\n' +
+      'Yes: Viewers can rewind and replay the live stream\n' +
+      'No: Live stream only, no rewind capability (recommended for real-time content)'
+    );
+
     try {
       const response = await api.post(`/destinations/${destination.id}/youtube/create-broadcast`, {
         title,
@@ -341,7 +347,8 @@ const StreamingDestinations: React.FC = () => {
         privacy_status: 'public',
         create_stream: createStream,
         frame_rate: '30fps',
-        resolution: '1080p'
+        resolution: '1080p',
+        enable_dvr: enableDvr
       });
 
       const { broadcast_id, video_id, stream_id, stream_key, rtmp_url, studio_url, watch_url } = response.data;

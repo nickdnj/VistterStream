@@ -147,6 +147,7 @@ class CreateBroadcastRequest(BaseModel):
     create_stream: bool = False  # If True, also create and bind a new stream
     frame_rate: str = "30fps"
     resolution: str = "1080p"
+    enable_dvr: bool = False  # Enable DVR (allows viewers to rewind/replay)
 
 
 class YouTubeBroadcastTransitionRequest(BaseModel):
@@ -727,7 +728,8 @@ async def create_youtube_broadcast(
             broadcast_result = await helper.create_broadcast(
                 title=request.title,
                 description=request.description,
-                privacy_status=request.privacy_status
+                privacy_status=request.privacy_status,
+                enable_dvr=request.enable_dvr
             )
             
             broadcast_id = broadcast_result['broadcast_id']
