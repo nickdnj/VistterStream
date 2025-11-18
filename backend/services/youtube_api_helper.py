@@ -400,7 +400,7 @@ class YouTubeAPIHelper:
             title: Broadcast title
             description: Broadcast description
             privacy_status: Privacy status ("public", "unlisted", "private")
-            scheduled_start_time: ISO 8601 timestamp for scheduled start (optional)
+            scheduled_start_time: ISO 8601 timestamp for scheduled start (optional, defaults to "now")
             enable_auto_start: Automatically start when stream begins
             enable_auto_stop: Automatically stop when stream ends
             enable_dvr: Enable DVR (allows viewers to rewind/replay)
@@ -410,10 +410,16 @@ class YouTubeAPIHelper:
         """
         logger.info(f"Creating YouTube broadcast: {title} (DVR: {enable_dvr})")
         
+        # YouTube now requires scheduledStartTime - default to current time + 10 seconds
+        if not scheduled_start_time:
+            from datetime import datetime, timedelta, timezone
+            scheduled_start_time = (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat()
+        
         broadcast_data = {
             'snippet': {
                 'title': title,
-                'description': description
+                'description': description,
+                'scheduledStartTime': scheduled_start_time
             },
             'status': {
                 'privacyStatus': privacy_status,
@@ -425,9 +431,6 @@ class YouTubeAPIHelper:
                 'enableDvr': enable_dvr
             }
         }
-        
-        if scheduled_start_time:
-            broadcast_data['snippet']['scheduledStartTime'] = scheduled_start_time
         
         data = await self._make_request(
             'POST',
