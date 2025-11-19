@@ -29,6 +29,83 @@ The result: A fully functional, professionally architected streaming platform th
 - **📚 [Complete User Guide](docs/USER_GUIDE.md)** - Comprehensive feature reference with screenshots
 - **📋 [Documentation Index](docs/README.md)** - All documentation organized by topic
 
+## 🖥️ Reference Hardware
+
+VistterStream was built and tested on this production hardware setup:
+
+### Compute Platform
+
+**Raspberry Pi 5 (8GB RAM)**
+- **Model**: Raspberry Pi 5
+- **RAM**: 8GB
+- **Storage**: MicroSD card (32GB+ recommended) or NVMe SSD via PCIe
+- **Power**: 27W USB-C power supply (5.1V/5A)
+- **Networking**: Gigabit Ethernet (recommended for stable streaming)
+- **Why**: Powerful ARM64 processor with hardware video encoding, runs Docker natively, low power consumption (~15W), perfect for 24/7 operation
+
+**Performance**: The Raspberry Pi 5's VideoCore VII GPU provides hardware-accelerated H.264 encoding, enabling smooth 1080p60 streaming with multiple overlays while maintaining low CPU usage.
+
+### Cameras
+
+**Sunba PTZ Camera**
+- **Type**: IP PTZ Camera with ONVIF support
+- **Connection**: RTSP stream via network
+- **PTZ Protocol**: ONVIF (port 8899)
+- **Features**: 
+  - Pan/Tilt/Zoom control
+  - Preset positions (unlimited presets supported)
+  - 1080p video output
+  - Excellent for automated multi-angle shows
+- **Use Case**: Primary camera for creating professional multi-angle content from a single camera using VistterStream's PTZ preset system
+
+**Reolink Fixed Camera** (Optional)
+- **Type**: Stationary IP camera
+- **Connection**: RTSP stream
+- **Features**: 
+  - High-quality 1080p video
+  - Wide angle lens
+  - Reliable RTSP stream
+- **Use Case**: Wide scenic shots, secondary angles in multi-camera timelines
+
+### Weather Station
+
+**WeatherFlow Tempest Weather Station**
+- **Type**: Wireless all-in-one weather station
+- **Connection**: WiFi to WeatherFlow cloud
+- **API**: RESTful API for weather data
+- **Integration**: VistterStream pulls real-time weather data via API overlays
+- **Data Available**: 
+  - Temperature, humidity, pressure
+  - Wind speed and direction
+  - Rain rate and accumulation
+  - UV index, solar radiation
+  - Lightning detection
+- **Use Case**: Dynamic weather overlays on scenic streams, perfect for weather storytelling
+
+### Network Requirements
+
+- **Internet**: 10+ Mbps upload for 1080p streaming (20+ Mbps recommended for multi-streaming)
+- **Local Network**: Gigabit Ethernet switch recommended
+- **Router**: Port forwarding not required (outbound connections only)
+- **Cameras**: All cameras and Pi on same local network
+
+### Optional Accessories
+
+- **PoE Switch**: Power cameras via Ethernet (if cameras support PoE)
+- **UPS**: Uninterruptible power supply for 24/7 reliability
+- **Cooling**: Raspberry Pi 5 case with active cooling for sustained performance
+- **Storage**: External SSD for local recording (optional)
+
+### Total System Power
+
+- Raspberry Pi 5: ~15W
+- Sunba PTZ Camera: ~12W
+- Reolink Camera: ~6W
+- Network Switch: ~10W
+- **Total**: ~43W (less than a standard light bulb!)
+
+Perfect for 24/7 operation with minimal power costs.
+
 ## What Is VistterStream?
 
 VistterStream is a **standalone streaming appliance** that runs on Raspberry Pi, Intel NUC, or Mac hardware in a Docker container. It provides a beautiful web interface for managing cameras, creating automated shows, and streaming to multiple platforms simultaneously.

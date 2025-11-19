@@ -14,7 +14,8 @@ Welcome to the VistterStream documentation! This index helps you find the right 
 
 ### For End Users
 
-**Setup & Installation:**
+**Hardware & Setup:**
+- [Hardware Guide](hardware/HARDWARE_GUIDE.md) - Complete hardware specifications and setup
 - [Quick Start Guide](QUICK_START_GUIDE.md) - First-time setup
 - [Raspberry Pi Docker Setup](RaspberryPi-Docker.md) - Pi-specific deployment
 - [Docker Testing Guide](Docker-Testing-Complete.md) - Advanced Docker deployment
@@ -81,6 +82,9 @@ docs/
 │   ├── oauth/                   # OAuth setup and troubleshooting
 │   ├── debug/                   # Debug notes and fixes
 │   └── deployment/              # Deployment procedures
+├── hardware/                    # Hardware specifications and setup
+│   ├── HARDWARE_GUIDE.md        # Complete hardware guide
+│   └── README.md                # Image guidelines
 ├── status_notes/                # Historical development notes
 ├── screenshots/                 # UI reference images
 ├── ui-changes/                  # UI change documentation
@@ -93,7 +97,8 @@ docs/
 
 ## 📖 Key Documents by Topic
 
-### Camera Management
+### Hardware & Cameras
+- [Hardware Guide](hardware/HARDWARE_GUIDE.md) - Complete hardware specifications
 - [User Guide - Camera Section](USER_GUIDE.md#cameras)
 - [Local Test Cameras](Local%20Test%20Cameras.md)
 - [Pi Docker PTZ](pi-docker-ptz.md)
@@ -165,6 +170,7 @@ Historical development logs showing how features evolved, problems encountered, 
 
 | I want to... | Read this |
 |--------------|-----------|
+| Understand hardware requirements | [Hardware Guide](hardware/HARDWARE_GUIDE.md) |
 | Set up VistterStream for the first time | [Quick Start Guide](QUICK_START_GUIDE.md) |
 | Deploy on Raspberry Pi | [Raspberry Pi Setup](RaspberryPi-Docker.md) |
 | Learn all features | [Complete User Guide](USER_GUIDE.md) |
