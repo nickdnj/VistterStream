@@ -353,11 +353,11 @@ VistterStream was originally conceived as part of a two-product platform:
 The project includes configuration for local test cameras:
 
 ### Reolink (Fixed position)
-- **Stream**: `rtsp://Wharfside:Wharfside2025!!@192.168.86.250:554/Preview_01_main`
-- **Snapshot**: `http://Wharfside:Wharfside2025!!@192.168.86.250:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0`
+- **Stream**: `rtsp://username:password@192.168.86.250:554/Preview_01_main`
+- **Snapshot**: `http://username:password@192.168.86.250:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0`
 
 ### Sunba (PTZ with ONVIF)
-- **Stream**: `rtsp://192.168.86.23:554/user=admin_password=sOKDKxsV_channel=0_stream=0&onvif=0.sdp?real_stream`
+- **Stream**: `rtsp://192.168.86.23:554/user=admin_password=password_channel=0_stream=0&onvif=0.sdp?real_stream`
 - **ONVIF Port**: 8899 (non-standard)
 
 ## Contributing

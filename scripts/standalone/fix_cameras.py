@@ -51,12 +51,12 @@ def add_reolink_camera(token):
     print("📷 Adding Reolink camera at 192.168.86.24...")
     
     camera_data = {
-        "name": "Reolink Wharfside",
+        "name": "Reolink Camera",
         "type": "stationary",
         "protocol": "rtsp",
         "address": "192.168.86.24",  # CORRECT IP!
-        "username": "Wharfside",
-        "password": "Wharfside2025!!",
+        "username": "username",
+        "password": "password",
         "port": 554,
         "stream_path": "/Preview_01_main",
         "snapshot_url": "http://192.168.86.24:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0"
@@ -71,7 +71,7 @@ def add_reolink_camera(token):
     if response.status_code == 200:
         camera = response.json()
         print(f"✅ Reolink camera added (ID: {camera['id']})")
-        print(f"   RTSP: rtsp://Wharfside:***@192.168.86.24:554/Preview_01_main\n")
+        print(f"   RTSP: rtsp://username:***@192.168.86.24:554/Preview_01_main\n")
         return camera
     else:
         print(f"❌ Failed: {response.status_code} - {response.text}\n")
@@ -87,10 +87,10 @@ def add_sunba_camera(token):
         "protocol": "rtsp",
         "address": "192.168.86.250",  # CORRECT IP!
         "username": "admin",
-        "password": "sOKDKxsV",
+        "password": "password",
         "port": 554,
-        "stream_path": "/user=admin_password=sOKDKxsV_channel=0_stream=0&onvif=0.sdp?real_stream",
-        "snapshot_url": "http://192.168.86.250/webcapture.jpg?command=snap&channel=0&user=admin&password=sOKDKxsV"
+        "stream_path": "/user=admin_password=password_channel=0_stream=0&onvif=0.sdp?real_stream",
+        "snapshot_url": "http://192.168.86.250/webcapture.jpg?command=snap&channel=0&user=admin&password=password"
     }
     
     response = requests.post(
@@ -178,12 +178,12 @@ def main():
     
     test_snapshot_direct(
         "Reolink",
-        "http://Wharfside:Wharfside2025!!@192.168.86.24:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0"
+        "http://username:password@192.168.86.24:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0"
     )
     
     test_snapshot_direct(
         "Sunba PTZ",
-        "http://192.168.86.250/webcapture.jpg?command=snap&channel=0&user=admin&password=sOKDKxsV"
+        "http://192.168.86.250/webcapture.jpg?command=snap&channel=0&user=admin&password=password"
     )
     
     # Test cameras via API
@@ -194,7 +194,7 @@ def main():
     print()
     
     if reolink:
-        test_camera(token, reolink['id'], "Reolink Wharfside")
+        test_camera(token, reolink['id'], "Reolink Camera")
     
     if sunba:
         test_camera(token, sunba['id'], "Sunba PTZ")

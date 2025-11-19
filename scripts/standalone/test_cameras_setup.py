@@ -49,15 +49,15 @@ def add_reolink_camera(token):
     print("\n📷 Adding Reolink camera...")
     
     camera_data = {
-        "name": "Reolink Wharfside",
+        "name": "Reolink Camera",
         "type": "stationary",
         "protocol": "rtsp",
         "address": "192.168.86.24",
-        "username": "Wharfside",
-        "password": "Wharfside2025!!",
+        "username": "username",
+        "password": "password",
         "port": 554,
         "stream_path": "/Preview_01_main",
-        "snapshot_url": "http://Wharfside:Wharfside2025!!@192.168.86.24:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0"
+        "snapshot_url": "http://username:password@192.168.86.24:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0"
     }
     
     response = requests.post(
@@ -84,10 +84,10 @@ def add_sunba_camera(token):
         "protocol": "rtsp",
         "address": "192.168.86.250",
         "username": "admin",
-        "password": "sOKDKxsV",
+        "password": "password",
         "port": 554,
-        "stream_path": "/user=admin_password=sOKDKxsV_channel=0_stream=0&onvif=0.sdp?real_stream",
-        "snapshot_url": "http://192.168.86.250/webcapture.jpg?command=snap&channel=0&user=admin&password=sOKDKxsV"
+        "stream_path": "/user=admin_password=password_channel=0_stream=0&onvif=0.sdp?real_stream",
+        "snapshot_url": "http://192.168.86.250/webcapture.jpg?command=snap&channel=0&user=admin&password=password"
     }
     
     response = requests.post(
