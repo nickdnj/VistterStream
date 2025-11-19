@@ -1,284 +1,221 @@
-# VistterStream Documentation
+# VistterStream Documentation Index
 
-Welcome to the VistterStream documentation! This directory contains all the guides and resources you need to use, configure, and understand VistterStream.
+Welcome to the VistterStream documentation! This index helps you find the right documentation for your needs.
 
----
+## 🚀 Getting Started
 
-## 📚 Documentation Index
+**New to VistterStream?** Start here:
+
+1. **[Quick Start Guide](QUICK_START_GUIDE.md)** - Get streaming in 5 minutes
+2. **[Complete User Guide](USER_GUIDE.md)** - Comprehensive feature reference with screenshots
+3. **[Raspberry Pi Setup](RaspberryPi-Docker.md)** - Deploy on Raspberry Pi hardware
+
+## 📚 Documentation by Role
 
 ### For End Users
 
-#### 🚀 [Quick Start Guide](QUICK_START_GUIDE.md) - **START HERE!**
-Get streaming in 5 minutes! Perfect for first-time users who want to get up and running quickly.
+**Setup & Installation:**
+- [Quick Start Guide](QUICK_START_GUIDE.md) - First-time setup
+- [Raspberry Pi Docker Setup](RaspberryPi-Docker.md) - Pi-specific deployment
+- [Docker Testing Guide](Docker-Testing-Complete.md) - Advanced Docker deployment
+- [Local Test Cameras](Local%20Test%20Cameras.md) - Test camera configurations
 
-**Covers:**
-- Login and initial setup
-- Adding your first camera
-- Configuring streaming destination
-- Creating your first timeline
-- Going live
-- Security basics
+**Using VistterStream:**
+- [Complete User Guide](USER_GUIDE.md) - All features explained with screenshots
+- [YouTube OAuth Setup](working_documents/oauth/YOUTUBE_OAUTH_SETUP.md) - Configure YouTube API integration
 
-#### 📖 [Complete User Guide](USER_GUIDE.md) - **Comprehensive Reference**
-Detailed documentation for all VistterStream features with step-by-step instructions.
+**Troubleshooting:**
+- [OAuth Connection Fix](working_documents/oauth/OAUTH_CONNECTION_FIX.md) - Fix YouTube OAuth issues
+- Status notes in `status_notes/` directory for historical troubleshooting
 
-**Includes:**
-- Dashboard overview and monitoring
-- Camera management and configuration
-- Stream management for multiple platforms
-- Timeline editor with advanced features
-- Scheduler for automated streaming
-- Complete settings guide
-- Troubleshooting section
-- Tips and best practices
+### For Developers & Contributors
 
----
+**Technical Specifications:**
+- [Product Requirements (PRD)](specifications/PRD.md) - Original product vision and requirements
+- [Software Architecture (SAD)](specifications/SAD.md) - System architecture and design
+- [UX Design (UXD)](specifications/UXD.md) - User experience specifications
+- [Streaming Pipeline Technical Spec](specifications/StreamingPipeline-TechnicalSpec.md) - Detailed implementation
+- [Scheduler Design](specifications/Scheduler.md) - Scheduling system architecture
+
+**Advanced Features:**
+- [Preview System Specification](specifications/PreviewSystem-Specification.md) - Preview system design (future)
+- [Preview System Quick Start](PreviewSystem-QuickStart.md) - Preview system setup
+- [Preview System Summary](PreviewSystem-Summary.md) - Executive overview
+- [Preview System TODO](PreviewSystem-TODO.md) - Implementation tasks
+
+**Integration & Deployment:**
+- [Pi Docker PTZ Guide](pi-docker-ptz.md) - PTZ camera setup on Raspberry Pi
+- [Settings Location Sync](settings-location-sync.md) - Configuration synchronization
+- [Firewall Access Options](FirewallAccessOptions.md) - Network configuration
+- [Deployment Workflow](working_documents/deployment/CODEX_DEPLOY_WORKFLOW.md) - Automated deployment
+
+**Working Documents:**
+- [OAuth Documentation](working_documents/oauth/) - OAuth setup and troubleshooting
+- [Debug Notes](working_documents/debug/) - Debugging guides and fixes
+- [Deployment Notes](working_documents/deployment/) - Deployment procedures
 
 ### For System Administrators
 
-#### 🔧 [Manual Installation Guide](../MANUAL_INSTALL.md)
-Step-by-step instructions for manually installing VistterStream on various systems.
+**Deployment:**
+- [Docker Compose Configurations](../docker/) - Various deployment scenarios
+- [Systemd Service Examples](../systemd/) - Linux service configuration
+- [Deployment Scripts](../scripts/) - Automation scripts
 
-#### 🍓 [Raspberry Pi Setup](../RASPBERRY_PI_SETUP.md)
-Complete guide for deploying VistterStream on Raspberry Pi hardware.
+**Monitoring & Maintenance:**
+- [YouTube Studio Button](YouTubeStudioButton.md) - YouTube integration features
+- [Status Notes](status_notes/) - Historical development and fixes
 
-#### 🐳 [Docker Setup](Docker-Testing-Complete.md)
-Instructions for running VistterStream in Docker containers.
+## 📂 Documentation Structure
 
-#### 🔍 [Raspberry Pi Debugging Guide](../RASPBERRY_PI_DEBUG_GUIDE.md)
-Troubleshooting guide specifically for Raspberry Pi deployments.
+```
+docs/
+├── specifications/              # Technical specifications (PRD, SAD, UXD)
+│   ├── PRD.md                   # Product Requirements Document
+│   ├── SAD.md                   # Software Architecture Document
+│   ├── UXD.md                   # User Experience Design
+│   ├── StreamingPipeline-TechnicalSpec.md
+│   ├── Scheduler.md
+│   ├── VistterStudioIntegration.md (future vision)
+│   └── PreviewSystem-Specification.md
+├── working_documents/           # Working notes, fixes, deployment
+│   ├── oauth/                   # OAuth setup and troubleshooting
+│   ├── debug/                   # Debug notes and fixes
+│   └── deployment/              # Deployment procedures
+├── status_notes/                # Historical development notes
+├── screenshots/                 # UI reference images
+├── ui-changes/                  # UI change documentation
+├── QUICK_START_GUIDE.md         # ⭐ START HERE
+├── USER_GUIDE.md                # Complete feature guide
+├── RaspberryPi-Docker.md        # Pi deployment
+├── Docker-Testing-Complete.md   # Docker guide
+└── README.md                    # This file
+```
 
----
+## 📖 Key Documents by Topic
 
-### For Developers and Technical Users
+### Camera Management
+- [User Guide - Camera Section](USER_GUIDE.md#cameras)
+- [Local Test Cameras](Local%20Test%20Cameras.md)
+- [Pi Docker PTZ](pi-docker-ptz.md)
 
-#### 📋 [Product Requirements Document (PRD)](PRD.md)
-Comprehensive product specifications, features, and requirements.
+### Streaming & Broadcasting
+- [User Guide - Streaming Section](USER_GUIDE.md#streaming)
+- [Streaming Pipeline Spec](specifications/StreamingPipeline-TechnicalSpec.md)
+- [YouTube OAuth Setup](working_documents/oauth/YOUTUBE_OAUTH_SETUP.md)
 
-#### 🏗️ [System Architecture Document (SAD)](SAD.md)
-Technical architecture, system design, and component interactions.
+### Timelines & Automation
+- [User Guide - Timeline Section](USER_GUIDE.md#timelines)
+- [Scheduler Design](specifications/Scheduler.md)
+- [Streaming Pipeline Spec](specifications/StreamingPipeline-TechnicalSpec.md)
 
-#### 🎨 [User Experience Design (UXD)](UXD.md)
-UI/UX specifications and design principles.
+### PTZ Cameras & Presets
+- [User Guide - PTZ Presets](USER_GUIDE.md#ptz-presets)
+- [PRD - PTZ Implementation](specifications/PRD.md#11-ptz-preset-system-implementation-october-2025)
+- [SAD - PTZ Architecture](specifications/SAD.md#42-ptz-preset-system-architecture)
 
-#### 🎬 [Streaming Pipeline Technical Specification](StreamingPipeline-TechnicalSpec.md)
-Deep dive into the FFmpeg-based streaming pipeline architecture.
+### Assets & Overlays
+- [User Guide - Assets Section](USER_GUIDE.md#assets)
+- [Streaming Pipeline Spec](specifications/StreamingPipeline-TechnicalSpec.md)
 
-#### 📅 [Scheduler Documentation](Scheduler.md)
-Technical details about the scheduling system.
+### Scheduling
+- [User Guide - Scheduler](USER_GUIDE.md#scheduler)
+- [Scheduler Design](specifications/Scheduler.md)
 
-#### 🔌 [Vistter Studio Integration](VistterStudioIntegration.md)
-Integration guide for connecting with Vistter Studio.
+### YouTube Integration
+- [YouTube OAuth Setup](working_documents/oauth/YOUTUBE_OAUTH_SETUP.md)
+- [OAuth Connection Fix](working_documents/oauth/OAUTH_CONNECTION_FIX.md)
+- [YouTube Watchdog](status_notes/YOUTUBE_WATCHDOG_README.md)
+- [YouTube Studio Button](YouTubeStudioButton.md)
 
-#### 📺 [YouTube Studio Button Guide](YouTubeStudioButton.md)
-Quick access to YouTube Live Control Room from the Timeline Editor.
+## 🔍 Finding Specific Information
 
----
+### Feature Implementation Status
+See the **README.md** in the project root for current implementation status.
 
-### Preview System Documentation
+### Historical Context
+Check `status_notes/` for development history, decisions, and evolution of features.
 
-#### 📺 [Preview System Overview](PreviewSystem-Summary.md)
-Summary of the camera preview system.
+### Troubleshooting
+1. Check the [User Guide](USER_GUIDE.md) troubleshooting sections
+2. Review `working_documents/debug/` for known issues and fixes
+3. Check `working_documents/oauth/` for YouTube/OAuth issues
+4. Search `status_notes/` for historical solutions
 
-#### 📋 [Preview System Specification](PreviewSystem-Specification.md)
-Technical specification for the preview system.
+### API & Integration
+- [SAD](specifications/SAD.md) - API architecture
+- [Streaming Pipeline Spec](specifications/StreamingPipeline-TechnicalSpec.md) - Implementation details
+- [VistterStudio Integration](specifications/VistterStudioIntegration.md) - Future cloud integration (not implemented)
 
-#### ⚡ [Preview System Quick Start](PreviewSystem-QuickStart.md)
-Getting started with camera previews.
+## 📝 Understanding the Documentation
 
-#### ✅ [Preview System Completion Status](PreviewSystem-TODO.md)
-Implementation status and remaining tasks.
+### Specification Documents (specs/)
+These documents represent the **original vision** developed during the design phase. They include:
+- ✅ Features that were implemented
+- ⏳ Features planned for the future (like VistterStudio cloud integration)
 
----
+Each specification now includes a status section clarifying what was built vs. what remains future work.
 
-### Additional Resources
+### Working Documents (working_documents/)
+Real-world fixes, debugging notes, and deployment procedures discovered during development and operation.
 
-#### 🎯 [Local Test Cameras](Local%20Test%20Cameras.md)
-Setting up test cameras for development and testing.
+### Status Notes (status_notes/)
+Historical development logs showing how features evolved, problems encountered, and solutions applied.
 
-#### 🔥 [Firewall Access Options](FirewallAccessOptions.md)
-Network configuration and firewall settings.
+## 🎯 Quick Reference
 
-#### 📝 [Change Logs](../CHANGELOG.md)
-Version history and feature updates.
+| I want to... | Read this |
+|--------------|-----------|
+| Set up VistterStream for the first time | [Quick Start Guide](QUICK_START_GUIDE.md) |
+| Deploy on Raspberry Pi | [Raspberry Pi Setup](RaspberryPi-Docker.md) |
+| Learn all features | [Complete User Guide](USER_GUIDE.md) |
+| Set up YouTube streaming | [YouTube OAuth Setup](working_documents/oauth/YOUTUBE_OAUTH_SETUP.md) |
+| Understand the architecture | [Software Architecture (SAD)](specifications/SAD.md) |
+| Configure PTZ cameras | [User Guide - PTZ](USER_GUIDE.md#ptz-presets) |
+| Create automated shows | [User Guide - Timelines](USER_GUIDE.md#timelines) |
+| Schedule content | [User Guide - Scheduler](USER_GUIDE.md#scheduler) |
+| Add overlays | [User Guide - Assets](USER_GUIDE.md#assets) |
+| Fix OAuth issues | [OAuth Connection Fix](working_documents/oauth/OAUTH_CONNECTION_FIX.md) |
+| Understand what was built vs. planned | [PRD](specifications/PRD.md) or [SAD](specifications/SAD.md) status sections |
 
-#### 📋 [TODO List](../TODO.md)
-Planned features and improvements.
+## 📊 Documentation Quality
 
----
+All user-facing documentation includes:
+- ✅ Step-by-step instructions
+- ✅ Screenshots where applicable
+- ✅ Troubleshooting sections
+- ✅ Prerequisites and requirements
+- ✅ Expected outcomes
 
-## 🎯 Quick Navigation by Task
-
-### "I want to..."
-
-| Task | Document |
-|------|----------|
-| Get started quickly | [Quick Start Guide](QUICK_START_GUIDE.md) |
-| Learn all features | [User Guide](USER_GUIDE.md) |
-| Install VistterStream | [Manual Install](../MANUAL_INSTALL.md) |
-| Set up on Raspberry Pi | [RPi Setup](../RASPBERRY_PI_SETUP.md) |
-| Stream to YouTube | [User Guide - Destinations](USER_GUIDE.md#destinations) |
-| Access YouTube Studio | [YouTube Studio Button](YouTubeStudioButton.md) |
-| Create automated schedules | [User Guide - Scheduler](USER_GUIDE.md#scheduler) |
-| Add camera overlays | [User Guide - Assets](USER_GUIDE.md#assets) |
-| Control PTZ cameras | [User Guide - PTZ Presets](USER_GUIDE.md#ptz-presets) |
-| Troubleshoot issues | [User Guide - Troubleshooting](USER_GUIDE.md#troubleshooting) |
-| Understand the architecture | [SAD](SAD.md) |
-| Contribute to development | [PRD](PRD.md) + [SAD](SAD.md) |
-
----
-
-## 📱 Documentation by Role
-
-### 👤 **Content Creator / Streamer**
-Start with:
-1. [Quick Start Guide](QUICK_START_GUIDE.md)
-2. [User Guide](USER_GUIDE.md)
-3. [User Guide - Timeline Editor](USER_GUIDE.md#timeline-editor)
-4. [User Guide - Assets](USER_GUIDE.md#assets)
-
-### 🔧 **System Administrator**
-Start with:
-1. [Manual Installation](../MANUAL_INSTALL.md)
-2. [Raspberry Pi Setup](../RASPBERRY_PI_SETUP.md)
-3. [Docker Setup](Docker-Testing-Complete.md)
-4. [User Guide - System Settings](USER_GUIDE.md#system-information)
-
-### 💻 **Developer**
-Start with:
-1. [PRD](PRD.md) - Understand requirements
-2. [SAD](SAD.md) - Learn architecture
-3. [Streaming Pipeline](StreamingPipeline-TechnicalSpec.md) - Understand video processing
-4. [UXD](UXD.md) - UI/UX guidelines
-
-### 🧪 **QA / Tester**
-Start with:
-1. [Quick Start Guide](QUICK_START_GUIDE.md)
-2. [Local Test Cameras](Local%20Test%20Cameras.md)
-3. [User Guide](USER_GUIDE.md) - All features to test
-4. [RPi Debug Guide](../RASPBERRY_PI_DEBUG_GUIDE.md) - Platform-specific testing
-
----
-
-## 🆕 New to VistterStream?
-
-### Recommended Reading Order:
-
-1. **📖 Quick Start Guide** - Get familiar with basics (5 minutes)
-2. **🎥 Dashboard & Cameras** - Learn monitoring and camera setup (10 minutes)
-3. **🎬 Timeline Basics** - Create your first production (15 minutes)
-4. **📡 Destinations** - Configure streaming outputs (10 minutes)
-5. **📅 Scheduler** - Automate streaming (10 minutes)
-6. **⚙️ Settings & Advanced** - Explore advanced features (20 minutes)
-
-**Total learning time:** ~1 hour to become proficient
-
----
-
-## 📊 Documentation Statistics
-
-| Category | Documents | Status |
-|----------|-----------|--------|
-| User Guides | 2 | ✅ Complete |
-| Installation | 3 | ✅ Complete |
-| Technical Specs | 6 | ✅ Complete |
-| Preview System | 4 | ✅ Complete |
-| Troubleshooting | 2 | ✅ Complete |
-| Change Logs | 1+ | 🔄 Ongoing |
-
----
+Technical specifications include:
+- ✅ Implementation status (built vs. future)
+- ✅ Architecture diagrams
+- ✅ Data models and schemas
+- ✅ API contracts
+- ✅ Deployment considerations
 
 ## 🤝 Contributing to Documentation
 
-If you'd like to improve these docs:
+Found an error or want to improve documentation?
 
-1. Identify gaps or unclear sections
-2. Create or update markdown files
-3. Follow existing formatting style
-4. Include practical examples
-5. Test instructions before submitting
-6. Submit pull request with changes
+1. User guides live in `docs/`
+2. Specifications live in `docs/specifications/`
+3. Working notes live in `docs/working_documents/`
+4. Screenshots go in `docs/screenshots/`
 
-### Documentation Standards:
-- Use clear, concise language
-- Include screenshots where helpful
-- Provide step-by-step instructions
-- Add troubleshooting tips
-- Keep formatting consistent
-- Update table of contents
-
----
+Keep documentation:
+- **Accurate** - Reflects current implementation
+- **Clear** - Written for the intended audience
+- **Complete** - Includes all necessary context
+- **Current** - Updated when features change
 
 ## 📞 Getting Help
 
-### Documentation Issues:
-- Missing information? Open an issue
-- Unclear instructions? Request clarification
-- Found errors? Submit corrections
-
-### Technical Support:
-- Check [User Guide - Troubleshooting](USER_GUIDE.md#troubleshooting)
-- Review [Raspberry Pi Debug Guide](../RASPBERRY_PI_DEBUG_GUIDE.md)
-- Check system logs in Settings → System tab
-
-### Community:
-- Share your streaming setups
-- Contribute tips and best practices
-- Help other users get started
+1. **Start with:** [Quick Start Guide](QUICK_START_GUIDE.md)
+2. **Then try:** [User Guide](USER_GUIDE.md) troubleshooting sections
+3. **For OAuth issues:** [OAuth docs](working_documents/oauth/)
+4. **For deployment:** [Docker guides](Docker-Testing-Complete.md)
+5. **For architecture questions:** [Technical specs](specifications/)
 
 ---
 
-## 📝 Version Information
-
-- **Documentation Version:** 1.0
-- **VistterStream Version:** 1.0.0-beta
-- **Last Updated:** October 23, 2025
-- **Status:** Complete and actively maintained
-
----
-
-## 🎓 Learning Resources
-
-### Beginner Topics:
-- IP camera configuration
-- RTSP streaming basics
-- RTMP destinations
-- Basic video production
-
-### Intermediate Topics:
-- Multi-camera timelines
-- PTZ camera control
-- Overlay graphics
-- Scheduled streaming
-
-### Advanced Topics:
-- Custom RTMP destinations
-- API-based dynamic assets
-- Hardware encoding
-- High-availability setups
-
----
-
-## 🔗 External Resources
-
-### Streaming Platforms:
-- [YouTube Live Documentation](https://support.google.com/youtube/answer/2474026)
-- [Facebook Live Documentation](https://www.facebook.com/business/help/1968707740106188)
-- [Twitch Broadcasting Guide](https://help.twitch.tv/s/article/guide-to-broadcast-health-and-using-twitch-inspector)
-
-### Video Technology:
-- [FFmpeg Documentation](https://ffmpeg.org/documentation.html)
-- [RTSP Protocol](https://en.wikipedia.org/wiki/Real_Time_Streaming_Protocol)
-- [RTMP Specification](https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol)
-
-### Hardware:
-- [Raspberry Pi Documentation](https://www.raspberrypi.org/documentation/)
-- [IP Camera Standards](https://www.onvif.org/)
-
----
-
-**Welcome to VistterStream!** We hope these docs help you create amazing streaming experiences. If you have questions or suggestions, please don't hesitate to reach out.
-
-Happy Streaming! 📹✨
-
-
+**Ready to get started?** → **[Quick Start Guide](QUICK_START_GUIDE.md)** 🚀

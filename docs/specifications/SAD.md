@@ -1,7 +1,40 @@
 # VistterStream Software Architecture & Specification
 
+**Document Status**: This SAD represents the original architectural vision (2025). See section 1.1 for implementation status.
+
 ## 1. Architectural Overview
-VistterStream is delivered as a containerized appliance that runs on ARM64 (Raspberry Pi) and x86_64 (Mac, Intel NUC) hardware. The system orchestrates IP camera ingest, timeline execution from VistterStudio, overlay rendering, and multi-endpoint streaming. The solution favors modular services within a single container to simplify deployment, while keeping responsibilities explicit for future multi-service evolution.
+
+### 1.1 Implementation Status
+
+**ORIGINAL VISION:**
+VistterStream designed as appliance with cloud integration to VistterStudio for remote control and timeline authoring.
+
+**ACTUAL IMPLEMENTATION (November 2025):**
+VistterStream built as **standalone streaming appliance** with all functionality local:
+
+✅ **Implemented Architecture:**
+- Single Docker container (FastAPI backend + React frontend)
+- SQLite database with comprehensive schema
+- FFmpeg-based streaming engine with hardware acceleration
+- ONVIF PTZ control via onvif-zeep
+- Local timeline editor and execution
+- Local asset management and overlay composition
+- YouTube Live API integration (OAuth, broadcast lifecycle)
+- Stream health watchdog with auto-recovery
+- Multi-architecture Docker builds (ARM64 + x86_64)
+
+⏳ **Not Implemented (Future):**
+- VistterStudio cloud integration
+- Outbound command channel
+- Fleet management messaging
+- Remote control plane
+- Cloud-based overlay synchronization
+
+**Architecture Reality:** The system operates entirely locally. All "VistterStudio integration" references in this document represent future enhancement opportunities, not current dependencies.
+
+### 1.2 System Architecture
+
+VistterStream is delivered as a containerized appliance that runs on ARM64 (Raspberry Pi) and x86_64 (Mac, Intel NUC) hardware. The system orchestrates IP camera ingest, local timeline execution, overlay rendering, and multi-endpoint streaming. The solution favors modular services within a single container to simplify deployment, while keeping responsibilities explicit for future multi-service evolution.
 
 ```
 +-----------------------+         +-----------------------+

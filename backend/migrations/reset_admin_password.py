@@ -65,3 +65,4 @@ if __name__ == "__main__":
     success = reset_admin_password()
     sys.exit(0 if success else 1)
 
+

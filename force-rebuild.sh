@@ -117,3 +117,8 @@ log "  Rebuilt all services with latest code"
 log "  Database migration completed"
 log ""
 log "Done."
+
+
+
+
+

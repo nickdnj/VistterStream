@@ -43,3 +43,4 @@ echo ""
 echo "5. Checking backend container network:"
 docker inspect vistterstream-backend | grep -A 10 "NetworkSettings" | head -15
 
+

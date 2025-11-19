@@ -1,12 +1,51 @@
 # Product Requirements Document (PRD): Vistter Platform — VistterStream Appliance Focus
 
+**Document Status**: This PRD represents the original product vision developed during the specification phase (2025). See section 1.1 for implementation status.
+
 ## 1. Product Overview
-Vistter is an end-to-end platform for producing live and scheduled video streams. It consists of two primary products:
+
+### 1.1 Vision vs Implementation Status
+
+**ORIGINAL VISION (This PRD):**
+Vistter was conceived as an end-to-end platform with two integrated products:
+
+* **VistterStream** — On-premises streaming appliance
+* **VistterStudio** — Cloud-hosted timeline editor and control surface
+
+**ACTUAL IMPLEMENTATION (November 2025):**
+VistterStream was successfully built as a **complete, standalone streaming appliance** with all core functionality operating locally:
+
+✅ **Fully Implemented:**
+- Local web UI for complete configuration and control
+- Camera management (RTSP/RTMP/ONVIF)
+- PTZ preset system with ONVIF control
+- Multi-camera timeline system with visual editor
+- Asset management and overlay system
+- Automated scheduling
+- Multiple streaming destinations (YouTube, Facebook, Twitch, RTMP)
+- YouTube Live API integration (OAuth, broadcast management)
+- Stream health monitoring and auto-recovery
+- Docker deployment (ARM64 + x86_64)
+
+⏳ **Not Implemented (Future Vision):**
+- VistterStudio cloud platform
+- Cloud-based timeline authoring
+- Fleet management across multiple appliances
+- Remote appliance control from cloud
+- Outbound command channel to VistterStudio
+
+**Key Insight:** VistterStream operates entirely locally without cloud dependencies. VistterStudio integration remains a future enhancement for fleet management and advanced remote control, but is **not required** for full functionality.
+
+### 1.2 Product Vision
+
+This document describes the original vision for the Vistter platform, which consists of two primary products:
 
 * **VistterStream** — an on-premises appliance that ingests camera feeds, executes show timelines, renders overlays, and distributes the encoded program feed to streaming destinations.
 * **VistterStudio** — a cloud-hosted (firewalled) timeline editor and control surface that author VistterStream appliances subscribe to for orchestration instructions, assets, and monitoring directives.
 
 This PRD focuses on the first shippable version of **VistterStream** while capturing the integration touchpoints that must exist for future VistterStudio control. The appliance must operate reliably on commodity edge hardware (e.g., Raspberry Pi, Intel NUC), expose a local-first configuration experience, and maintain a secure outbound channel to VistterStudio in order to receive instructions despite inbound firewall restrictions.
+
+**Note:** While VistterStudio integration was part of the original vision, VistterStream was implemented as a fully functional standalone system. All requirements in sections 6.1 (Platform Integration) related to VistterStudio represent future work.
 
 ## 2. Product Goals
 * **Establish the Vistter platform foundations** by delivering an appliance that can be controlled by VistterStudio through a defined outbound integration channel.

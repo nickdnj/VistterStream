@@ -1,281 +1,313 @@
 # VistterStream
 
-VistterStream isn’t just a local streaming appliance – it’s a full-on movement for camera creators who want to bring the energy of their waterfronts, main streets, and weather stations straight to the world. Built for the Tempest weather station community, destination marketers, and any creator who dreams in live video, VistterStream discovers, manages, and processes local cameras, including PTZ (pan-tilt-zoom) presets, and streams the final output to destinations such as YouTube Live, Facebook Live, or Twitch.
+**A standalone, AI-built live streaming appliance for multi-camera productions.**
 
-## About Us – The Conversational Build
+VistterStream is a complete live streaming system designed for creators who want professional multi-camera broadcasts without the complexity. Built for weather station operators, destination marketers, community organizations, and anyone who wants to showcase their location 24/7. It manages IP cameras, executes automated timelines with PTZ presets, applies overlays, and streams to YouTube Live, Facebook Live, Twitch, or custom RTMP destinations.
 
-VistterStream is what happens when a lifetime of systems thinking meets an all-AI creative room. I’m Nick DeMarco — 61, retired from four decades of architecting bespoke enterprise software in the EDA world — and this project is the culmination of twenty years of “what if” ideas, Raspberry Pi experiments, and late-night tinkering finally unleashed.
+## About This Project – AI-Powered Development
 
-We didn’t wing it. We vibe-coded *formally*. The very first sprint with ChatGPT produced a full stack of living documents: a PRD, software architecture blueprint, UX design outline, and supporting specs. Every requirement, every user story, every timeline started as a conversation, got shaped into documentation, and then came right back into the dialogue for iteration. We refined, diverted, updated, and versioned those specs as the build evolved — just like a real software shop, but orchestrated entirely through conversation.
+This project represents a unique collaboration between a veteran software architect and multiple AI systems working in concert:
 
-Once the documents felt right, we opened the repo and started pairing with tools like Cursor, Claude, Codex CLI, and Gemini. ChatGPT remained the anchor for spec maintenance and decision-making, while Cursor and Codex CLI handled code execution, Claude brought narrative clarity, and Gemini sparked lateral options when we hit forks in the road. Every AI came at the problem from a different angle; my job was to conduct the orchestra, keep the specs honest, and make sure the build stayed grounded in real-world broadcasting needs.
+**Nick DeMarco** — 61, retired after four decades of enterprise software architecture in the EDA world — paired with ChatGPT, Cursor, Claude, Codex CLI, and Gemini to build a production-ready streaming platform entirely through conversation.
 
-So yes, this project was built in conversation — but it was conversation with structure, documentation, review, and relentless iteration. We built this motherfucker together, and it shows up like a serious piece of software ready for every storm chaser, harbor host, marina master, and city storyteller who wants to go live without friction.
-This project is the definition of collaborative storytelling. There was no spec doc, no lonely engineer grinding out code in a vacuum. We talked it into existence – in Cursor, in Claude, in ChatGPT, in Codex CLI, and in Gemini. Every angle, every idea, every breakthrough happened in conversation. We were there together, riffing at all hours, swapping “what if” scenarios like musicians trading solos, and watching the product snap into focus one epic dialogue at a time.
+### The Collaborative Build Process
 
-Not a single line of traditional boilerplate was typed out in isolation. Not one sheet of a formal spec ever existed. The whole build is a living transcript of collaborators and AI copilots working in real time. We used Cursor for the engineering cockpit, Claude for big-picture rewrites, ChatGPT for surgical code shifts, Codex CLI for local wizardry on the Raspi, Gemini for lateral thinking, and every one of them pushed from a different angle. That multi-model braintrust turned a blank repo into a working, ship-ready streaming platform.
+We didn't just write code. We built a complete software project the way it should be done:
 
-We built this motherfucker together. And now it’s ready for every storm chaser, harbor host, marina master, and city storyteller to light up their own channels with zero friction.
+1. **Specification Phase** - ChatGPT helped create comprehensive living documents: PRD, Software Architecture, UX Design
+2. **Iterative Development** - Cursor and Codex CLI handled implementation, Claude provided narrative clarity, Gemini offered lateral thinking
+3. **Continuous Refinement** - Specs evolved with the build, just like a real software shop
+4. **Multi-Model Approach** - Each AI brought unique strengths: ChatGPT for architecture decisions, Cursor for code execution, Claude for documentation, Gemini for creative solutions
 
-## 📖 Documentation for End Users
+The result: A fully functional, professionally architected streaming platform that proves AI-assisted development can produce serious, production-ready software.
 
-**New to VistterStream?** Start here:
+## 📖 Quick Start
 
-- **🚀 [Quick Start Guide](docs/QUICK_START_GUIDE.md)** - Get streaming in 5 minutes!
-- **📚 [Complete User Guide](docs/USER_GUIDE.md)** - Comprehensive reference for all features
-- **📋 [Documentation Index](docs/README.md)** - All available documentation organized by topic
+**New to VistterStream?** Get streaming in 5 minutes:
 
-These guides include screenshots, step-by-step instructions, and troubleshooting tips for using VistterStream.
+- **🚀 [Quick Start Guide](docs/QUICK_START_GUIDE.md)** - Install and configure your first stream
+- **📚 [Complete User Guide](docs/USER_GUIDE.md)** - Comprehensive feature reference with screenshots
+- **📋 [Documentation Index](docs/README.md)** - All documentation organized by topic
 
-## Overview
+## What Is VistterStream?
 
-VistterStream is designed to run on hardware like the Raspberry Pi in a Docker container, providing a web interface for camera management and live streaming capabilities. It ingests RTSP/RTMP feeds, applies overlays and instructions received from VistterStudio, and streams the final output to various platforms.
+VistterStream is a **standalone streaming appliance** that runs on Raspberry Pi, Intel NUC, or Mac hardware in a Docker container. It provides a beautiful web interface for managing cameras, creating automated shows, and streaming to multiple platforms simultaneously.
 
-### Why Tempest Weather Stations & Creators Love It
+### Perfect For
 
-- **Weather storytellers** can pull in live atmospheric data, overlay it on cinematic shoreline feeds, and push to audiences who crave the real-time pulse of the planet.
-- **Destination marketers** can spin up 24/7 scenic loops with PTZ presets that fly from wide shot to detail without anyone on-site.
-- **Community creators** finally get the “studio-in-a-box” that makes neighborhood pride look like a network broadcast.
+- **Weather Station Operators** - Showcase your Tempest station with live scenic views and weather overlays
+- **Destination Marketers** - 24/7 scenic streams of harbors, main streets, and attractions
+- **Community Organizations** - Broadcast local events and scenic views to build community pride
+- **Small Businesses** - Restaurants, shops, marinas showing live ambiance
+- **Property Managers** - Real estate and venue showcase streams
 
-## Key Features
+## Core Features
 
-- **Camera Management**: Support for RTSP/RTMP cameras including Reolink (stationary) and Amcrest/Samba (PTZ)
-- **PTZ Presets**: Define and execute preset positions for PTZ cameras
-- **Live Scheduling**: Background scheduler starts/stops timelines on day/time windows
-- **Health Monitoring**: Real-time camera connection status and system metrics
-- **Web Interface**: Local-only web UI for configuration and monitoring
-- **FFmpeg Processing**: Professional video processing with overlays and transcoding
-- **Multi-Output Streaming**: Support for multiple streaming destinations simultaneously
+### 🎥 Camera Management
+- **RTSP/RTMP Support** - Works with Reolink, Sunba, Amcrest, and most IP cameras
+- **PTZ Camera Control** - Full pan/tilt/zoom control via ONVIF
+- **Preset System** - Save and recall camera positions for automated shows
+- **Health Monitoring** - Real-time connection status and automatic recovery
+- **Live Snapshots** - Visual confirmation of camera views
 
-## Target Users
+### 🎬 Timeline Production
+- **Multi-Camera Timelines** - Switch between cameras on a schedule
+- **PTZ Automation** - Create professional multi-angle shows from a single PTZ camera
+- **Visual Timeline Editor** - Drag, drop, and resize cues with precision
+- **Looping Playback** - Run 24/7 unattended with automatic looping
+- **Multi-Destination** - Stream timelines to multiple platforms simultaneously
 
-- **Tempest Weather Station champions**: Pair your hyperlocal weather intel with gorgeous live visuals.
-- **Small businesses & venues**: Shops, restaurants, marinas, and tourist attractions.
-- **Community organizations**: Visitor bureaus or chambers of commerce looking to showcase their town.
-- **Property managers & real estate**: Broadcast properties or scenic angles around the clock.
-- **Event operators**: Local operators who need reliable camera-to-stream appliances.
+### 🎨 Overlay System
+- **Static Image Overlays** - Upload PNG/JPEG logos and graphics
+- **Dynamic API Overlays** - Auto-refreshing content from APIs (weather, tides, scores)
+- **Positioning Controls** - Precise placement with horizontal/vertical coordinates
+- **Scaling System** - Proportional or custom dimensions for overlays
+- **Opacity Control** - Transparent overlays blend perfectly
+- **Multiple Overlays** - Stack multiple overlays in a single stream
+
+### 📅 Automated Scheduling
+- **Day/Time Windows** - Schedule timelines for specific days and times
+- **Background Execution** - Scheduler runs automatically, checking every 30 seconds
+- **Multiple Schedules** - Different content for different times of day
+- **24/7 Operation** - Perfect for unattended streaming
+
+### 📡 Streaming Destinations
+- **YouTube Live** - Full broadcast lifecycle management with OAuth
+- **Facebook Live** - Stream to Facebook pages and profiles
+- **Twitch** - Gaming and creative content streaming
+- **Custom RTMP** - Any RTMP server or CDN
+- **Reusable Configs** - Configure once, use across all streams and timelines
+- **Multi-Streaming** - Broadcast to 3+ platforms simultaneously
+
+### 🔧 System Features
+- **Hardware Acceleration** - Automatic detection and use of GPU encoders
+- **Quality Profiles** - 1080p60, 720p, 480p with custom bitrates
+- **Health Watchdog** - Automatic stream recovery from failures
+- **YouTube API Integration** - Broadcast status monitoring and auto-reset
+- **Beautiful UI** - Dark theme, responsive design, professional interface
+- **Docker Deployment** - Single container, multi-architecture (ARM64/x86_64)
+- **Local-First** - All configuration stored locally, no cloud dependencies
 
 ## Architecture
 
-- **Single-container modular architecture** with Docker
-- **Web UI**: React frontend with Tailwind CSS
-- **API Backend**: FastAPI (Python) for REST APIs
-- **Controller**: Manages camera configs, PTZ, and state
-- **Stream Engine**: FFmpeg wrapper for video processing
-- **Database**: SQLite for persistent local storage
+VistterStream uses a modern, modular architecture:
 
-## Technical Stack
+```
+┌─────────────────────────────────────────────────┐
+│           React Frontend (Tailwind CSS)         │
+│  Cameras • Timelines • Destinations • Settings  │
+└────────────────┬────────────────────────────────┘
+                 │ REST API + WebSocket
+┌────────────────┴────────────────────────────────┐
+│          FastAPI Backend (Python)               │
+│  Camera Service • Timeline Executor • FFmpeg    │
+│  PTZ Control • Watchdog • Asset Management      │
+└────────────────┬────────────────────────────────┘
+                 │
+┌────────────────┴────────────────────────────────┐
+│     SQLite Database • File Storage • Logs       │
+└─────────────────────────────────────────────────┘
+```
 
-- **Frontend**: React + Tailwind CSS
-- **Backend**: FastAPI (Python)
-- **Database**: SQLite
-- **Streaming**: FFmpeg (multi-arch build)
-- **Containerization**: Docker with multi-arch support (x86_64 & ARM64)
-- **Authentication**: Local username/password with bcrypt
+### Technical Stack
+
+- **Frontend**: React 18 + TypeScript + Tailwind CSS
+- **Backend**: FastAPI (Python) + SQLAlchemy
+- **Database**: SQLite with comprehensive schema
+- **Streaming**: FFmpeg with hardware acceleration
+- **PTZ Control**: ONVIF (onvif-zeep)
+- **Container**: Docker with multi-arch builds
+- **Authentication**: JWT tokens with bcrypt
+
+## What Makes VistterStream Special
+
+### Single PTZ Camera = Multi-Camera Show
+
+One of VistterStream's breakthrough features: Create professional multi-angle content from a **single PTZ camera**:
+
+1. Save multiple presets: "Wide Shot", "Close Up", "Medium"
+2. Create a timeline with cues referencing different presets
+3. Camera automatically repositions between angles
+4. Result: Professional multi-camera production without buying multiple cameras!
+
+### Destination-First Architecture
+
+Configure YouTube, Facebook, Twitch once. Reuse everywhere. Stream keys, OAuth credentials, and platform settings are centralized and referenced by all streams and timelines.
+
+### Smart Broadcast Management
+
+YouTube Live integration handles the broadcast lifecycle automatically:
+- OAuth authentication with Google
+- Automatic broadcast status checks
+- Auto-reset when broadcasts finish
+- Frame probing for stream health
+- Daily broadcast resets (optional)
+
+### Unattended Operation
+
+Built for 24/7 streaming:
+- Health watchdog monitors all streams
+- Automatic recovery from failures
+- Scheduled content rotation
+- Camera health monitoring
+- Emergency "Kill All" button
 
 ## Project Structure
 
 ```
 VistterStream/
-├── docs/                        # Documentation
-│   ├── status_notes/            # Historical reports and setup guides (moved from repo root)
-│   ├── screenshots/             # UI reference images
-│   ├── PRD.md                   # Product Requirements Document
-│   ├── SAD.md                   # Software Architecture Document
-│   ├── UXD.md                   # User Experience Design Document
-│   └── Local Test Cameras.md    # Test camera configurations
-├── scripts/
-│   ├── standalone/              # Ad-hoc debugging and testing scripts
-│   └── README.md                # Script catalog
-├── README.md                    # This file
-└── …                            # Backend, frontend, deploy tooling, etc.
+├── docs/
+│   ├── specifications/           # PRD, SAD, UXD, technical specs
+│   ├── working_documents/        # Debug notes, fixes, deployment docs
+│   ├── status_notes/             # Development history
+│   ├── screenshots/              # UI reference images
+│   ├── QUICK_START_GUIDE.md      # Get started in 5 minutes
+│   ├── USER_GUIDE.md             # Complete feature reference
+│   └── README.md                 # Documentation index
+├── backend/
+│   ├── routers/                  # API endpoints
+│   ├── services/                 # Business logic
+│   ├── models/                   # Database models
+│   └── migrations/               # Schema migrations
+├── frontend/
+│   └── src/
+│       ├── components/           # React components
+│       └── pages/                # Main application pages
+├── docker/                       # Docker Compose configurations
+├── scripts/                      # Deployment and utility scripts
+├── tests/                        # Test suite
+└── README.md                     # This file
 ```
+
+## Installation
+
+### Quick Install (Docker)
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/VistterStream.git
+cd VistterStream
+
+# Copy and configure environment
+cp env.sample .env
+# Edit .env with your settings
+
+# Start the system
+docker-compose up -d
+
+# Access the UI
+open http://localhost:3000
+```
+
+### Raspberry Pi Installation
+
+See **[Raspberry Pi Setup Guide](docs/RaspberryPi-Docker.md)** for detailed instructions.
+
+### Manual Installation
+
+See **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** for advanced deployment options.
+
+## Documentation
+
+### 📖 User Documentation
+- **[Quick Start Guide](docs/QUICK_START_GUIDE.md)** ⭐ START HERE!
+- **[Complete User Guide](docs/USER_GUIDE.md)** - All features explained
+- **[Documentation Index](docs/README.md)** - Find any documentation
+
+### 🔧 Setup & Deployment
+- **[Raspberry Pi Setup](docs/RaspberryPi-Docker.md)** - Deploy on Raspberry Pi
+- **[Docker Testing](docs/Docker-Testing-Complete.md)** - Docker deployment guide
+- **[YouTube OAuth Setup](docs/working_documents/oauth/YOUTUBE_OAUTH_SETUP.md)** - Configure YouTube API
+
+### 📋 Technical Specifications
+- **[Product Requirements (PRD)](docs/specifications/PRD.md)** - Original product vision
+- **[Software Architecture (SAD)](docs/specifications/SAD.md)** - System design
+- **[UX Design (UXD)](docs/specifications/UXD.md)** - User experience specification
+- **[Streaming Pipeline Spec](docs/specifications/StreamingPipeline-TechnicalSpec.md)** - Detailed implementation
+- **[Scheduler Design](docs/specifications/Scheduler.md)** - Scheduling system
+
+### 🔮 Future Vision
+- **[VistterStudio Integration](docs/specifications/VistterStudioIntegration.md)** - Planned cloud control platform
+- **[Preview System Spec](docs/specifications/PreviewSystem-Specification.md)** - Advanced preview features
+
+## Current Status
+
+**✅ Production-Ready** (November 2025)
+
+### What's Working
+- ✅ Complete camera management (RTSP/RTMP/ONVIF)
+- ✅ PTZ preset system with ONVIF control
+- ✅ Multi-camera timeline system
+- ✅ Asset management and overlay system
+- ✅ Multiple streaming destinations
+- ✅ Automated scheduling
+- ✅ YouTube Live integration with OAuth
+- ✅ Stream health monitoring and auto-recovery
+- ✅ Beautiful, responsive web UI
+- ✅ Docker deployment (ARM64 + x86_64)
+
+### What's Next
+- ⏳ VistterStudio cloud control platform (future)
+- ⏳ Advanced analytics and metrics
+- ⏳ Mobile app (currently responsive web)
+- ⏳ AI-powered scene detection
+- ⏳ Multi-language support
+
+## Vision vs Reality
+
+### Original Vision (from PRD)
+VistterStream was originally conceived as part of a two-product platform:
+- **VistterStream** - On-premises appliance (this project)
+- **VistterStudio** - Cloud-hosted timeline editor and control surface
+
+### What Was Actually Built
+**VistterStream is a complete, standalone streaming appliance.** All the core functionality works perfectly without any cloud dependencies:
+
+- ✅ Local web UI for all configuration
+- ✅ Local timeline editor (no cloud required)
+- ✅ Local asset management
+- ✅ Direct streaming to platforms
+- ✅ All automation runs locally
+
+**VistterStudio** remains a future enhancement for fleet management and advanced remote control, but is **not required** for full functionality.
 
 ## Test Cameras
 
 The project includes configuration for local test cameras:
 
-### Reolink (Fixed position camera)
-- **Main Stream**: `rtsp://Wharfside:Wharfside2025!!@192.168.86.250:554/Preview_01_main`
+### Reolink (Fixed position)
+- **Stream**: `rtsp://Wharfside:Wharfside2025!!@192.168.86.250:554/Preview_01_main`
 - **Snapshot**: `http://Wharfside:Wharfside2025!!@192.168.86.250:80/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0`
 
-### Sunba (PTZ camera with ONVIF support)
-- **Main Stream**: `rtsp://192.168.86.23:554/user=admin_password=sOKDKxsV_channel=0_stream=0&onvif=0.sdp?real_stream`
-- **Snapshot**: `http://192.168.86.23/webcapture.jpg?command=snap&channel=0&user=admin&password=sOKDKxsV`
+### Sunba (PTZ with ONVIF)
+- **Stream**: `rtsp://192.168.86.23:554/user=admin_password=sOKDKxsV_channel=0_stream=0&onvif=0.sdp?real_stream`
+- **ONVIF Port**: 8899 (non-standard)
 
-## Development Status
+## Contributing
 
-**Milestone 1 COMPLETED** ✅ - Foundation & Local Camera Integration  
-**Milestone 2 MOSTLY COMPLETE** ✅ - Streaming Engine & Destination Architecture  
-**Milestone 3 IN PROGRESS** 🚧 - Multi-Track Timeline System
+This project was built through AI-assisted development. Contributions welcome! Please:
 
-### ✅ **What's Working:**
-
-#### **Core Infrastructure**
-- **🚀 FastAPI Backend**: Complete REST API with authentication, camera management, and database models
-- **🎨 React Frontend**: Beautiful dark-themed UI with Tailwind CSS, responsive design
-- **💾 Database**: SQLite with comprehensive schema for cameras, destinations, streams, timelines
-- **🔐 Authentication**: Secure login system with JWT tokens
-
-#### **Camera Management**
-- **📷 Camera Integration**: Full support for Reolink and Sunba cameras with RTSP/ONVIF
-- **⚡ Live Monitoring**: Real-time camera status, snapshots, and health checks
-- **📹 Live Stream Viewer**: Auto-refreshing camera preview with RTSP URL display
-- **🔄 Background Health Monitor**: Keeps cameras persistently online
-- **🎯 PTZ Preset System** ⭐ **NEW!**: Save, recall, and automate camera positions
-  - ONVIF control for Sunba PTZ cameras (port 8899)
-  - Capture current position as named preset
-  - Test presets with "Go To" button
-  - Use presets in streams and timelines
-  - Pan/tilt/zoom position tracking
-
-#### **Streaming Destinations** ⭐ **NEW!**
-- **📡 Destination-First Architecture**: Configure YouTube, Facebook, Twitch, Custom RTMP once, use everywhere
-- **🎯 Reusable Configs**: Stream keys stored centrally, referenced by streams and timelines
-- **📊 Usage Tracking**: Automatic `last_used` timestamp tracking per destination
-- **🎨 Platform Presets**: Built-in RTMP URL templates for major platforms
-
-#### **Stream Management**
-- **▶️ Single-Camera Streams**: Direct camera-to-destination streaming with full control
-- **🎯 PTZ Preset Streams** ⭐ **NEW!**: Streams automatically move PTZ cameras to preset positions
-  - Select camera + preset in stream configuration
-  - Camera moves to preset before stream starts
-  - 3-second settling time for mechanical movement
-  - Edit streams to change presets on-the-fly
-- **🎛️ Encoding Profiles**: Resolution, bitrate, framerate configuration (1080p/720p/480p)
-- **🔥 Hardware Acceleration**: Automatic detection and usage of hardware encoders
-- **⏯️ Start/Stop Control**: Reliable stream control with orphaned process cleanup
-- **🚨 Emergency Stop**: "Kill All Streams" button to terminate rogue processes
-
-#### **Composite Streams & Timelines** ⭐ **NEW!**
-- **🎬 Multi-Camera Composite Streams**: Switch between cameras on a schedule (e.g., 1 min each, looping)
-- **📅 Timeline Editor**: Visual interface to create timelines with camera cues
-- **🎯 PTZ Preset Timelines** ⭐ **BREAKTHROUGH!**: Automated multi-angle shows from single PTZ camera!
-  - Select camera + preset for each timeline cue
-  - Camera automatically repositions between presets during playback
-  - Create professional multi-angle shows: "Wide Shot → Close Up → Medium Shot → Loop"
-  - Visual preset selector in timeline editor
-  - Same camera, multiple presets = infinite creative possibilities!
-- **🎯 Multi-Track System**: Video track with sequential cue execution
-- **▶️ Timeline Execution**: Start/stop timeline playback with live camera switching
-- **🔄 Looping Support**: Infinite loop mode for continuous operation
-- **📡 Multi-Destination**: Stream timelines to multiple platforms simultaneously
-- **🔄 Auto-Restart**: Smart start button automatically restarts running timelines
-
-#### **Asset Management & Overlay System** ⭐ **NEW!** (Oct 3, 2025)
-- **🎨 Comprehensive Asset Management**: Full CRUD for overlay assets with beautiful UI
-  - **API Image Assets**: Dynamic content from API endpoints (e.g., weather/tides data)
-  - **Static Image Assets**: Upload PNG, JPEG, GIF, WebP with drag-and-drop or file picker
-  - **Video Assets**: Upload MP4, MOV, WebM for video overlays
-  - **Graphic Assets**: Custom graphic overlays with positioning controls
-- **📤 File Upload System**: Drag-and-drop or click to upload with validation
-  - File type validation (images, videos)
-  - Size limit enforcement (50MB max)
-  - Preview generation for all asset types
-  - Unique filename generation (UUID-based)
-- **📐 Asset Scaling Controls**: Precise dimension control for overlays
-  - Width/Height input fields (pixels)
-  - Proportional scaling (set one dimension, other auto-adjusts)
-  - "Auto" for original size preservation
-  - Real-time size display in asset cards
-- **🎯 Positioning System**: Coordinate-based overlay placement
-  - Horizontal (0=Left, 1=Right) and Vertical (0=Top, 1=Bottom) controls
-  - Position preview labels (e.g., "Bottom Left", "Top Right", "Center")
-  - Opacity control (0-100%)
-  - Layer management for multiple overlays
-- **🔄 API Asset Refresh**: Automatic content updates for dynamic overlays
-  - Configurable refresh intervals (1-3600 seconds)
-  - Live weather, tides, scores, news integration
-  - Background refresh without stream interruption
-- **📺 Program Monitor Integration**: Real-time preview of composed output
-  - Actual camera snapshots (not simulations)
-  - Overlays composited in preview
-  - Position and size verification before going live
-  - Multiple overlay support in preview
-- **🎬 FFmpeg Integration**: Professional overlay compositing in live streams
-  - Hardware-accelerated overlay rendering
-  - Dynamic overlay updates during stream
-  - Multiple simultaneous overlays supported
-  - Scaling, positioning, opacity all applied in real-time
-
-### **Technical Architecture:**
-- **Backend**: FastAPI with SQLAlchemy ORM, Pydantic schemas, JWT authentication
-- **Frontend**: React 18 with TypeScript, Tailwind CSS, React Router, Axios
-- **Database**: SQLite with models for cameras, destinations, streams, timelines, tracks, cues, **presets**
-- **PTZ Control**: ONVIF integration for pan/tilt/zoom camera automation (onvif-zeep library)
-- **Streaming**: FFmpeg process manager with hardware acceleration, auto-restart, metrics
-- **Real-time**: Live status monitoring, health checks, auto-refreshing UI
-- **API Design**: RESTful endpoints with enriched responses, proper error handling
-- **Security**: Bcrypt password hashing, JWT tokens, encrypted credentials
-- **UI/UX**: Professional dark theme, responsive design, beautiful animations, conditional preset UI
-
-## 🎯 Current Focus: Production-Ready Streaming!
-
-### **Just Completed:** ✅ **(October 3, 2025)**
-- **🎨 Complete Asset Management System**: CRUD operations, file uploads, previews, multiple asset types
-- **📐 Asset Scaling System**: Control overlay dimensions with width/height controls, proportional scaling
-- **🎥 Multiple Overlay Support**: Static images + API overlays working together in streams
-- **📺 Program Monitor**: Real-time preview with actual camera snapshots and overlay composition
-- **🎬 Multi-Track Timeline Editor**: Drag, drop, resize cues with Premiere Pro-level UX
-- **🔄 Stream Status Sync**: Frontend polling keeps Start/Stop button accurate
-- **🐛 Path Resolution Fixes**: URL paths correctly converted to filesystem paths for uploads
-- **🔐 Robust Stop Functionality**: Handles database errors gracefully during cancellation
-
-### **Ready for Production:**
-- **🚀 YouTube Live Streaming**: ✅ Working with camera switching and overlays
-- **📡 RTMP Relay Architecture**: ✅ Seamless switching infrastructure deployed
-- **🎯 PTZ Preset System**: ✅ Automated multi-angle shows from single camera
-- **💾 Complete Database**: ✅ Assets, timelines, tracks, cues, executions, presets
-- **🎨 Beautiful UI**: ✅ Dark theme, responsive, professional-grade
-
-### **Next Up:**
-- **🎯 End-to-End Testing**: Full timeline → YouTube test with seamless switching
-- **☁️ VistterStudio Integration**: Import/export timelines, cloud control
-- **📊 Advanced Metrics**: Real-time bitrate graphs, FPS monitoring, dropped frames
-- **🔄 Multi-Destination Testing**: Simultaneous streaming to 3+ platforms (architecture ready)
-
-## Documentation
-
-### **📖 User Documentation**
-- **[Quick Start Guide](docs/QUICK_START_GUIDE.md)** ⭐ **START HERE!** - Get streaming in 5 minutes
-- **[Complete User Guide](docs/USER_GUIDE.md)** - Comprehensive reference with screenshots and instructions
-- **[Documentation Index](docs/README.md)** - All documentation organized by topic and role
-
-### **🔧 Installation & Setup**
-- **[Manual Installation](MANUAL_INSTALL.md)** - Manual setup instructions
-- **[Raspberry Pi Setup](RASPBERRY_PI_SETUP.md)** - Deploy on Raspberry Pi
-- **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** - Docker deployment
-- **[Raspberry Pi Debug Guide](RASPBERRY_PI_DEBUG_GUIDE.md)** - Troubleshooting for RPi
-
-### **📋 Technical Specifications**
-- **[Product Requirements Document (PRD)](docs/PRD.md)** - Product vision, use cases, requirements
-- **[Software Architecture Document (SAD)](docs/SAD.md)** - System architecture and component design
-- **[User Experience Design (UXD)](docs/UXD.md)** - UI/UX specifications and workflows
-- **[Streaming Pipeline Technical Spec](docs/StreamingPipeline-TechnicalSpec.md)** ⭐ **PRIMARY SPEC** - Detailed streaming & timeline implementation
-- **[VistterStudio Integration](docs/VistterStudioIntegration.md)** - Future cloud control integration
-
-### **Preview System** 🆕 ⭐ **(October 2025)**
-- **[Preview System Specification](docs/PreviewSystem-Specification.md)** - Complete PRD+SAD for local preview & go-live workflow (18,000 words)
-- **[Preview Quick Start Guide](docs/PreviewSystem-QuickStart.md)** - 30-minute developer setup guide
-- **[Preview Implementation TODO](docs/PreviewSystem-TODO.md)** - Detailed task breakdown with 57 actionable items
-- **[Preview Executive Summary](docs/PreviewSystem-Summary.md)** - High-level overview for stakeholders
-
-Note: Local preview window has been removed in favor of using YouTube Live Studio directly from the Timeline UI.
-
-### **Scheduler** (October 2025)
-- See `docs/Scheduler.md` for design and API
-- UI: left nav → Scheduler; create schedules with days/time windows and timelines
-- Background loop runs every 30s to enforce active schedules
-
-### **Development Resources**
-- **[TODO List](TODO.md)** - Current development roadmap and task tracking
-- **[Local Test Cameras](docs/Local%20Test%20Cameras.md)** - Test camera configurations
-- **[Changelog](CHANGELOG.md)** - Version history and updates
+1. Check existing issues and documentation
+2. Follow the established code style
+3. Include tests for new features
+4. Update documentation as needed
 
 ## License
 
 [License information to be added]
 
-## Contributing
+## Acknowledgments
 
-[Contributing guidelines to be added]
+Built with the collaborative power of:
+- **ChatGPT** - Architecture and specifications
+- **Cursor** - Code implementation
+- **Claude** - Documentation and narrative
+- **Codex CLI** - Raspberry Pi deployment
+- **Gemini** - Creative problem solving
+- **Nick DeMarco** - Vision, orchestration, and 40 years of software architecture experience
+
+This project proves that AI-assisted development, when done thoughtfully with proper specifications and iterative refinement, can produce professional, production-ready software.
+
+---
+
+**Ready to start streaming?** → **[Quick Start Guide](docs/QUICK_START_GUIDE.md)** 🚀
