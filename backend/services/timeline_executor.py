@@ -109,6 +109,13 @@ class TimelineExecutor:
             logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} stopped")
         except Exception as e:
             logger.warning(f"Failed to notify watchdog manager: {e}")
+            
+        # Notify Cloud Link Service
+        try:
+            from services.cloud_link_service import get_cloud_link_service
+            await get_cloud_link_service().notify_stream_event("stopped", timeline_id)
+        except Exception as e:
+            logger.warning(f"Failed to notify cloud link: {e}")
         
         # Stop FFmpeg if running
         if timeline_id in self.ffmpeg_managers:
@@ -554,6 +561,17 @@ class TimelineExecutor:
                                     db_session=db
                                 )
                                 logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} → destinations {destination_ids}")
+                                
+                            # Notify Cloud Link Service
+                            try:
+                                from services.cloud_link_service import get_cloud_link_service
+                                await get_cloud_link_service().notify_stream_event(
+                                    "started", 
+                                    timeline_id,
+                                    {"destinations": destination_ids}
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to notify cloud link: {e}")
                         finally:
                             db.close()
                     except Exception as e:

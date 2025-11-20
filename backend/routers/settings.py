@@ -9,6 +9,7 @@ from typing import Optional
 from datetime import datetime
 
 from models.database import get_db, Settings, Asset
+from services.cloud_link_service import get_cloud_link_service
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -109,4 +110,21 @@ def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_d
             print(f"✅ Synced location to {len(assets)} asset(s)")
     
     return settings
+
+
+@router.post("/cloud/pair")
+async def request_pairing():
+    """Request a pairing code from the cloud"""
+    service = get_cloud_link_service()
+    success = await service.request_pairing()
+    if not success:
+        raise HTTPException(status_code=503, detail="Failed to request pairing. Check internet connection.")
+    return {"status": "pairing_requested"}
+
+
+@router.get("/cloud/status")
+def get_cloud_status():
+    """Get cloud connection status"""
+    service = get_cloud_link_service()
+    return service.get_status()
 

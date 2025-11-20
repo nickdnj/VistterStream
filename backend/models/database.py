@@ -43,6 +43,11 @@ class Settings(Base):
     city = Column(String)  # City name
     latitude = Column(Float)  # Geographic latitude
     longitude = Column(Float)  # Geographic longitude
+
+    # Cloud Companion App (VistterStudio)
+    cloud_pairing_token = Column(String, nullable=True)  # JWT token for cloud auth
+    cloud_device_id = Column(String, nullable=True)  # UUID of this device in cloud
+    cloud_api_url = Column(String, default="wss://api.vistterstudio.com/ws/device")  # WebSocket URL
     
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -26,6 +26,9 @@ except Exception:  # noqa: E722
 # Import RTMP relay service (THE SECRET SAUCE!)
 from services.rtmp_relay_service import get_rtmp_relay_service
 
+# Import Cloud Link Service
+from services.cloud_link_service import get_cloud_link_service
+
 # Import watchdog manager
 from services.watchdog_manager import get_watchdog_manager
 from models.database import get_db
@@ -150,6 +153,16 @@ async def startup_event():
         print("✅ Watchdog manager started")
     except Exception as e:
         print(f"⚠️ Failed to start watchdog manager: {e}")
+    except Exception as e:
+        print(f"⚠️ Failed to start watchdog manager: {e}")
+        
+    # Start Cloud Link Service
+    try:
+        print("☁️ Starting Cloud Link Service...")
+        await get_cloud_link_service().start()
+    except Exception as e:
+        print(f"⚠️ Failed to start Cloud Link Service: {e}")
+        
     print("✅ All services started")
 
 @app.on_event("shutdown")
@@ -175,6 +188,16 @@ async def shutdown_event():
         print("✅ Watchdog manager stopped")
     except Exception:
         pass
+    except Exception:
+        pass
+        
+    # Stop Cloud Link Service
+    try:
+        print("☁️ Stopping Cloud Link Service...")
+        await get_cloud_link_service().stop()
+    except Exception:
+        pass
+        
     print("✅ All services stopped")
 
 if __name__ == "__main__":
