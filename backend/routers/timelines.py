@@ -192,7 +192,15 @@ def update_timeline(timeline_id: int, timeline_data: TimelineUpdate, db: Session
         
         # Update tracks and cues if provided
         if timeline_data.tracks is not None:
-            # Delete existing tracks and cues (cascade delete)
+            # Delete cues first (explicit deletion to ensure no orphaned cues)
+            # SQLAlchemy bulk delete doesn't trigger cascade, so we must delete cues explicitly
+            db.query(TimelineCue).filter(
+                TimelineCue.track_id.in_(
+                    db.query(TimelineTrack.id).filter(TimelineTrack.timeline_id == timeline_id)
+                )
+            ).delete(synchronize_session=False)
+            
+            # Then delete tracks
             db.query(TimelineTrack).filter(TimelineTrack.timeline_id == timeline_id).delete()
             
             # Create new tracks and cues
@@ -298,4 +306,48 @@ def duplicate_timeline(timeline_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(duplicate)
     return duplicate
+
+
+@router.post("/cleanup-orphaned-cues")
+def cleanup_orphaned_cues(db: Session = Depends(get_db)):
+    """
+    Clean up orphaned cues that don't belong to any track.
+    
+    This fixes data corruption from the bug where bulk track deletion
+    didn't cascade delete cues properly.
+    """
+    try:
+        # Find all valid track IDs
+        valid_track_ids = db.query(TimelineTrack.id).all()
+        valid_track_id_set = {t[0] for t in valid_track_ids}
+        
+        # Find orphaned cues (cues with track_id that doesn't exist)
+        all_cues = db.query(TimelineCue).all()
+        orphaned_cue_ids = [
+            cue.id for cue in all_cues 
+            if cue.track_id not in valid_track_id_set
+        ]
+        
+        if not orphaned_cue_ids:
+            return {
+                "message": "No orphaned cues found",
+                "deleted_count": 0
+            }
+        
+        # Delete orphaned cues
+        deleted_count = db.query(TimelineCue).filter(
+            TimelineCue.id.in_(orphaned_cue_ids)
+        ).delete(synchronize_session=False)
+        
+        db.commit()
+        
+        return {
+            "message": f"Successfully cleaned up {deleted_count} orphaned cue(s)",
+            "deleted_count": deleted_count,
+            "deleted_cue_ids": orphaned_cue_ids
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup orphaned cues: {str(e)}")
 
