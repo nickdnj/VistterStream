@@ -271,14 +271,13 @@ class CameraService:
                 else:
                     clean_url = snapshot_url
                 
-                # Try 1: URL as-is if it already has credentials (browsers handle this)
+                # Try 1: URL as-is if it already has credentials (browsers handle this, requests is more lenient than httpx)
                 if has_credentials_in_url:
                     try:
-                        async with httpx.AsyncClient(timeout=5.0) as client:
-                            response = await client.get(snapshot_url)
-                            if response.status_code == 200:
-                                print(f"DEBUG: Reolink snapshot accessible with URL-embedded credentials (as-is)")
-                                return True
+                        response = requests.get(snapshot_url, timeout=10)
+                        if response.status_code == 200:
+                            print(f"DEBUG: Reolink snapshot accessible with URL-embedded credentials (as-is)")
+                            return True
                     except Exception as e:
                         print(f"DEBUG: URL as-is test failed: {e}")
                 
