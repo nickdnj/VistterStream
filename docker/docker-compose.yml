@@ -32,6 +32,35 @@ services:
       retries: 3
       start_period: 5s
 
+  # Cloudflare Tunnel (optional - for remote access without port forwarding)
+  # Requires CLOUDFLARE_TUNNEL_TOKEN environment variable
+  # See docs/CLOUDFLARE_TUNNEL_SETUP.md for setup instructions
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vistterstream-cloudflared
+    # Use token-based auth if token is provided, otherwise use config file
+    command: >
+      sh -c "
+      if [ -n \"$$CLOUDFLARE_TUNNEL_TOKEN\" ]; then
+        cloudflared tunnel --token $$CLOUDFLARE_TUNNEL_TOKEN run
+      else
+        cloudflared tunnel --config /etc/cloudflared/config.yml run
+      fi
+      "
+    environment:
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - cloudflared_creds:/etc/cloudflared
+    restart: unless-stopped
+    networks:
+      - vistter-network
+    profiles:
+      - cloudflare
+
+volumes:
+  cloudflared_creds:
+
 networks:
   vistter-network:
     driver: bridge

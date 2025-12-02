@@ -81,8 +81,9 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        # Update this with your Pi's IP address
-        REACT_APP_API_URL: "http://192.168.12.107:8000/api"
+        # If using Cloudflare Tunnel, leave REACT_APP_API_URL unset to use relative URLs
+        # Otherwise, set to your Pi's IP address for local access
+        REACT_APP_API_URL: ${FRONTEND_API_URL:-}
     container_name: vistterstream-frontend
     ports:
       - "3000:80"
@@ -90,8 +91,35 @@ services:
     networks:
       - vistter-net
 
+  # Cloudflare Tunnel - enables remote access without port forwarding
+  # See docs/CLOUDFLARE_TUNNEL_SETUP.md for setup instructions
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: vistterstream-cloudflared
+    # Use token-based auth if token is provided, otherwise use config file
+    command: >
+      sh -c "
+      if [ -n \"$$CLOUDFLARE_TUNNEL_TOKEN\" ]; then
+        cloudflared tunnel --token $$CLOUDFLARE_TUNNEL_TOKEN run
+      else
+        cloudflared tunnel --config /etc/cloudflared/config.yml run
+      fi
+      "
+    environment:
+      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - cloudflared_creds:/etc/cloudflared
+    restart: unless-stopped
+    networks:
+      - vistter-net
+    depends_on:
+      - frontend
+      - backend
+
 volumes:
   vistter_data:
+  cloudflared_creds:
 
 networks:
   vistter-net:

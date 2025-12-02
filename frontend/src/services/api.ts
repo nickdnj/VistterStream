@@ -7,9 +7,12 @@ const resolveApiBaseUrl = (): string => {
   }
 
   if (typeof window !== 'undefined') {
-    const { protocol, hostname } = window.location;
-    const port = process.env.REACT_APP_API_PORT || '8000';
-    const portSegment = port ? `:${port}` : '';
+    const { protocol, hostname, port } = window.location;
+    // For HTTPS (Cloudflare Tunnel), don't add port segment
+    // For HTTP, use the current port or default to 8000 for local development
+    const portSegment = (protocol === 'https:' || !port || port === '443' || port === '80') 
+      ? '' 
+      : `:${port}`;
     return `${protocol}//${hostname}${portSegment}/api`;
   }
 

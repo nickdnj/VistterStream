@@ -1,0 +1,42 @@
+# Cloudflare Tunnel Configuration
+# This file is used by cloudflared to route traffic from your domain to local services
+#
+# NOTE: If using token-based authentication (recommended), cloudflared will use the
+# token from CLOUDFLARE_TUNNEL_TOKEN environment variable and route based on
+# configuration in Cloudflare dashboard. This config file is optional for advanced routing.
+#
+# For token-based setup (recommended - see docs/CLOUDFLARE_TUNNEL_SETUP.md):
+# - Set CLOUDFLARE_TUNNEL_TOKEN in your .env file
+# - Configure ingress rules in Cloudflare dashboard
+# - This config file is optional but can be used for local routing rules
+#
+# For config file authentication (alternative):
+# - Uncomment and configure the tunnel section below
+# - Requires tunnel credentials file in /etc/cloudflared/credentials.json
+
+# tunnel: your-tunnel-id
+# credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  # Route frontend (React app) to root path
+  - hostname: stream.vistter.com
+    service: http://frontend:80
+  
+  # Route backend API to /api path
+  - hostname: stream.vistter.com
+    path: /api/*
+    service: http://backend:8000
+  
+  # Route backend API docs to /api/docs
+  - hostname: stream.vistter.com
+    path: /api/docs
+    service: http://backend:8000
+  
+  # Route backend API redoc to /api/redoc
+  - hostname: stream.vistter.com
+    path: /api/redoc
+    service: http://backend:8000
+  
+  # Catch-all rule (must be last)
+  - service: http_status:404
+

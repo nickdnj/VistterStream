@@ -164,6 +164,7 @@ VistterStream is a **standalone streaming appliance** that runs on Raspberry Pi,
 - **Beautiful UI** - Dark theme, responsive design, professional interface
 - **Docker Deployment** - Single container, multi-architecture (ARM64/x86_64)
 - **Local-First** - All configuration stored locally, no cloud dependencies
+- **Remote Access** - Optional Cloudflare Tunnel integration for secure web access without port forwarding
 
 ## Architecture
 
@@ -294,6 +295,7 @@ See **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** for advanced dep
 ### 🔧 Setup & Deployment
 - **[Raspberry Pi Setup](docs/RaspberryPi-Docker.md)** - Deploy on Raspberry Pi
 - **[Docker Testing](docs/Docker-Testing-Complete.md)** - Docker deployment guide
+- **[Cloudflare Tunnel Setup](docs/CLOUDFLARE_TUNNEL_SETUP.md)** - Remote access without port forwarding
 - **[YouTube OAuth Setup](docs/working_documents/oauth/YOUTUBE_OAUTH_SETUP.md)** - Configure YouTube API
 
 ### 📋 Technical Specifications
