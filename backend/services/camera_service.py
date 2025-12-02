@@ -12,7 +12,7 @@ import subprocess
 import requests
 from requests.auth import HTTPDigestAuth
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote, urlunparse
 
 from models.database import Camera, Preset
 from models.schemas import (
@@ -249,22 +249,45 @@ class CameraService:
             if password_enc:
                 password = base64.b64decode(password_enc).decode()
             
-            # Try with Digest auth for Reolink cameras (they use HTTP Digest)
+            # Parse the URL to check if it already has credentials
+            parsed_url = urlparse(snapshot_url)
+            has_credentials_in_url = '@' in parsed_url.netloc
+            
+            # For Reolink cameras, use Digest auth (strip credentials from URL if present)
             if username and password and "reolink" in camera_name.lower():
                 print(f"DEBUG: Testing Reolink snapshot with Digest auth")
                 try:
+                    # Strip credentials from URL if they're embedded
+                    if has_credentials_in_url:
+                        # Remove credentials from netloc
+                        clean_netloc = parsed_url.netloc.split('@')[-1]
+                        clean_url = urlunparse((
+                            parsed_url.scheme,
+                            clean_netloc,
+                            parsed_url.path,
+                            parsed_url.params,
+                            parsed_url.query,
+                            parsed_url.fragment
+                        ))
+                    else:
+                        clean_url = snapshot_url
+                    
                     auth = HTTPDigestAuth(username, password)
-                    response = requests.get(snapshot_url, auth=auth, timeout=10)
+                    response = requests.get(clean_url, auth=auth, timeout=10)
                     return response.status_code == 200
                 except Exception as e:
                     print(f"DEBUG: Digest auth test failed: {e}")
                     return False
             
-            # Build URL with credentials if provided (for other cameras)
+            # For other cameras, build URL with credentials (URL-encode special characters)
             if username and password:
-                parsed_url = urlparse(snapshot_url)
                 if parsed_url.scheme in ['http', 'https']:
-                    snapshot_url = f"{parsed_url.scheme}://{username}:{password}@{parsed_url.netloc}{parsed_url.path}?{parsed_url.query}"
+                    # URL-encode username and password to handle special characters
+                    encoded_username = quote(username, safe='')
+                    encoded_password = quote(password, safe='')
+                    # Strip existing credentials from netloc if present
+                    clean_netloc = parsed_url.netloc.split('@')[-1] if has_credentials_in_url else parsed_url.netloc
+                    snapshot_url = f"{parsed_url.scheme}://{encoded_username}:{encoded_password}@{clean_netloc}{parsed_url.path}{'?' + parsed_url.query if parsed_url.query else ''}"
             
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(snapshot_url)
@@ -324,6 +347,23 @@ class CameraService:
             except Exception as exc:
                 return False, f"Failed to decode camera credentials: {exc}"
 
+        # Parse URL and strip embedded credentials if present (auth should be passed separately)
+        parsed_url = urlparse(camera.snapshot_url)
+        has_credentials_in_url = '@' in parsed_url.netloc
+        probe_url = camera.snapshot_url
+        
+        if has_credentials_in_url:
+            # Strip credentials from URL - we'll use auth parameter instead
+            clean_netloc = parsed_url.netloc.split('@')[-1]
+            probe_url = urlunparse((
+                parsed_url.scheme,
+                clean_netloc,
+                parsed_url.path,
+                parsed_url.params,
+                parsed_url.query,
+                parsed_url.fragment
+            ))
+
         auth = None
         if camera.username and password:
             if "reolink" in camera.name.lower():
@@ -334,7 +374,7 @@ class CameraService:
         try:
             async with httpx.AsyncClient(timeout=3.0, follow_redirects=True) as client:
                 try:
-                    response = await client.head(camera.snapshot_url, auth=auth)
+                    response = await client.head(probe_url, auth=auth)
                 except httpx.RequestError as exc:
                     return False, f"Snapshot probe failed: {exc}"
 
@@ -373,20 +413,31 @@ class CameraService:
             if camera.password_enc:
                 password = base64.b64decode(camera.password_enc).decode()
             
-            # Build URL with credentials if provided
-            snapshot_url = camera.snapshot_url
-            if camera.username and password:
-                parsed_url = urlparse(snapshot_url)
-                if parsed_url.scheme in ['http', 'https']:
-                    snapshot_url = f"{parsed_url.scheme}://{camera.username}:{password}@{parsed_url.netloc}{parsed_url.path}?{parsed_url.query}"
+            # Parse the URL to check if it already has credentials
+            parsed_url = urlparse(camera.snapshot_url)
+            has_credentials_in_url = '@' in parsed_url.netloc
             
             # Try with requests and Digest auth for Reolink cameras
             if camera.username and password and "reolink" in camera.name.lower():
                 print(f"DEBUG: Using Digest auth for Reolink camera")
                 try:
+                    # Strip credentials from URL if they're embedded (Digest auth needs clean URL)
+                    if has_credentials_in_url:
+                        clean_netloc = parsed_url.netloc.split('@')[-1]
+                        clean_url = urlunparse((
+                            parsed_url.scheme,
+                            clean_netloc,
+                            parsed_url.path,
+                            parsed_url.params,
+                            parsed_url.query,
+                            parsed_url.fragment
+                        ))
+                    else:
+                        clean_url = camera.snapshot_url
+                    
                     # Use requests with Digest auth for Reolink
                     auth = HTTPDigestAuth(camera.username, password)
-                    response = requests.get(snapshot_url, auth=auth, timeout=10)
+                    response = requests.get(clean_url, auth=auth, timeout=10)
                     
                     if response.status_code == 200:
                         content_type = response.headers.get("content-type", "")
@@ -403,6 +454,18 @@ class CameraService:
                     print(f"DEBUG: Digest auth failed: {e}")
             
             # Fallback to httpx for other cameras or if Digest auth fails
+            # Build URL with credentials if provided (URL-encode special characters)
+            snapshot_url = camera.snapshot_url
+            if camera.username and password:
+                parsed_url = urlparse(snapshot_url)
+                if parsed_url.scheme in ['http', 'https']:
+                    # URL-encode username and password to handle special characters
+                    encoded_username = quote(camera.username, safe='')
+                    encoded_password = quote(password, safe='')
+                    # Strip existing credentials from netloc if present
+                    clean_netloc = parsed_url.netloc.split('@')[-1] if has_credentials_in_url else parsed_url.netloc
+                    snapshot_url = f"{parsed_url.scheme}://{encoded_username}:{encoded_password}@{clean_netloc}{parsed_url.path}{'?' + parsed_url.query if parsed_url.query else ''}"
+            
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(snapshot_url)
                 if response.status_code == 200:
