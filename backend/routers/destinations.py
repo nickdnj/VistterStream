@@ -270,6 +270,10 @@ def create_destination(destination_data: DestinationCreate, db: Session = Depend
         return _serialize_destination(destination)
     except Exception as e:
         db.rollback()
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Error creating destination: {str(e)}")
+        print(f"Full traceback: {error_trace}")
         raise HTTPException(status_code=500, detail=f"Failed to create destination: {str(e)}")
 
 
