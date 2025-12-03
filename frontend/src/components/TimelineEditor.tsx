@@ -679,9 +679,27 @@ const TimelineEditor: React.FC = () => {
       return;
     }
 
+    // Check if another timeline is already running (MVP: only one stream at a time)
+    try {
+      const activeResp = await api.get('/timeline-execution/active');
+      const activeIds = activeResp.data?.active_timeline_ids || [];
+      
+      if (activeIds.length > 0 && !activeIds.includes(selectedTimeline.id)) {
+        // Another timeline is running - find its name
+        const runningTimeline = timelines.find(t => activeIds.includes(t.id));
+        const runningName = runningTimeline?.name || `Timeline #${activeIds[0]}`;
+        
+        alert(`⚠️ Another stream is already running!\n\n"${runningName}" is currently streaming.\n\nPlease stop that stream first before starting a new one.`);
+        return;
+      }
+    } catch (err) {
+      // Could not check active timelines, proceed anyway
+      console.log('Could not check for active timelines:', err);
+    }
+
     setStarting(true);
     try {
-      // First, try to stop the timeline if it's already running
+      // First, try to stop the timeline if it's already running (same timeline restart)
       try {
         await api.post(`/timeline-execution/stop/${selectedTimeline.id}`);
         console.log('🛑 Stopped existing timeline instance');
