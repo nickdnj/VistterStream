@@ -318,7 +318,28 @@ const TimelineEditor: React.FC = () => {
     try {
       const response = await api.get('/timelines/');
       setTimelines(response.data);
+      
       if (response.data.length > 0 && !selectedTimeline) {
+        // Check for active/running timeline first
+        try {
+          const activeResp = await api.get('/timeline-execution/active');
+          const activeIds = activeResp.data?.active_timeline_ids || [];
+          
+          if (activeIds.length > 0) {
+            // Find and select the active timeline
+            const activeTimeline = response.data.find(
+              (t: Timeline) => activeIds.includes(t.id)
+            );
+            if (activeTimeline) {
+              setSelectedTimeline(activeTimeline);
+              return;
+            }
+          }
+        } catch (err) {
+          console.log('No active timeline found');
+        }
+        
+        // Fall back to first timeline
         setSelectedTimeline(response.data[0]);
       }
     } catch (error) {
