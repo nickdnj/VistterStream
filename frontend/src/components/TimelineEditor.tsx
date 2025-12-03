@@ -978,7 +978,7 @@ const TimelineEditor: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-dark-900">
+    <div className="h-full flex flex-col bg-dark-900">
       {/* Top Bar */}
       <div className="flex items-center justify-between px-6 py-2 bg-dark-800 border-b border-dark-700">
         <div className="flex items-center gap-4">
