@@ -159,7 +159,12 @@ PLATFORM_PRESETS = {
     "youtube": {
         "name": "YouTube Live",
         "rtmp_url": "rtmp://a.rtmp.youtube.com/live2",
-        "description": "YouTube Live primary server"
+        "description": "YouTube Live (manual RTMP setup)"
+    },
+    "youtube_oauth": {
+        "name": "YouTube Live OAuth",
+        "rtmp_url": "rtmp://a.rtmp.youtube.com/live2",
+        "description": "YouTube Live with OAuth integration"
     },
     "facebook": {
         "name": "Facebook Live",

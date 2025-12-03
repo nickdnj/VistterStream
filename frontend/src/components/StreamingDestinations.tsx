@@ -107,7 +107,9 @@ const StreamingDestinations: React.FC = () => {
     youtube_oauth_redirect_uri: ''
   });
 
-  const isYoutubeForm = (editingDestination?.platform ?? newDestination.platform) === 'youtube';
+  const currentPlatform = editingDestination?.platform ?? newDestination.platform;
+  const isYoutubeOAuthForm = currentPlatform === 'youtube_oauth';
+  const isAnyYoutubeForm = ['youtube', 'youtube_oauth'].includes(currentPlatform);
 
   const clearOAuthPolling = () => {
     Object.values(pollingRef.current).forEach((timeoutId) => window.clearTimeout(timeoutId));
@@ -396,6 +398,7 @@ const StreamingDestinations: React.FC = () => {
   const getPlatformIcon = (platform: string) => {
     const icons: Record<string, string> = {
       youtube: '📺',
+      youtube_oauth: '📺',
       facebook: '👥',
       twitch: '🎮',
       custom: '🔧'
@@ -406,11 +409,23 @@ const StreamingDestinations: React.FC = () => {
   const getPlatformColor = (platform: string) => {
     const colors: Record<string, string> = {
       youtube: 'bg-red-600',
+      youtube_oauth: 'bg-red-600',
       facebook: 'bg-blue-600',
       twitch: 'bg-purple-600',
       custom: 'bg-gray-600'
     };
     return colors[platform] || 'bg-gray-600';
+  };
+
+  const getPlatformLabel = (platform: string) => {
+    const labels: Record<string, string> = {
+      youtube: 'YouTube',
+      youtube_oauth: 'YouTube OAuth',
+      facebook: 'Facebook',
+      twitch: 'Twitch',
+      custom: 'Custom'
+    };
+    return labels[platform] || platform;
   };
 
   return (
@@ -438,8 +453,8 @@ const StreamingDestinations: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">{getPlatformIcon(dest.platform)}</span>
-                <span className={`${getPlatformColor(dest.platform)} px-3 py-1 rounded-full text-xs font-medium text-white capitalize`}>
-                  {dest.platform}
+                <span className={`${getPlatformColor(dest.platform)} px-3 py-1 rounded-full text-xs font-medium text-white`}>
+                  {getPlatformLabel(dest.platform)}
                 </span>
               </div>
               {dest.is_active && (
@@ -453,7 +468,7 @@ const StreamingDestinations: React.FC = () => {
             <h3 className="text-xl font-bold text-white mb-2">{dest.name}</h3>
             <p className="text-gray-400 text-sm mb-4">{dest.description}</p>
 
-            {dest.platform === 'youtube' && (
+            {dest.platform === 'youtube_oauth' && (
               <div className="mt-4 p-4 bg-gray-900 border border-gray-700 rounded-lg">
                 <div className="flex flex-col gap-3">
                   <div>
@@ -530,7 +545,7 @@ const StreamingDestinations: React.FC = () => {
               </div>
             </div>
 
-            {(dest.platform === 'youtube' || dest.channel_id) && (
+            {(['youtube', 'youtube_oauth'].includes(dest.platform) || dest.channel_id) && (
               <div className="mb-3">
                 <div className="text-gray-500 text-xs mb-1">Channel ID</div>
                 <div className="bg-gray-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
@@ -614,7 +629,7 @@ const StreamingDestinations: React.FC = () => {
                       setEditingDestination({
                         ...editingDestination,
                         platform: e.target.value,
-                        channel_id: e.target.value === 'youtube' ? (editingDestination.channel_id || '') : ''
+                        channel_id: ['youtube', 'youtube_oauth'].includes(e.target.value) ? (editingDestination.channel_id || '') : ''
                       });
                     } else {
                       handlePlatformChange(e.target.value);
@@ -623,6 +638,7 @@ const StreamingDestinations: React.FC = () => {
                   className="w-full bg-gray-700 text-white px-4 py-2 rounded"
                 >
                   <option value="youtube">YouTube Live</option>
+                  <option value="youtube_oauth">YouTube Live OAuth</option>
                   <option value="facebook">Facebook Live</option>
                   <option value="twitch">Twitch</option>
                   <option value="custom">Custom RTMP</option>
@@ -695,9 +711,9 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, channel_id: e.target.value });
                     }
                   }}
-                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
+                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isAnyYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
                   placeholder="UCxxxxxxxxxxxxxxxx"
-                  disabled={!isYoutubeForm}
+                  disabled={!isAnyYoutubeForm}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Add your channel ID to enable quick links to YouTube Studio and the public channel page.
@@ -717,38 +733,39 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, youtube_stream_id: e.target.value });
                     }
                   }}
-                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
+                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isAnyYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
                   placeholder="s6qs14YByEQ (from YouTube Studio livestream URL)"
-                  disabled={!isYoutubeForm}
+                  disabled={!isAnyYoutubeForm}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Primary ingestion stream identifier (studio.youtube.com/video/<strong>ID</strong>/livestreaming).
                 </p>
               </div>
 
-              {/* YouTube Broadcast ID */}
-              <div>
-                <label className="block text-gray-300 mb-2">YouTube Broadcast ID</label>
-                <input
-                  type="text"
-                  value={editingDestination ? (editingDestination.youtube_broadcast_id || '') : (newDestination.youtube_broadcast_id || '')}
-                  onChange={(e) => {
-                    if (editingDestination) {
-                      setEditingDestination({ ...editingDestination, youtube_broadcast_id: e.target.value });
-                    } else {
-                      setNewDestination({ ...newDestination, youtube_broadcast_id: e.target.value });
-                    }
-                  }}
-                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
-                  placeholder="ab12cd34ef56gh78"
-                  disabled={!isYoutubeForm}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Optional liveBroadcast ID for API-driven transitions. Required for automatic OAuth recovery flows.
-                </p>
-              </div>
+              {/* YouTube Broadcast ID - Only for OAuth */}
+              {isYoutubeOAuthForm && (
+                <div>
+                  <label className="block text-gray-300 mb-2">YouTube Broadcast ID</label>
+                  <input
+                    type="text"
+                    value={editingDestination ? (editingDestination.youtube_broadcast_id || '') : (newDestination.youtube_broadcast_id || '')}
+                    onChange={(e) => {
+                      if (editingDestination) {
+                        setEditingDestination({ ...editingDestination, youtube_broadcast_id: e.target.value });
+                      } else {
+                        setNewDestination({ ...newDestination, youtube_broadcast_id: e.target.value });
+                      }
+                    }}
+                    className="w-full px-4 py-2 rounded font-mono text-sm bg-gray-700 text-white"
+                    placeholder="ab12cd34ef56gh78"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Optional liveBroadcast ID for API-driven transitions. Required for automatic OAuth recovery flows.
+                  </p>
+                </div>
+              )}
 
-              {isYoutubeForm && (
+              {isYoutubeOAuthForm && (
                 <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-md font-semibold text-white">YouTube OAuth Credentials</h3>
@@ -838,8 +855,8 @@ const StreamingDestinations: React.FC = () => {
                 </div>
               )}
 
-              {/* Stream Watchdog Section */}
-              {isYoutubeForm && (
+              {/* Stream Watchdog Section - Only for OAuth */}
+              {isYoutubeOAuthForm && (
                 <div className="border-t border-gray-700 pt-4 mt-4">
                   <h3 className="text-lg font-semibold text-white mb-3">🐕 Stream Watchdog (Optional)</h3>
                   <p className="text-sm text-gray-400 mb-4">
