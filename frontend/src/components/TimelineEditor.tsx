@@ -272,6 +272,11 @@ const TimelineEditor: React.FC = () => {
         if (!selectedTimeline?.id) return;
         const resp = await api.get(`/timeline-execution/status/${selectedTimeline.id}`);
         setIsRunning(Boolean(resp.data?.is_running));
+        
+        // Auto-select destinations if stream is running and we have destination IDs
+        if (resp.data?.is_running && resp.data?.destination_ids?.length > 0) {
+          setSelectedDestinations(resp.data.destination_ids);
+        }
       } catch (err) {
         console.error('Failed to fetch timeline status:', err);
         // If status endpoint fails, assume not running to avoid false "Stop" state
