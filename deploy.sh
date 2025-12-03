@@ -157,6 +157,7 @@ if [[ " ${SERVICES_TO_REBUILD[*]} " =~ " backend " ]]; then
   MIGRATION_SCRIPTS=(
     "backend/migrations/add_youtube_watchdog_fields.py"
     "backend/migrations/add_youtube_oauth_fields.py"
+    "backend/migrations/add_youtube_oauth_credentials_fields.py"
   )
 
   for MIGRATION_SCRIPT in "${MIGRATION_SCRIPTS[@]}"; do
