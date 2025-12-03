@@ -32,7 +32,7 @@ class TimelineStatusResponse(BaseModel):
     timeline_id: int
     is_running: bool
     timeline_name: Optional[str] = None
-    destination_ids: Optional[List[int]] = None
+    destination_ids: Optional[list[int]] = None
 
 
 @router.post("/start")
