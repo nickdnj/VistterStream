@@ -132,16 +132,18 @@ const TimelineEditor: React.FC = () => {
    * - Find the first SELECTED YouTube destination from selectedDestinations
    * - Extract youtube_stream_id (or youtube_broadcast_id) for Studio URL
    * - Extract channel_id for public Channel URL and as Studio fallback
-   * - Buttons are disabled/grayed if no YouTube destination is selected
+   * - Buttons are always active; link to specific stream/channel if available, otherwise generic YouTube pages
    * 
    * URL Formats:
    * - Studio (with stream ID): https://studio.youtube.com/video/{stream_id}/livestreaming
    * - Studio (fallback with channel ID): https://studio.youtube.com/channel/{channel_id}/livestreaming
-   * - Channel: https://www.youtube.com/channel/{channel_id}/live
+   * - Studio (generic): https://studio.youtube.com/livestreaming
+   * - Channel (with channel ID): https://www.youtube.com/channel/{channel_id}/live
+   * - Channel (generic): https://www.youtube.com/live
    */
   const selectedYoutubeDestination = destinations.find((dest) => 
     selectedDestinations.includes(dest.id) && 
-    dest.platform === 'youtube'
+    (dest.platform === 'youtube' || dest.platform === 'youtube_oauth')
   );
   // For YouTube live streams, broadcast_id = video_id (use broadcast_id for Studio URL)
   // Fallback to stream_id if broadcast_id not available
@@ -151,12 +153,12 @@ const TimelineEditor: React.FC = () => {
   const youtubeChannelId = selectedYoutubeDestination?.channel_id || null;
   const hasYoutubeDestination = !!selectedYoutubeDestination;
   
-  // Studio URL with fallback: video ID (from broadcast) > channel ID > homepage
+  // Studio URL with fallback: video ID (from broadcast) > channel ID > generic studio
   const youtubeStudioUrl = youtubeVideoId
     ? `https://studio.youtube.com/video/${youtubeVideoId}/livestreaming`
     : youtubeChannelId
     ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming`
-    : 'https://studio.youtube.com';
+    : 'https://studio.youtube.com/livestreaming';
   const youtubeChannelUrl = youtubeChannelId
     ? `https://www.youtube.com/channel/${youtubeChannelId}/live`
     : 'https://www.youtube.com/live';
@@ -1457,77 +1459,51 @@ const TimelineEditor: React.FC = () => {
                     </h2>
                     {!hasYoutubeDestination && (
                       <p className="text-gray-500 text-xs mt-0.5">
-                        Select a YouTube destination above to enable quick links
+                        Select a YouTube destination above to link to specific stream
                       </p>
                     )}
                     {hasYoutubeDestination && !youtubeVideoId && !youtubeChannelId && (
                       <p className="text-yellow-500 text-xs mt-0.5">
-                        ⚠️ Add Broadcast ID or Channel ID to destination to enable Studio link
+                        💡 Add Broadcast ID or Channel ID to destination to link directly to your stream
                       </p>
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {hasYoutubeDestination ? (
-                      <>
-                        {youtubeVideoId || youtubeChannelId ? (
-                          <a
-                            href={youtubeStudioUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                            title={youtubeVideoId 
-                              ? "Open YouTube Live Studio for this broadcast" 
-                              : "Open YouTube Live Studio for this channel"}
-                          >
-                            Studio ↗
-                          </a>
-                        ) : (
-                          <button
-                            disabled
-                            className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                            title="Add Broadcast ID or Channel ID to destination to enable Studio link"
-                          >
-                            Studio ↗
-                          </button>
-                        )}
-                        {youtubeChannelId ? (
-                          <a
-                            href={youtubeChannelUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                            title="Preview public channel page in new tab"
-                          >
-                            Channel ↗
-                          </a>
-                        ) : (
-                          <button
-                            disabled
-                            className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                            title="Add Channel ID to destination to enable Channel link"
-                          >
-                            Channel ↗
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          disabled
-                          className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                          title="Select a YouTube destination first"
-                        >
-                          Studio ↗
-                        </button>
-                        <button
-                          disabled
-                          className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                          title="Select a YouTube destination first"
-                        >
-                          Channel ↗
-                        </button>
-                      </>
-                    )}
+                    {/* Studio button - always active */}
+                    <a
+                      href={youtubeStudioUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap transition-colors ${
+                        youtubeVideoId || youtubeChannelId
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
+                      title={
+                        youtubeVideoId 
+                          ? "Open YouTube Live Studio for this broadcast" 
+                          : youtubeChannelId
+                          ? "Open YouTube Live Studio for this channel"
+                          : "Open YouTube Live Studio"
+                      }
+                    >
+                      Studio ↗
+                    </a>
+                    
+                    {/* Channel button - always active */}
+                    <a
+                      href={youtubeChannelUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
+                      title={
+                        youtubeChannelId
+                          ? "Preview public channel page in new tab"
+                          : "Open YouTube Live"
+                      }
+                    >
+                      Channel ↗
+                    </a>
                   </div>
                 </div>
               </div>
