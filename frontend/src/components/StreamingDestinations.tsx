@@ -2,6 +2,24 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { AxiosError } from 'axios';
 
+// Helper to get backend base URL for OAuth redirect URIs
+const getBackendBaseUrl = (): string => {
+  const explicitUrl = process.env.REACT_APP_API_URL;
+  if (explicitUrl) {
+    // Remove /api suffix if present
+    return explicitUrl.replace(/\/api\/?$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+    const port = process.env.REACT_APP_API_PORT || '8000';
+    const portSegment = port ? `:${port}` : '';
+    return `${protocol}//${hostname}${portSegment}`;
+  }
+
+  return 'http://localhost:8000';
+};
+
 
 interface Destination {
   id?: number;
@@ -787,7 +805,7 @@ const StreamingDestinations: React.FC = () => {
                     <div className="flex gap-2 items-center">
                       <input
                         type="text"
-                        value={editingDestination ? (editingDestination.youtube_oauth_redirect_uri || '') : (newDestination.youtube_oauth_redirect_uri || `${window.location.origin}/api/destinations/youtube/oauth/callback`)}
+                        value={editingDestination ? (editingDestination.youtube_oauth_redirect_uri || '') : (newDestination.youtube_oauth_redirect_uri || `${getBackendBaseUrl()}/api/destinations/youtube/oauth/callback`)}
                         onChange={(e) => {
                           if (editingDestination) {
                             setEditingDestination({ ...editingDestination, youtube_oauth_redirect_uri: e.target.value });
@@ -801,7 +819,7 @@ const StreamingDestinations: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const defaultUri = `${window.location.origin}/api/destinations/youtube/oauth/callback`;
+                          const defaultUri = `${getBackendBaseUrl()}/api/destinations/youtube/oauth/callback`;
                           if (editingDestination) {
                             setEditingDestination({ ...editingDestination, youtube_oauth_redirect_uri: defaultUri });
                           } else {
