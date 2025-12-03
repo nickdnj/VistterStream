@@ -437,9 +437,30 @@ const AddCameraModal: React.FC<{
     stream_path: '/stream1',
     snapshot_url: '',
   });
+  const [snapshotUrlError, setSnapshotUrlError] = useState<string | null>(null);
+
+  const validateSnapshotUrl = (url: string): string | null => {
+    if (!url) return null; // Optional field
+    // Check for embedded credentials: user:pass@host pattern
+    const urlMatch = url.match(/^https?:\/\/([^/]+)/);
+    if (urlMatch && urlMatch[1].includes('@')) {
+      return "Snapshot URL cannot contain embedded credentials (username:password@). Use the Username and Password fields instead.";
+    }
+    return null;
+  };
+
+  const handleSnapshotUrlChange = (value: string) => {
+    setFormData({ ...formData, snapshot_url: value });
+    setSnapshotUrlError(validateSnapshotUrl(value));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const error = validateSnapshotUrl(formData.snapshot_url || '');
+    if (error) {
+      setSnapshotUrlError(error);
+      return;
+    }
     onSave(formData);
   };
 
@@ -555,10 +576,15 @@ const AddCameraModal: React.FC<{
                   <input
                     type="text"
                     value={formData.snapshot_url || ''}
-                    onChange={(e) => setFormData({ ...formData, snapshot_url: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    onChange={(e) => handleSnapshotUrlChange(e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      snapshotUrlError ? 'border-red-500' : 'border-gray-600'
+                    }`}
                     placeholder="http://192.168.1.100/snapshot.jpg"
                   />
+                  {snapshotUrlError && (
+                    <p className="mt-1 text-sm text-red-400">{snapshotUrlError}</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -601,9 +627,30 @@ const EditCameraModal: React.FC<{
     stream_path: camera.stream_path,
     snapshot_url: camera.snapshot_url,
   });
+  const [snapshotUrlError, setSnapshotUrlError] = useState<string | null>(null);
+
+  const validateSnapshotUrl = (url: string): string | null => {
+    if (!url) return null; // Optional field
+    // Check for embedded credentials: user:pass@host pattern
+    const urlMatch = url.match(/^https?:\/\/([^/]+)/);
+    if (urlMatch && urlMatch[1].includes('@')) {
+      return "Snapshot URL cannot contain embedded credentials (username:password@). Use the Username and Password fields instead.";
+    }
+    return null;
+  };
+
+  const handleSnapshotUrlChange = (value: string) => {
+    setFormData({ ...formData, snapshot_url: value });
+    setSnapshotUrlError(validateSnapshotUrl(value));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const error = validateSnapshotUrl(formData.snapshot_url || '');
+    if (error) {
+      setSnapshotUrlError(error);
+      return;
+    }
     onSave(formData);
   };
 
@@ -716,9 +763,14 @@ const EditCameraModal: React.FC<{
                   <input
                     type="text"
                     value={formData.snapshot_url || ''}
-                    onChange={(e) => setFormData({ ...formData, snapshot_url: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    onChange={(e) => handleSnapshotUrlChange(e.target.value)}
+                    className={`w-full px-3 py-2 border rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                      snapshotUrlError ? 'border-red-500' : 'border-gray-600'
+                    }`}
                   />
+                  {snapshotUrlError && (
+                    <p className="mt-1 text-sm text-red-400">{snapshotUrlError}</p>
+                  )}
                 </div>
               </div>
             </div>
