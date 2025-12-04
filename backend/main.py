@@ -42,6 +42,8 @@ app = FastAPI(
 # CORS middleware for frontend communication
 # CORS configuration (configurable via env)
 cors_origins_env = os.getenv("CORS_ALLOW_ORIGINS")
+# Get Cloudflare Tunnel domain from env (if configured)
+cloudflare_domain = os.getenv("CLOUDFLARE_TUNNEL_DOMAIN", "stream.vistter.com")
 default_cors_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -50,6 +52,7 @@ default_cors_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://0.0.0.0:5173",
+    f"https://{cloudflare_domain}",  # Cloudflare Tunnel domain
 ]
 cors_origins = [o.strip() for o in (cors_origins_env or "").split(",") if o.strip()]
 if not cors_origins:
@@ -59,9 +62,9 @@ cors_origin_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
 if not cors_origin_regex:
     # Allow any HTTP origin on the local network (IPv4) and mDNS hostnames by default so the
     # frontend served from the Pi (e.g. http://192.168.x.x:3000 or http://vistter.local:3000) can reach the
-    # API without additional configuration. This still keeps the regex scoped
-    # to HTTP origins and matches the common dev ports used by the project.
-    cors_origin_regex = r"http://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3}|[a-zA-Z0-9-]+\\.local)(?::\\d+)?"
+    # API without additional configuration. Also allow HTTPS origins from Cloudflare Tunnel domains.
+    # This still keeps the regex scoped to HTTP/HTTPS origins and matches the common dev ports used by the project.
+    cors_origin_regex = r"https?://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3}|[a-zA-Z0-9-]+\\.local|.*\\.vistter\\.com)(?::\\d+)?"
 
 app.add_middleware(
     CORSMiddleware,
