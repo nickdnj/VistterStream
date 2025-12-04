@@ -159,7 +159,12 @@ PLATFORM_PRESETS = {
     "youtube": {
         "name": "YouTube Live",
         "rtmp_url": "rtmp://a.rtmp.youtube.com/live2",
-        "description": "YouTube Live primary server"
+        "description": "YouTube Live (manual RTMP setup)"
+    },
+    "youtube_oauth": {
+        "name": "YouTube Live OAuth",
+        "rtmp_url": "rtmp://a.rtmp.youtube.com/live2",
+        "description": "YouTube Live with OAuth integration"
     },
     "facebook": {
         "name": "Facebook Live",
@@ -270,6 +275,10 @@ def create_destination(destination_data: DestinationCreate, db: Session = Depend
         return _serialize_destination(destination)
     except Exception as e:
         db.rollback()
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Error creating destination: {str(e)}")
+        print(f"Full traceback: {error_trace}")
         raise HTTPException(status_code=500, detail=f"Failed to create destination: {str(e)}")
 
 

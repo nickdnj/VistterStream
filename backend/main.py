@@ -46,6 +46,7 @@ default_cors_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://0.0.0.0:3000",
+    "http://vistter.local:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://0.0.0.0:5173",
@@ -56,11 +57,11 @@ if not cors_origins:
 
 cors_origin_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX")
 if not cors_origin_regex:
-    # Allow any HTTP origin on the local network (IPv4) by default so the
-    # frontend served from the Pi (e.g. http://192.168.x.x:3000) can reach the
+    # Allow any HTTP origin on the local network (IPv4) and mDNS hostnames by default so the
+    # frontend served from the Pi (e.g. http://192.168.x.x:3000 or http://vistter.local:3000) can reach the
     # API without additional configuration. This still keeps the regex scoped
     # to HTTP origins and matches the common dev ports used by the project.
-    cors_origin_regex = r"http://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3})(?::\\d+)?"
+    cors_origin_regex = r"http://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3}|[a-zA-Z0-9-]+\\.local)(?::\\d+)?"
 
 app.add_middleware(
     CORSMiddleware,

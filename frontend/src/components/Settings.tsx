@@ -126,9 +126,28 @@ const Settings: React.FC = () => {
           setLocationDetecting(false);
         }
       },
-      (error) => {
+      (error: GeolocationPositionError) => {
         console.warn('Location detection failed:', error.message);
         setLocationDetecting(false);
+        
+        // Provide user-friendly error message
+        let errorMessage = 'Location detection is not available. ';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMessage += 'Please allow location access in your browser settings.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMessage += 'Location information is unavailable.';
+        } else if (error.code === error.TIMEOUT) {
+          errorMessage += 'Location detection timed out. Please try again.';
+        } else if (error.message && error.message.includes('secure origin')) {
+          errorMessage += 'Geolocation requires HTTPS. You can manually enter your location below.';
+        } else {
+          errorMessage += 'You can manually enter your location below.';
+        }
+        
+        setGeneralSettingsMessage({ 
+          type: 'error', 
+          text: errorMessage 
+        });
       }
     );
   };

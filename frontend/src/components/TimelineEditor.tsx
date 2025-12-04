@@ -132,16 +132,18 @@ const TimelineEditor: React.FC = () => {
    * - Find the first SELECTED YouTube destination from selectedDestinations
    * - Extract youtube_stream_id (or youtube_broadcast_id) for Studio URL
    * - Extract channel_id for public Channel URL and as Studio fallback
-   * - Buttons are disabled/grayed if no YouTube destination is selected
+   * - Buttons are always active; link to specific stream/channel if available, otherwise generic YouTube pages
    * 
    * URL Formats:
    * - Studio (with stream ID): https://studio.youtube.com/video/{stream_id}/livestreaming
    * - Studio (fallback with channel ID): https://studio.youtube.com/channel/{channel_id}/livestreaming
-   * - Channel: https://www.youtube.com/channel/{channel_id}/live
+   * - Studio (generic): https://studio.youtube.com/livestreaming
+   * - Channel (with channel ID): https://www.youtube.com/channel/{channel_id}/live
+   * - Channel (generic): https://www.youtube.com/live
    */
   const selectedYoutubeDestination = destinations.find((dest) => 
     selectedDestinations.includes(dest.id) && 
-    dest.platform === 'youtube'
+    (dest.platform === 'youtube' || dest.platform === 'youtube_oauth')
   );
   // For YouTube live streams, broadcast_id = video_id (use broadcast_id for Studio URL)
   // Fallback to stream_id if broadcast_id not available
@@ -151,12 +153,12 @@ const TimelineEditor: React.FC = () => {
   const youtubeChannelId = selectedYoutubeDestination?.channel_id || null;
   const hasYoutubeDestination = !!selectedYoutubeDestination;
   
-  // Studio URL with fallback: video ID (from broadcast) > channel ID > homepage
+  // Studio URL with fallback: video ID (from broadcast) > channel ID > generic studio
   const youtubeStudioUrl = youtubeVideoId
     ? `https://studio.youtube.com/video/${youtubeVideoId}/livestreaming`
     : youtubeChannelId
     ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming`
-    : 'https://studio.youtube.com';
+    : 'https://studio.youtube.com/livestreaming';
   const youtubeChannelUrl = youtubeChannelId
     ? `https://www.youtube.com/channel/${youtubeChannelId}/live`
     : 'https://www.youtube.com/live';
@@ -174,6 +176,26 @@ const TimelineEditor: React.FC = () => {
   const [camerasExpanded, setCamerasExpanded] = useState(true);
   const [assetsExpanded, setAssetsExpanded] = useState(false);
   const [expandedCameras, setExpandedCameras] = useState<Set<number>>(new Set());
+
+  // Context menu for reordering sidebar items
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    type: 'camera' | 'asset' | 'timeline';
+    itemId: number;
+  } | null>(null);
+
+  // Custom order state (persisted to localStorage)
+  const [cameraOrder, setCameraOrder] = useState<number[]>([]);
+  const [assetOrder, setAssetOrder] = useState<number[]>([]);
+  const [timelineOrder, setTimelineOrder] = useState<number[]>([]);
+
+  // "Show more" collapse state for sidebar lists
+  const [showAllCameras, setShowAllCameras] = useState(false);
+  const [showAllAssets, setShowAllAssets] = useState(false);
+  const [showAllTimelines, setShowAllTimelines] = useState(false);
+
+  const COLLAPSED_LIMIT = 5;
 
   // Playhead and zoom controls (local-only, no live preview)
   const [playheadTime, setPlayheadTime] = useState(0);
@@ -210,6 +232,37 @@ const TimelineEditor: React.FC = () => {
     loadAllData();
   }, []);
 
+  // Load custom order from localStorage on mount
+  useEffect(() => {
+    const savedCameraOrder = localStorage.getItem('timeline-camera-order');
+    const savedAssetOrder = localStorage.getItem('timeline-asset-order');
+    const savedTimelineOrder = localStorage.getItem('timeline-timeline-order');
+    
+    if (savedCameraOrder) setCameraOrder(JSON.parse(savedCameraOrder));
+    if (savedAssetOrder) setAssetOrder(JSON.parse(savedAssetOrder));
+    if (savedTimelineOrder) setTimelineOrder(JSON.parse(savedTimelineOrder));
+  }, []);
+
+  // Save custom order to localStorage when it changes
+  useEffect(() => {
+    if (cameraOrder.length) localStorage.setItem('timeline-camera-order', JSON.stringify(cameraOrder));
+  }, [cameraOrder]);
+
+  useEffect(() => {
+    if (assetOrder.length) localStorage.setItem('timeline-asset-order', JSON.stringify(assetOrder));
+  }, [assetOrder]);
+
+  useEffect(() => {
+    if (timelineOrder.length) localStorage.setItem('timeline-timeline-order', JSON.stringify(timelineOrder));
+  }, [timelineOrder]);
+
+  // Close context menu when clicking elsewhere
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
+
   // Sync Start/Stop button with backend status on refresh and selection changes
   useEffect(() => {
     let statusInterval: any;
@@ -219,6 +272,11 @@ const TimelineEditor: React.FC = () => {
         if (!selectedTimeline?.id) return;
         const resp = await api.get(`/timeline-execution/status/${selectedTimeline.id}`);
         setIsRunning(Boolean(resp.data?.is_running));
+        
+        // Auto-select destinations if stream is running and we have destination IDs
+        if (resp.data?.is_running && resp.data?.destination_ids?.length > 0) {
+          setSelectedDestinations(resp.data.destination_ids);
+        }
       } catch (err) {
         console.error('Failed to fetch timeline status:', err);
         // If status endpoint fails, assume not running to avoid false "Stop" state
@@ -318,7 +376,28 @@ const TimelineEditor: React.FC = () => {
     try {
       const response = await api.get('/timelines/');
       setTimelines(response.data);
+      
       if (response.data.length > 0 && !selectedTimeline) {
+        // Check for active/running timeline first
+        try {
+          const activeResp = await api.get('/timeline-execution/active');
+          const activeIds = activeResp.data?.active_timeline_ids || [];
+          
+          if (activeIds.length > 0) {
+            // Find and select the active timeline
+            const activeTimeline = response.data.find(
+              (t: Timeline) => activeIds.includes(t.id)
+            );
+            if (activeTimeline) {
+              setSelectedTimeline(activeTimeline);
+              return;
+            }
+          }
+        } catch (err) {
+          console.log('No active timeline found');
+        }
+        
+        // Fall back to first timeline
         setSelectedTimeline(response.data[0]);
       }
     } catch (error) {
@@ -386,6 +465,71 @@ const TimelineEditor: React.FC = () => {
       newExpanded.add(cameraId);
     }
     setExpandedCameras(newExpanded);
+  };
+
+  // Sort items by custom order (for sidebar reordering)
+  const sortByCustomOrder = <T extends { id?: number }>(
+    items: T[],
+    customOrder: number[]
+  ): T[] => {
+    if (customOrder.length === 0) return items;
+    
+    return [...items].sort((a, b) => {
+      const indexA = customOrder.indexOf(a.id || 0);
+      const indexB = customOrder.indexOf(b.id || 0);
+      // Items not in custom order go to the end
+      if (indexA === -1 && indexB === -1) return 0;
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+  };
+
+  // Context menu handlers for sidebar reordering
+  const handleContextMenu = (
+    e: React.MouseEvent,
+    type: 'camera' | 'asset' | 'timeline',
+    itemId: number
+  ) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, type, itemId });
+  };
+
+  const handleMoveItem = (direction: 'top' | 'up' | 'down') => {
+    if (!contextMenu) return;
+    
+    const { type, itemId } = contextMenu;
+    const items = type === 'camera' ? cameras : type === 'asset' ? assets : timelines;
+    const currentOrder = type === 'camera' ? cameraOrder : type === 'asset' ? assetOrder : timelineOrder;
+    const setOrder = type === 'camera' ? setCameraOrder : type === 'asset' ? setAssetOrder : setTimelineOrder;
+    
+    // Build order array if empty (use current item order)
+    let order = currentOrder.length ? [...currentOrder] : items.map(i => i.id!);
+    const currentIndex = order.indexOf(itemId);
+    
+    if (currentIndex === -1) {
+      // Item not in order array, add it
+      order.push(itemId);
+    }
+    
+    const idx = order.indexOf(itemId);
+    
+    // Remove from current position
+    order.splice(idx, 1);
+    
+    // Insert at new position
+    if (direction === 'top') {
+      order.unshift(itemId);
+    } else if (direction === 'up' && idx > 0) {
+      order.splice(idx - 1, 0, itemId);
+    } else if (direction === 'down') {
+      order.splice(idx + 1, 0, itemId);
+    } else {
+      order.splice(idx, 0, itemId); // Put back if can't move
+    }
+    
+    setOrder(order);
+    setContextMenu(null);
   };
 
   const addCueToTimeline = (trackIndex: number, camera: Camera, preset?: Preset) => {
@@ -658,9 +802,27 @@ const TimelineEditor: React.FC = () => {
       return;
     }
 
+    // Check if another timeline is already running (MVP: only one stream at a time)
+    try {
+      const activeResp = await api.get('/timeline-execution/active');
+      const activeIds = activeResp.data?.active_timeline_ids || [];
+      
+      if (activeIds.length > 0 && !activeIds.includes(selectedTimeline.id)) {
+        // Another timeline is running - find its name
+        const runningTimeline = timelines.find(t => activeIds.includes(t.id));
+        const runningName = runningTimeline?.name || `Timeline #${activeIds[0]}`;
+        
+        alert(`⚠️ Another stream is already running!\n\n"${runningName}" is currently streaming.\n\nPlease stop that stream first before starting a new one.`);
+        return;
+      }
+    } catch (err) {
+      // Could not check active timelines, proceed anyway
+      console.log('Could not check for active timelines:', err);
+    }
+
     setStarting(true);
     try {
-      // First, try to stop the timeline if it's already running
+      // First, try to stop the timeline if it's already running (same timeline restart)
       try {
         await api.post(`/timeline-execution/stop/${selectedTimeline.id}`);
         console.log('🛑 Stopped existing timeline instance');
@@ -978,7 +1140,7 @@ const TimelineEditor: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-dark-900">
+    <div className="h-full flex flex-col bg-dark-900">
       {/* Top Bar */}
       <div className="flex items-center justify-between px-6 py-2 bg-dark-800 border-b border-dark-700">
         <div className="flex items-center gap-4">
@@ -1076,7 +1238,9 @@ const TimelineEditor: React.FC = () => {
             
             {camerasExpanded && (
               <div className="px-2 pb-2 space-y-1 max-h-96 overflow-y-auto">
-                {cameras.map((camera) => {
+                {sortByCustomOrder(cameras, cameraOrder)
+                  .slice(0, showAllCameras ? undefined : COLLAPSED_LIMIT)
+                  .map((camera) => {
                   const isPTZ = camera.type === 'ptz';
                   const cameraPresets = isPTZ ? getPresetsForCamera(camera.id) : [];
                   const isExpanded = expandedCameras.has(camera.id);
@@ -1084,7 +1248,10 @@ const TimelineEditor: React.FC = () => {
                   return (
                     <div key={camera.id} className="space-y-1">
                       {/* Camera Card */}
-                      <div className="bg-dark-700 rounded-lg overflow-hidden">
+                      <div 
+                        className="bg-dark-700 rounded-lg overflow-hidden"
+                        onContextMenu={(e) => handleContextMenu(e, 'camera', camera.id)}
+                      >
                         <div
                           draggable
                           onDragStart={(e) => {
@@ -1139,6 +1306,18 @@ const TimelineEditor: React.FC = () => {
                     </div>
                   );
                 })}
+                
+                {/* Show more/less button for cameras */}
+                {cameras.length > COLLAPSED_LIMIT && (
+                  <button
+                    onClick={() => setShowAllCameras(!showAllCameras)}
+                    className="w-full py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  >
+                    {showAllCameras 
+                      ? '▲ Show less' 
+                      : `▼ Show ${cameras.length - COLLAPSED_LIMIT} more`}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -1162,29 +1341,46 @@ const TimelineEditor: React.FC = () => {
                     No assets yet. Create assets in Settings → Assets.
                   </div>
                 ) : (
-                  assets.map((asset) => (
-                    <div
-                      key={asset.id}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData('application/json', JSON.stringify({ type: 'asset', assetId: asset.id }));
-                      }}
-                      className="bg-dark-700 rounded-lg overflow-hidden hover:bg-dark-600 cursor-move transition-colors"
-                    >
-                      <div className="flex items-center gap-2 p-3">
-                        <span className="text-2xl flex-shrink-0">
-                          {asset.type === 'api_image' && '🌐'}
-                          {asset.type === 'static_image' && '🖼️'}
-                          {asset.type === 'video' && '🎥'}
-                          {asset.type === 'graphic' && '🎨'}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-white text-sm font-medium truncate">{asset.name}</div>
-                          <div className="text-gray-400 text-xs">{asset.type.replace('_', ' ')}</div>
+                  <>
+                    {sortByCustomOrder(assets, assetOrder)
+                      .slice(0, showAllAssets ? undefined : COLLAPSED_LIMIT)
+                      .map((asset) => (
+                      <div
+                        key={asset.id}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('application/json', JSON.stringify({ type: 'asset', assetId: asset.id }));
+                        }}
+                        onContextMenu={(e) => handleContextMenu(e, 'asset', asset.id)}
+                        className="bg-dark-700 rounded-lg overflow-hidden hover:bg-dark-600 cursor-move transition-colors"
+                      >
+                        <div className="flex items-center gap-2 p-3">
+                          <span className="text-2xl flex-shrink-0">
+                            {asset.type === 'api_image' && '🌐'}
+                            {asset.type === 'static_image' && '🖼️'}
+                            {asset.type === 'video' && '🎥'}
+                            {asset.type === 'graphic' && '🎨'}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white text-sm font-medium truncate">{asset.name}</div>
+                            <div className="text-gray-400 text-xs">{asset.type.replace('_', ' ')}</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                    
+                    {/* Show more/less button for assets */}
+                    {assets.length > COLLAPSED_LIMIT && (
+                      <button
+                        onClick={() => setShowAllAssets(!showAllAssets)}
+                        className="w-full py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                      >
+                        {showAllAssets 
+                          ? '▲ Show less' 
+                          : `▼ Show ${assets.length - COLLAPSED_LIMIT} more`}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -1196,7 +1392,9 @@ const TimelineEditor: React.FC = () => {
               <h3 className="text-white font-semibold">Timelines</h3>
             </div>
             <div className="p-2 space-y-1">
-              {timelines.map((timeline) => (
+              {sortByCustomOrder(timelines, timelineOrder)
+                .slice(0, showAllTimelines ? undefined : COLLAPSED_LIMIT)
+                .map((timeline) => (
                 <div
                   key={timeline.id}
                   className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${
@@ -1204,6 +1402,7 @@ const TimelineEditor: React.FC = () => {
                       ? 'bg-primary-600'
                       : 'hover:bg-dark-700'
                   }`}
+                  onContextMenu={(e) => timeline.id && handleContextMenu(e, 'timeline', timeline.id)}
                 >
                   <button
                     onClick={() => setSelectedTimeline(timeline)}
@@ -1225,6 +1424,18 @@ const TimelineEditor: React.FC = () => {
                   </button>
                 </div>
               ))}
+              
+              {/* Show more/less button for timelines */}
+              {timelines.length > COLLAPSED_LIMIT && (
+                <button
+                  onClick={() => setShowAllTimelines(!showAllTimelines)}
+                  className="w-full py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  {showAllTimelines 
+                    ? '▲ Show less' 
+                    : `▼ Show ${timelines.length - COLLAPSED_LIMIT} more`}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1253,77 +1464,51 @@ const TimelineEditor: React.FC = () => {
                     </h2>
                     {!hasYoutubeDestination && (
                       <p className="text-gray-500 text-xs mt-0.5">
-                        Select a YouTube destination above to enable quick links
+                        Select a YouTube destination above to link to specific stream
                       </p>
                     )}
                     {hasYoutubeDestination && !youtubeVideoId && !youtubeChannelId && (
                       <p className="text-yellow-500 text-xs mt-0.5">
-                        ⚠️ Add Broadcast ID or Channel ID to destination to enable Studio link
+                        💡 Add Broadcast ID or Channel ID to destination to link directly to your stream
                       </p>
                     )}
                   </div>
                   <div className="flex gap-2">
-                    {hasYoutubeDestination ? (
-                      <>
-                        {youtubeVideoId || youtubeChannelId ? (
-                          <a
-                            href={youtubeStudioUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                            title={youtubeVideoId 
-                              ? "Open YouTube Live Studio for this broadcast" 
-                              : "Open YouTube Live Studio for this channel"}
-                          >
-                            Studio ↗
-                          </a>
-                        ) : (
-                          <button
-                            disabled
-                            className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                            title="Add Broadcast ID or Channel ID to destination to enable Studio link"
-                          >
-                            Studio ↗
-                          </button>
-                        )}
-                        {youtubeChannelId ? (
-                          <a
-                            href={youtubeChannelUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                            title="Preview public channel page in new tab"
-                          >
-                            Channel ↗
-                          </a>
-                        ) : (
-                          <button
-                            disabled
-                            className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                            title="Add Channel ID to destination to enable Channel link"
-                          >
-                            Channel ↗
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          disabled
-                          className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                          title="Select a YouTube destination first"
-                        >
-                          Studio ↗
-                        </button>
-                        <button
-                          disabled
-                          className="px-3 py-1.5 bg-gray-700/50 text-gray-500 rounded text-sm font-medium whitespace-nowrap cursor-not-allowed"
-                          title="Select a YouTube destination first"
-                        >
-                          Channel ↗
-                        </button>
-                      </>
-                    )}
+                    {/* Studio button - always active */}
+                    <a
+                      href={youtubeStudioUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap transition-colors ${
+                        youtubeVideoId || youtubeChannelId
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'bg-red-600 hover:bg-red-700 text-white'
+                      }`}
+                      title={
+                        youtubeVideoId 
+                          ? "Open YouTube Live Studio for this broadcast" 
+                          : youtubeChannelId
+                          ? "Open YouTube Live Studio for this channel"
+                          : "Open YouTube Live Studio"
+                      }
+                    >
+                      Studio ↗
+                    </a>
+                    
+                    {/* Channel button - always active */}
+                    <a
+                      href={youtubeChannelUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
+                      title={
+                        youtubeChannelId
+                          ? "Preview public channel page in new tab"
+                          : "Open YouTube Live"
+                      }
+                    >
+                      Channel ↗
+                    </a>
                   </div>
                 </div>
               </div>
@@ -1638,6 +1823,34 @@ const TimelineEditor: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Context Menu for reordering sidebar items */}
+      {contextMenu && (
+        <div
+          className="fixed bg-dark-700 border border-dark-600 rounded-lg shadow-xl py-1 z-50 min-w-[140px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleMoveItem('top')}
+            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-dark-600 transition-colors flex items-center gap-2"
+          >
+            <span>⬆️</span> Move to top
+          </button>
+          <button
+            onClick={() => handleMoveItem('up')}
+            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-dark-600 transition-colors flex items-center gap-2"
+          >
+            <span>🔼</span> Move up
+          </button>
+          <button
+            onClick={() => handleMoveItem('down')}
+            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-dark-600 transition-colors flex items-center gap-2"
+          >
+            <span>🔽</span> Move down
+          </button>
         </div>
       )}
     </div>

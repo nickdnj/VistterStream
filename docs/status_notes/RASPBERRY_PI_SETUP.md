@@ -28,7 +28,33 @@ ls -l /dev/video11
 
 ---
 
-## Step 1: Install Docker (if not installed)
+## Step 1: Set Hostname (Recommended)
+
+Set your Pi's hostname to `vistter` for easy network access via mDNS:
+
+```bash
+# Set the hostname
+sudo hostnamectl set-hostname vistter
+
+# Restart mDNS service
+sudo systemctl restart avahi-daemon
+
+# Verify the hostname
+hostname
+# Should output: vistter
+```
+
+After this, you can access your Pi from any device on your network at `http://vistter.local:3000` - no need to remember IP addresses!
+
+**Why this matters:**
+- Access VistterStream at `http://vistter.local:3000` from any device
+- OAuth redirect URIs work consistently (no IP address changes)
+- Same configuration works on multiple Pi devices
+- No need to update config when DHCP assigns a new IP
+
+---
+
+## Step 2: Install Docker (if not installed)
 
 ```bash
 # Update system
@@ -49,7 +75,7 @@ sudo apt install docker-compose-plugin
 
 ---
 
-## Step 2: Clone Repository from GitHub
+## Step 3: Clone Repository from GitHub
 
 ```bash
 # Navigate to your home directory
@@ -127,34 +153,33 @@ end-to-end example that covers multi-agent collaboration in more detail.
 
 ---
 
-## Step 3: Configure Environment
+## Step 4: Configure Environment
 
 ```bash
 # Copy the sample environment file
 cp env.sample .env
 
-# Edit the environment file
+# Edit the environment file (optional - defaults work with vistter.local)
 nano .env
 ```
 
-**Important:** Update `CORS_ALLOW_ORIGINS` with your Pi's IP address:
+**If you set the hostname to `vistter` (Step 1):** The default configuration works out of the box! The default CORS setting already includes `http://vistter.local:3000`.
+
+**If you prefer to use IP addresses:** Update `CORS_ALLOW_ORIGINS`:
 
 ```bash
 # Find your Pi's IP address
 hostname -I
 
-# In .env, change this line:
-CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173
-
-# To include your Pi's IP (example: 192.168.1.100):
-CORS_ALLOW_ORIGINS=http://192.168.1.100:3000,http://localhost:3000
+# In .env, update CORS to include your Pi's IP:
+CORS_ALLOW_ORIGINS=http://vistter.local:3000,http://192.168.1.100:3000,http://localhost:3000
 ```
 
 Save and exit (Ctrl+X, Y, Enter).
 
 ---
 
-## Step 4: Build Docker Images
+## Step 5: Build Docker Images
 
 This will take 30-60 minutes on Raspberry Pi due to ARM compilation.
 
@@ -173,7 +198,7 @@ docker compose -f docker-compose.rpi.yml build
 
 ---
 
-## Step 5: Start Services
+## Step 6: Start Services
 
 ```bash
 docker compose -f docker-compose.rpi.yml up -d
@@ -192,7 +217,7 @@ You should see 4 services running:
 
 ---
 
-## Step 6: Verify Deployment
+## Step 7: Verify Deployment
 
 ### Backend API
 ```bash
@@ -209,16 +234,18 @@ curl -I http://localhost:3000
 ### From Another Computer
 Open a browser and navigate to:
 ```
-http://<pi-ip-address>:3000
+http://vistter.local:3000
 ```
 
-Example: `http://192.168.1.100:3000`
+Or use the IP address: `http://192.168.1.100:3000`
+
+**Tip:** If `vistter.local` doesn't resolve, ensure your client device supports mDNS (most modern devices do). On Windows, you may need to install Bonjour.
 
 ---
 
-## Step 7: Add Cameras
+## Step 8: Add Cameras
 
-1. Open the web interface at `http://<pi-ip>:3000`
+1. Open the web interface at `http://vistter.local:3000`
 2. Log in (default credentials if first time)
 3. Go to **Cameras** section
 4. Click **Add Camera**
@@ -392,15 +419,17 @@ docker run --rm -v vistter_data:/data -v $(pwd):/backup alpine tar xzf /backup/v
 
 ## Quick Reference
 
-| Service | Port | Access |
-|---------|------|--------|
-| Frontend | 3000 | `http://<pi-ip>:3000` |
-| Backend API | 8000 | `http://<pi-ip>:8000` |
-| API Docs | 8000 | `http://<pi-ip>:8000/api/docs` |
-| RTMP Relay | 1935 | `rtmp://<pi-ip>:1935/live/<key>` |
-| Preview RTMP | 1936 | `rtmp://<pi-ip>:1936/` |
-| Preview HLS | 8888 | `http://<pi-ip>:8888/` |
-| MediaMTX API | 9997 | `http://<pi-ip>:9997` |
+| Service | Port | Access (using vistter.local) |
+|---------|------|------------------------------|
+| Frontend | 3000 | `http://vistter.local:3000` |
+| Backend API | 8000 | `http://vistter.local:8000` |
+| API Docs | 8000 | `http://vistter.local:8000/api/docs` |
+| RTMP Relay | 1935 | `rtmp://vistter.local:1935/live/<key>` |
+| Preview RTMP | 1936 | `rtmp://vistter.local:1936/` |
+| Preview HLS | 8888 | `http://vistter.local:8888/` |
+| MediaMTX API | 9997 | `http://vistter.local:9997` |
+
+**Note:** Replace `vistter.local` with your Pi's IP address if mDNS isn't available.
 
 ---
 

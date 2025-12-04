@@ -32,6 +32,7 @@ class TimelineStatusResponse(BaseModel):
     timeline_id: int
     is_running: bool
     timeline_name: Optional[str] = None
+    destination_ids: Optional[list[int]] = None
 
 
 @router.post("/start")
@@ -118,7 +119,8 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
         timeline_id=request.timeline_id,
         output_urls=output_urls,
         encoding_profile=None,  # TODO: Support custom encoding profiles
-        destination_names=destination_names
+        destination_names=destination_names,
+        destination_ids=request.destination_ids
     )
     
     if not success:
@@ -172,10 +174,16 @@ async def get_timeline_status(timeline_id: int, db: Session = Depends(get_db)):
     # Check if running
     is_running = timeline_id in executor.active_timelines
     
+    # Get destination IDs if running
+    destination_ids = None
+    if is_running and hasattr(executor, 'timeline_destination_ids'):
+        destination_ids = executor.timeline_destination_ids.get(timeline_id)
+    
     return {
         "timeline_id": timeline_id,
         "is_running": is_running,
-        "timeline_name": timeline.name
+        "timeline_name": timeline.name,
+        "destination_ids": destination_ids
     }
 
 

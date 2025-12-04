@@ -45,13 +45,16 @@ class TimelineExecutor:
         self._position_update_tasks: Dict[int, asyncio.Task] = {}  # Tasks for position updates
         # Track destination names for each active timeline
         self.timeline_destinations: Dict[int, List[str]] = {}  # timeline_id -> [destination names]
+        # Track destination IDs for each active timeline (for auto-selection in UI)
+        self.timeline_destination_ids: Dict[int, List[int]] = {}  # timeline_id -> [destination IDs]
         
     async def start_timeline(
         self,
         timeline_id: int,
         output_urls: list[str],
         encoding_profile: Optional[EncodingProfile] = None,
-        destination_names: Optional[List[str]] = None
+        destination_names: Optional[List[str]] = None,
+        destination_ids: Optional[List[int]] = None
     ) -> bool:
         """
         Start executing a timeline.
@@ -61,6 +64,7 @@ class TimelineExecutor:
             output_urls: List of RTMP destinations
             encoding_profile: Encoding settings
             destination_names: Names of the destinations for display
+            destination_ids: IDs of the destinations for UI auto-selection
             
         Returns:
             bool: Success status
@@ -72,6 +76,10 @@ class TimelineExecutor:
         # Store destination names for status display
         if destination_names:
             self.timeline_destinations[timeline_id] = destination_names
+        
+        # Store destination IDs for UI auto-selection
+        if destination_ids:
+            self.timeline_destination_ids[timeline_id] = destination_ids
             
         # Create execution task
         task = asyncio.create_task(
@@ -97,9 +105,11 @@ class TimelineExecutor:
         except asyncio.CancelledError:
             pass
             
-        # Clean up destination names
+        # Clean up destination names and IDs
         if timeline_id in self.timeline_destinations:
             del self.timeline_destinations[timeline_id]
+        if timeline_id in self.timeline_destination_ids:
+            del self.timeline_destination_ids[timeline_id]
             
         # Notify watchdog manager that stream is stopping
         try:
