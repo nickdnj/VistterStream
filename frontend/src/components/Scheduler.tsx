@@ -33,7 +33,7 @@ const Scheduler: React.FC = () => {
 
   const fetchRunning = async () => {
     try {
-      const response = await api.get('/scheduler/running');
+      const response = await api.get('/scheduler/running/');
       setRunningSchedules(response.data.map((item: any) => item.schedule_id));
     } catch (error) {
       console.error('Failed to load running schedules', error);
