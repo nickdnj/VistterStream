@@ -303,47 +303,57 @@ class PTZService:
             
             # Use first profile
             media_profile = profiles[0]
-            position = self._build_absolute_position(pan, tilt, zoom)
             
-            # If we have absolute position values, use AbsoluteMove only
-            # This prevents overshooting that occurs when both AbsoluteMove and GotoPreset are used
-            if position and (pan is not None or tilt is not None or zoom is not None):
-                self._debug(
-                    "Dispatching AbsoluteMove",
-                    profile_token=media_profile.token,
-                    pan=pan,
-                    tilt=tilt,
-                    zoom=zoom,
+            # Check if we have VALID position values (not default -1.0 placeholders)
+            # Values of -1.0 indicate "use camera's internal preset" via GotoPreset
+            has_valid_position = (
+                pan is not None and pan != -1.0 and
+                tilt is not None and tilt != -1.0
+            )
+            
+            if has_valid_position:
+                position = self._build_absolute_position(pan, tilt, zoom)
+                if position:
+                    self._debug(
+                        "Dispatching AbsoluteMove (valid position)",
+                        profile_token=media_profile.token,
+                        pan=pan,
+                        tilt=tilt,
+                        zoom=zoom,
+                    )
+                    try:
+                        abs_move_request = ptz_service.create_type("AbsoluteMove")
+                        abs_move_request.ProfileToken = media_profile.token
+                        abs_move_request.Position = position
+                        await loop.run_in_executor(
+                            None,
+                            partial(ptz_service.AbsoluteMove, abs_move_request),
+                        )
+                        logger.info(
+                            "🧭 Absolute move completed for camera %s (preset %s)",
+                            address,
+                            preset_token,
+                        )
+                        # Wait for camera to settle after absolute move
+                        await asyncio.sleep(2)
+                        logger.info("✅ Camera %s moved to preset %s", address, preset_token)
+                        return True
+                    except Exception as exc:
+                        logger.error(
+                            "❌ AbsoluteMove failed for camera %s preset %s: %s",
+                            address,
+                            preset_token,
+                            exc,
+                        )
+                        # Fall back to GotoPreset if AbsoluteMove fails
+                        logger.info("Falling back to GotoPreset after AbsoluteMove failure")
+            else:
+                logger.info(
+                    "Using GotoPreset for camera %s (pan=%s, tilt=%s are default values)",
+                    address, pan, tilt
                 )
-                try:
-                    abs_move_request = ptz_service.create_type("AbsoluteMove")
-                    abs_move_request.ProfileToken = media_profile.token
-                    abs_move_request.Position = position
-                    await loop.run_in_executor(
-                        None,
-                        partial(ptz_service.AbsoluteMove, abs_move_request),
-                    )
-                    logger.info(
-                        "🧭 Absolute move completed for camera %s (preset %s)",
-                        address,
-                        preset_token,
-                    )
-                    # Wait for camera to settle after absolute move (prevent overshoot)
-                    await asyncio.sleep(3)
-                    logger.info("✅ Camera %s moved to preset %s", address, preset_token)
-                    return True
-                except Exception as exc:
-                    logger.error(
-                        "❌ AbsoluteMove failed for camera %s preset %s: %s",
-                        address,
-                        preset_token,
-                        exc,
-                    )
-                    # Fall back to GotoPreset if AbsoluteMove fails
-                    logger.info("Falling back to GotoPreset after AbsoluteMove failure")
             
-            # Use GotoPreset if AbsoluteMove wasn't used or failed
-            # This is the fallback when we don't have pan/tilt/zoom values
+            # Use GotoPreset - relies on camera's internal preset memory
             request = ptz_service.create_type('GotoPreset')
             request.ProfileToken = media_profile.token
             request.PresetToken = preset_token
@@ -358,9 +368,9 @@ class PTZService:
             await loop.run_in_executor(None, ptz_service.GotoPreset, request)
             
             # Wait for camera to settle after GotoPreset
-            await asyncio.sleep(3)
+            await asyncio.sleep(2)
             
-            logger.info("✅ Camera %s moved to preset %s", address, preset_token)
+            logger.info("✅ Camera %s moved to preset %s via GotoPreset", address, preset_token)
             return True
             
         except ONVIFError as e:
