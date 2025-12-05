@@ -36,7 +36,8 @@ app = FastAPI(
     description="Local streaming appliance for camera management and live streaming",
     version="1.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    redirect_slashes=False  # Prevent 307 redirects that break with nginx proxy
 )
 
 # CORS middleware for frontend communication
