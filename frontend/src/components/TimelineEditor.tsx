@@ -408,7 +408,8 @@ const TimelineEditor: React.FC = () => {
   const loadCameras = async () => {
     try {
       const response = await api.get('/cameras/');
-      setCameras(response.data);
+      const camerasData = Array.isArray(response.data) ? response.data : [];
+      setCameras(camerasData);
     } catch (error) {
       console.error('Failed to load cameras:', error);
     }
@@ -417,7 +418,8 @@ const TimelineEditor: React.FC = () => {
   const loadPresets = async () => {
     try {
       const response = await api.get('/presets/');
-      setPresets(response.data);
+      const presetsData = Array.isArray(response.data) ? response.data : [];
+      setPresets(presetsData);
     } catch (error) {
       console.error('Failed to load presets:', error);
     }
@@ -426,7 +428,8 @@ const TimelineEditor: React.FC = () => {
   const loadAssets = async () => {
     try {
       const response = await api.get('/assets/');
-      setAssets(response.data);
+      const assetsData = Array.isArray(response.data) ? response.data : [];
+      setAssets(assetsData);
     } catch (error) {
       console.error('Failed to load assets:', error);
     }
@@ -473,7 +476,9 @@ const TimelineEditor: React.FC = () => {
     items: T[],
     customOrder: number[]
   ): T[] => {
-    if (customOrder.length === 0) return items;
+    // Ensure items is always an array
+    if (!Array.isArray(items)) return [];
+    if (!Array.isArray(customOrder) || customOrder.length === 0) return items;
     
     return [...items].sort((a, b) => {
       const indexA = customOrder.indexOf(a.id || 0);
