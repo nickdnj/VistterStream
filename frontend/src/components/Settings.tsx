@@ -62,17 +62,18 @@ const Settings: React.FC = () => {
     setGeneralSettingsLoading(true);
     try {
       const response = await api.get('/settings/');
+      const data = response.data || {};
       setGeneralSettings({
-        appliance_name: response.data.appliance_name || 'VistterStream Appliance',
-        timezone: response.data.timezone || 'America/New_York',
-        state_name: response.data.state_name || '',
-        city: response.data.city || '',
-        latitude: response.data.latitude || null,
-        longitude: response.data.longitude || null,
+        appliance_name: data.appliance_name || 'VistterStream Appliance',
+        timezone: data.timezone || 'America/New_York',
+        state_name: data.state_name || '',
+        city: data.city || '',
+        latitude: data.latitude || null,
+        longitude: data.longitude || null,
       });
       
       // Auto-detect location if not already set
-      if (!response.data.latitude || !response.data.longitude) {
+      if (!data.latitude || !data.longitude) {
         detectLocation();
       }
     } catch (error) {
@@ -177,7 +178,9 @@ const Settings: React.FC = () => {
     setIsKilling(true);
     try {
       const response = await api.post('/emergency/kill-all-streams');
-      alert(`✅ Emergency stop complete!\n\nKilled ${response.data.total_killed} processes:\n${response.data.killed_processes.join('\n')}`);
+      const killedCount = response.data?.total_killed ?? 0;
+      const killedProcesses = response.data?.killed_processes ?? [];
+      alert(`✅ Emergency stop complete!\n\nKilled ${killedCount} processes:\n${killedProcesses.join('\n') || 'None'}`);
     } catch (error) {
       console.error('Emergency stop failed:', error);
       const detail = extractErrorDetail(error);

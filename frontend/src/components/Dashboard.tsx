@@ -127,7 +127,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-400">Active Cameras</p>
-                <p className="text-2xl font-bold text-white">{systemStatus.active_cameras}</p>
+                <p className="text-2xl font-bold text-white">{systemStatus.active_cameras ?? 0}</p>
               </div>
             </div>
           </div>
@@ -170,7 +170,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-400">CPU Usage</p>
-                <p className="text-2xl font-bold text-white">{systemStatus.cpu_usage.toFixed(1)}%</p>
+                <p className="text-2xl font-bold text-white">{(systemStatus.cpu_usage ?? 0).toFixed(1)}%</p>
               </div>
             </div>
           </div>
@@ -187,7 +187,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-400">Memory Usage</p>
-                  <p className="text-2xl font-bold text-white">{systemStatus.memory_usage.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-white">{(systemStatus.memory_usage ?? 0).toFixed(1)}%</p>
                 </div>
               </div>
             </div>
@@ -205,7 +205,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-400">Network Usage</p>
-                  <p className="text-2xl font-bold text-white">{systemStatus.network_usage.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-white">{(systemStatus.network_usage ?? 0).toFixed(1)}%</p>
                 </div>
               </div>
             </div>
@@ -223,7 +223,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-400">Disk Usage</p>
-                  <p className="text-2xl font-bold text-white">{systemStatus.disk_usage.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-white">{(systemStatus.disk_usage ?? 0).toFixed(1)}%</p>
                 </div>
               </div>
             </div>
@@ -240,7 +240,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-400">Uptime</p>
-                <p className="text-2xl font-bold text-white">{formatUptime(systemStatus.uptime)}</p>
+                <p className="text-2xl font-bold text-white">{formatUptime(systemStatus.uptime ?? 0)}</p>
               </div>
             </div>
           </div>

@@ -94,7 +94,7 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
     const positionInterval = setInterval(async () => {
       try {
         const response = await api.get('/preview/playback-position');
-        if (response.data.is_playing && response.data.position) {
+        if (response.data?.is_playing && response.data?.position) {
           const newCueId = response.data.position.current_cue_id;
           setPlaybackPosition(response.data.position);
           
@@ -173,7 +173,8 @@ const PreviewWindow: React.FC<PreviewWindowProps> = ({
   const loadDestinations = async () => {
     try {
       const response = await api.get('/destinations');
-      setDestinations(response.data.filter((d: Destination) => d.is_active));
+      const destinationsData = Array.isArray(response.data) ? response.data : [];
+      setDestinations(destinationsData.filter((d: Destination) => d.is_active));
     } catch (err) {
       console.error('Failed to load destinations:', err);
     }

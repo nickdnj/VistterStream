@@ -375,17 +375,17 @@ const TimelineEditor: React.FC = () => {
   const loadTimelines = async () => {
     try {
       const response = await api.get('/timelines/');
-      setTimelines(response.data);
-      
-      if (response.data.length > 0 && !selectedTimeline) {
+      const timelinesData = Array.isArray(response.data) ? response.data : [];
+      setTimelines(timelinesData);
+      if (timelinesData.length > 0 && !selectedTimeline) {
         // Check for active/running timeline first
         try {
           const activeResp = await api.get('/timeline-execution/active');
-          const activeIds = activeResp.data?.active_timeline_ids || [];
+          const activeIds = Array.isArray(activeResp.data?.active_timeline_ids) ? activeResp.data.active_timeline_ids : [];
           
           if (activeIds.length > 0) {
             // Find and select the active timeline
-            const activeTimeline = response.data.find(
+            const activeTimeline = timelinesData.find(
               (t: Timeline) => activeIds.includes(t.id)
             );
             if (activeTimeline) {
@@ -435,7 +435,8 @@ const TimelineEditor: React.FC = () => {
   const loadDestinations = async () => {
     try {
       const response = await api.get('/destinations/');
-      setDestinations(response.data.filter((d: Destination) => d.is_active));
+      const destinationsData = Array.isArray(response.data) ? response.data : [];
+      setDestinations(destinationsData.filter((d: Destination) => d.is_active));
     } catch (error) {
       console.error('Failed to load destinations:', error);
     }

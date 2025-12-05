@@ -152,9 +152,9 @@ const PresetManagement: React.FC = () => {
   const openEditor = (preset: Preset) => {
     setEditorState({
       preset,
-      pan: preset.pan.toString(),
-      tilt: preset.tilt.toString(),
-      zoom: preset.zoom.toString(),
+      pan: (preset.pan ?? 0).toString(),
+      tilt: (preset.tilt ?? 0).toString(),
+      zoom: (preset.zoom ?? 0).toString(),
     });
     setEditorError(null);
   };
@@ -390,15 +390,15 @@ const PresetManagement: React.FC = () => {
                       <div className="mt-2 grid grid-cols-3 gap-4 text-sm text-gray-300">
                         <div>
                           <span className="block text-xs uppercase text-gray-500">Pan</span>
-                          <span>{preset.pan.toFixed(3)}</span>
+                          <span>{(preset.pan ?? 0).toFixed(3)}</span>
                         </div>
                         <div>
                           <span className="block text-xs uppercase text-gray-500">Tilt</span>
-                          <span>{preset.tilt.toFixed(3)}</span>
+                          <span>{(preset.tilt ?? 0).toFixed(3)}</span>
                         </div>
                         <div>
                           <span className="block text-xs uppercase text-gray-500">Zoom</span>
-                          <span>{preset.zoom.toFixed(3)}</span>
+                          <span>{(preset.zoom ?? 0).toFixed(3)}</span>
                         </div>
                       </div>
                       <div className="text-xs text-gray-500 mt-2">
