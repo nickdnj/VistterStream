@@ -354,13 +354,8 @@ class FFmpegProcessManager:
         # Use TCP for RTSP cameras to avoid UDP packet loss / stalls
         if input_url.lower().startswith('rtsp://'):
             cmd.extend(['-rtsp_transport', 'tcp'])
-            # Note: -reconnect flags only work for HTTP/HTTPS, not RTSP
-            # For RTSP reliability, we rely on TCP transport and the auto-restart mechanism
-            cmd.extend([
-                '-rtsp_flags', 'prefer_tcp',  # Prefer TCP for reliability
-                '-stimeout', '10000000',  # RTSP socket timeout in microseconds (10 seconds)
-            ])
         cmd.extend([
+            '-timeout', '5000000',  # 5 second timeout (microseconds)
             '-i', input_url
         ])
         
