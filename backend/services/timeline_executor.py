@@ -184,6 +184,7 @@ class TimelineExecutor:
             loop_count = 0
             last_camera_id: Optional[int] = None
             last_preset_id: Optional[int] = None
+            last_overlay_ids: Optional[List[int]] = None
             while not self._shutdown_event.is_set():
                 loop_count += 1
                 logger.info(f"Timeline {timeline.name} - Loop {loop_count}")
@@ -226,6 +227,9 @@ class TimelineExecutor:
                     )
                     self._position_update_tasks[timeline_id] = update_task
 
+                    # Get current overlay IDs for this segment
+                    current_overlay_ids = self._get_overlay_ids_at_time(timeline, seg_start)
+
                     # Execute this segment with current video and overlays
                     await self._execute_segment(
                         timeline_id=timeline_id,
@@ -236,7 +240,8 @@ class TimelineExecutor:
                         output_urls=output_urls,
                         encoding_profile=encoding_profile,
                         db=db,
-                        last_camera_preset=(last_camera_id, last_preset_id)
+                        last_camera_preset=(last_camera_id, last_preset_id),
+                        last_overlay_ids=last_overlay_ids
                     )
 
                     # Cancel position updates
@@ -247,9 +252,10 @@ class TimelineExecutor:
                         except asyncio.CancelledError:
                             pass
 
-                    # Track last camera/preset to avoid redundant PTZ moves
+                    # Track last camera/preset/overlays for next segment
                     last_camera_id = video_cue.action_params.get("camera_id")
                     last_preset_id = video_cue.action_params.get("preset_id")
+                    last_overlay_ids = current_overlay_ids
 
                 if not timeline.loop:
                     logger.info(f"Timeline {timeline.name} completed (loop=False)")
@@ -306,6 +312,21 @@ class TimelineExecutor:
                     active_cues[track.track_type].append(cue)
         
         return active_cues
+
+    def _get_overlay_ids_at_time(self, timeline: Timeline, current_time: float) -> List[int]:
+        """Get list of overlay asset IDs active at a specific time"""
+        overlay_ids = []
+        for track in timeline.tracks:
+            if not track.is_enabled or track.track_type != 'overlay':
+                continue
+            for cue in track.cues:
+                cue_start = cue.start_time
+                cue_end = cue.start_time + cue.duration
+                if current_time >= cue_start and current_time < cue_end:
+                    asset_id = cue.action_params.get('asset_id')
+                    if asset_id:
+                        overlay_ids.append(asset_id)
+        return sorted(overlay_ids)
 
     def _compute_segments(self, timeline: Timeline) -> List[Tuple[float, float]]:
         """Compute contiguous time segments from union of all cue boundaries across enabled tracks."""
@@ -369,11 +390,16 @@ class TimelineExecutor:
         output_urls: list[str],
         encoding_profile: Optional[EncodingProfile],
         db: Session,
-        last_camera_preset: Tuple[Optional[int], Optional[int]]
+        last_camera_preset: Tuple[Optional[int], Optional[int]],
+        last_overlay_ids: Optional[List[int]] = None
     ):
         """Execute a single time segment with current video and overlays.
 
         Overlays are sampled at segment start and applied for the whole segment.
+        
+        For PTZ cameras: When only the preset changes (same camera), we keep
+        the stream running and just move the camera. This shows smooth PTZ
+        movement instead of stream interruption.
         """
         try:
             if video_cue.action_type == "show_camera":
@@ -390,65 +416,14 @@ class TimelineExecutor:
                     logger.error(f"Camera {camera_id} not found")
                     return
                 
-                # If preset specified, move camera to preset BEFORE streaming
+                # Check if this is the same camera as last segment
+                same_camera = (last_camera_preset[0] == camera_id)
+                preset_changed = (last_camera_preset[1] != preset_id)
+                
+                # Get preset info for logging
+                preset = None
                 if preset_id:
                     preset = db.query(Preset).filter(Preset.id == preset_id).first()
-                    if preset:
-                        # Avoid redundant PTZ if unchanged since last segment
-                        if (last_camera_preset[0] != camera_id) or (last_camera_preset[1] != preset_id):
-                            logger.info(f"🎯 Moving camera {camera.name} to preset '{preset.name}'")
-                        
-                        # Get camera credentials
-                        password = None
-                        if camera.password_enc:
-                            try:
-                                password = base64.b64decode(camera.password_enc).decode()
-                            except Exception as e:
-                                logger.error(f"Failed to decode camera password: {e}")
-                        
-                        if password and ((last_camera_preset[0] != camera_id) or (last_camera_preset[1] != preset_id)):
-                            # Use configured ONVIF port for PTZ control
-                            ptz_service = get_ptz_service()
-                            pan = preset.pan if preset.pan is not None else 0.0
-                            tilt = preset.tilt if preset.tilt is not None else 0.0
-                            zoom = preset.zoom if preset.zoom is not None else 1.0
-                            try:
-                                success = await ptz_service.move_to_preset(
-                                    address=camera.address,
-                                    port=camera.onvif_port,
-                                    username=camera.username,
-                                    password=password,
-                                    preset_token=preset.camera_preset_token or str(preset_id),
-                                    pan=pan,
-                                    tilt=tilt,
-                                    zoom=zoom,
-                                )
-                               
-                                if success:
-                                    logger.info(
-                                        "✅ Camera moved to preset '%s' (pan=%s, tilt=%s, zoom=%s)",
-                                        preset.name,
-                                        pan,
-                                        tilt,
-                                        zoom,
-                                    )
-                                    # PTZ service now handles settle time internally
-                                else:
-                                    logger.warning(f"⚠️  Failed to move camera to preset, continuing anyway")
-                            except Exception as e:
-                                logger.error(f"❌ Error moving camera to preset: {e}")
-                                # Continue anyway - don't fail the whole timeline
-                        else:
-                            logger.warning(f"⚠️  No camera credentials available for PTZ control")
-                    else:
-                        logger.warning(f"⚠️  Preset {preset_id} not found, ignoring")
-                    
-                # Build RTSP URL
-                rtsp_url = self._build_rtsp_url(camera)
-                preset_info = f" at preset '{preset.name}'" if preset_id and preset else ""
-                logger.info(f"🎬 Segment streaming from camera {camera.name}{preset_info} for {duration}s")
-                logger.debug(f"RTSP URL: {rtsp_url}")
-                logger.debug(f"Output URLs: {output_urls}")
                 
                 # Get the timeline to find overlay cues at this time
                 timeline = db.query(Timeline).filter(Timeline.id == timeline_id).first()
@@ -457,6 +432,7 @@ class TimelineExecutor:
                 # Process overlay cues
                 overlay_images = []
                 temp_files = []
+                current_overlay_ids = []
                 
                 if active_cues['overlay']:
                     logger.info(f"🎨 Found {len(active_cues['overlay'])} overlay cue(s) at time {seg_start}")
@@ -465,6 +441,8 @@ class TimelineExecutor:
                         asset_id = overlay_cue.action_params.get('asset_id')
                         if not asset_id:
                             continue
+                        
+                        current_overlay_ids.append(asset_id)
                         
                         # Get asset from database
                         asset = db.query(Asset).filter(Asset.id == asset_id).first()
@@ -510,73 +488,146 @@ class TimelineExecutor:
                             size_info = f" size={w}x{h}"
                         logger.info(f"  🖼️  {asset.name} at ({x_pixels}, {y_pixels}) opacity={asset.opacity}{size_info}")
                 
-                # Stop existing stream if running
-                try:
-                    logger.debug(f"Stopping existing stream {timeline_id} if running...")
-                    await ffmpeg_manager.stop_stream(timeline_id)
-                except KeyError:
-                    logger.debug(f"No existing stream to stop")
-                    pass  # Not running yet
-                except Exception as e:
-                    logger.error(f"Error stopping stream: {e}")
-                    traceback.print_exc()
-                    
-                # Start new stream with this camera and overlays
-                overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
-                logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
-                try:
-                    await ffmpeg_manager.start_stream(
-                        stream_id=timeline_id,
-                        input_url=rtsp_url,
-                        output_urls=output_urls,
-                        profile=encoding_profile or EncodingProfile.reliability_profile(
-                            ffmpeg_manager.hw_capabilities
-                        ),
-                        overlay_images=overlay_images if overlay_images else None
-                    )
-                    logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
-                    
-                    # Notify watchdog manager about the stream start
-                    try:
-                        from services.watchdog_manager import get_watchdog_manager
-                        from models.destination import StreamingDestination
-                        
-                        watchdog_manager = get_watchdog_manager()
-                        
-                        # Find destination IDs that match the output URLs
-                        destination_ids = []
-                        db = SessionLocal()
+                # Check if overlays changed
+                overlays_changed = (last_overlay_ids is None) or (sorted(current_overlay_ids) != sorted(last_overlay_ids or []))
+                
+                # Determine if we need to restart FFmpeg
+                # Only restart if: camera changed OR overlays changed OR stream not running
+                stream_running = timeline_id in ffmpeg_manager.processes
+                needs_restart = (not same_camera) or overlays_changed or (not stream_running)
+                
+                # If preset specified and changed, move camera
+                # Do this BEFORE restarting stream if camera changed, or DURING stream if same camera
+                if preset_id and preset and preset_changed:
+                    # Get camera credentials
+                    password = None
+                    if camera.password_enc:
                         try:
-                            for output_url in output_urls:
-                                # Match destinations by their full RTMP URL
-                                destinations = db.query(StreamingDestination).all()
-                                for dest in destinations:
-                                    if dest.get_full_rtmp_url() == output_url:
-                                        destination_ids.append(dest.id)
-                                        break
-                            
-                            # Notify watchdog manager
-                            if destination_ids:
-                                await watchdog_manager.notify_stream_started(
-                                    destination_ids=destination_ids,
-                                    stream_id=timeline_id,
-                                    db_session=db
+                            password = base64.b64decode(camera.password_enc).decode()
+                        except Exception as e:
+                            logger.error(f"Failed to decode camera password: {e}")
+                    
+                    if password:
+                        if same_camera and stream_running and not overlays_changed:
+                            # Same camera, stream running - move PTZ while streaming (shows movement!)
+                            logger.info(f"🎬 Moving camera {camera.name} to preset '{preset.name}' (viewers will see movement)")
+                        else:
+                            logger.info(f"🎯 Moving camera {camera.name} to preset '{preset.name}'")
+                        
+                        # Use configured ONVIF port for PTZ control
+                        ptz_service = get_ptz_service()
+                        pan = preset.pan if preset.pan is not None else 0.0
+                        tilt = preset.tilt if preset.tilt is not None else 0.0
+                        zoom = preset.zoom if preset.zoom is not None else 1.0
+                        try:
+                            success = await ptz_service.move_to_preset(
+                                address=camera.address,
+                                port=camera.onvif_port,
+                                username=camera.username,
+                                password=password,
+                                preset_token=preset.camera_preset_token or str(preset_id),
+                                pan=pan,
+                                tilt=tilt,
+                                zoom=zoom,
+                            )
+                           
+                            if success:
+                                logger.info(
+                                    "✅ Camera moved to preset '%s' (pan=%s, tilt=%s, zoom=%s)",
+                                    preset.name,
+                                    pan,
+                                    tilt,
+                                    zoom,
                                 )
-                                logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} → destinations {destination_ids}")
-                        finally:
-                            db.close()
-                    except Exception as e:
-                        logger.warning(f"Failed to notify watchdog manager: {e}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
-                    traceback.print_exc()
-                    # Clean up temp files
-                    for temp_file in temp_files:
+                            else:
+                                logger.warning(f"⚠️  Failed to move camera to preset, continuing anyway")
+                        except Exception as e:
+                            logger.error(f"❌ Error moving camera to preset: {e}")
+                            # Continue anyway - don't fail the whole timeline
+                    else:
+                        logger.warning(f"⚠️  No camera credentials available for PTZ control")
+                
+                # Build RTSP URL
+                rtsp_url = self._build_rtsp_url(camera)
+                preset_info = f" at preset '{preset.name}'" if preset_id and preset else ""
+                logger.info(f"🎬 Segment streaming from camera {camera.name}{preset_info} for {duration}s")
+                logger.debug(f"RTSP URL: {rtsp_url}")
+                logger.debug(f"Output URLs: {output_urls}")
+                
+                # Only restart FFmpeg if needed
+                if needs_restart:
+                    # Stop existing stream if running
+                    if stream_running:
                         try:
-                            os.unlink(temp_file)
-                        except:
-                            pass
-                    raise
+                            reason = "camera changed" if not same_camera else "overlays changed"
+                            logger.debug(f"Stopping existing stream {timeline_id} ({reason})...")
+                            await ffmpeg_manager.stop_stream(timeline_id)
+                        except KeyError:
+                            logger.debug(f"No existing stream to stop")
+                            pass  # Not running yet
+                        except Exception as e:
+                            logger.error(f"Error stopping stream: {e}")
+                            traceback.print_exc()
+                        
+                    # Start new stream with this camera and overlays
+                    overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
+                    logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
+                    try:
+                        await ffmpeg_manager.start_stream(
+                            stream_id=timeline_id,
+                            input_url=rtsp_url,
+                            output_urls=output_urls,
+                            profile=encoding_profile or EncodingProfile.reliability_profile(
+                                ffmpeg_manager.hw_capabilities
+                            ),
+                            overlay_images=overlay_images if overlay_images else None
+                        )
+                        logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
+                        
+                        # Notify watchdog manager about the stream start
+                        try:
+                            from services.watchdog_manager import get_watchdog_manager
+                            from models.destination import StreamingDestination
+                            
+                            watchdog_manager = get_watchdog_manager()
+                            
+                            # Find destination IDs that match the output URLs
+                            dest_ids = []
+                            dest_db = SessionLocal()
+                            try:
+                                for output_url in output_urls:
+                                    # Match destinations by their full RTMP URL
+                                    destinations = dest_db.query(StreamingDestination).all()
+                                    for dest in destinations:
+                                        if dest.get_full_rtmp_url() == output_url:
+                                            dest_ids.append(dest.id)
+                                            break
+                                
+                                # Notify watchdog manager
+                                if dest_ids:
+                                    await watchdog_manager.notify_stream_started(
+                                        destination_ids=dest_ids,
+                                        stream_id=timeline_id,
+                                        db_session=dest_db
+                                    )
+                                    logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} → destinations {dest_ids}")
+                            finally:
+                                dest_db.close()
+                        except Exception as e:
+                            logger.warning(f"Failed to notify watchdog manager: {e}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
+                        traceback.print_exc()
+                        # Clean up temp files
+                        for temp_file in temp_files:
+                            try:
+                                os.unlink(temp_file)
+                            except:
+                                pass
+                        raise
+                else:
+                    # Same camera, same overlays - just log that we're continuing
+                    logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
                 
                 # Wait for cue duration
                 logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
