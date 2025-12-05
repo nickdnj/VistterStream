@@ -354,8 +354,17 @@ class FFmpegProcessManager:
         # Use TCP for RTSP cameras to avoid UDP packet loss / stalls
         if input_url.lower().startswith('rtsp://'):
             cmd.extend(['-rtsp_transport', 'tcp'])
+            # Add reconnection options for RTSP streams to handle network hiccups
+            cmd.extend([
+                '-rtsp_flags', 'prefer_tcp',  # Prefer TCP for reliability
+                '-max_delay', '5000000',  # Max delay in microseconds (5 seconds)
+                '-reconnect', '1',  # Enable automatic reconnection
+                '-reconnect_at_eof', '1',  # Reconnect at end of file
+                '-reconnect_streamed', '1',  # Reconnect for streamed inputs
+                '-reconnect_delay_max', '10',  # Max delay between reconnection attempts (seconds)
+            ])
         cmd.extend([
-            '-timeout', '2000000',  # 2 second timeout (microseconds)
+            '-timeout', '10000000',  # 10 second timeout (microseconds) - increased for reliability
             '-i', input_url
         ])
         
@@ -492,18 +501,56 @@ class FFmpegProcessManager:
         
         logger.info(f"Started monitoring stream {stream_id}")
         
+        # Keep last 20 lines of FFmpeg output for error diagnosis
+        last_output_lines = []
+        error_patterns = ['error', 'Error', 'ERROR', 'failed', 'Failed', 'timeout', 'Timeout', 'Connection refused', 'Connection reset']
+        
         try:
             while not self._shutdown_event.is_set():
                 # Read line from stderr
                 line = await process.stderr.readline()
                 
                 if not line:
+                    # Process ended - capture any remaining output before it dies
+                    try:
+                        # Try to read any remaining buffered output
+                        remaining = await asyncio.wait_for(process.stderr.read(4096), timeout=0.5)
+                        if remaining:
+                            remaining_lines = remaining.decode('utf-8', errors='ignore').split('\n')
+                            last_output_lines.extend([l.strip() for l in remaining_lines if l.strip()])
+                    except (asyncio.TimeoutError, Exception):
+                        pass
+                    
                     # Process ended
                     returncode = await process.wait()
                     logger.warning(f"Stream {stream_id} process ended (exit code: {returncode})")
                     
+                    # Log the last output lines to help diagnose the issue
+                    if last_output_lines:
+                        logger.error(f"Last FFmpeg output before stream {stream_id} died:")
+                        for i, log_line in enumerate(last_output_lines[-20:], 1):  # Last 20 lines
+                            logger.error(f"  [{i}] {log_line}")
+                    
+                    # Check for specific error patterns in the last output
+                    error_found = False
+                    for line in last_output_lines[-20:]:
+                        for pattern in error_patterns:
+                            if pattern in line:
+                                logger.error(f"⚠️  Error pattern detected in FFmpeg output: '{pattern}' in: {line[:200]}")
+                                error_found = True
+                                break
+                        if error_found:
+                            break
+                    
                     stream_process.status = StreamStatus.ERROR
-                    stream_process.last_error = f"Process exited with code {returncode}"
+                    error_msg = f"Process exited with code {returncode}"
+                    if last_output_lines:
+                        # Include last error line in error message if available
+                        for line in reversed(last_output_lines[-10:]):
+                            if any(pattern in line for pattern in error_patterns):
+                                error_msg = f"Process exited with code {returncode}. Last error: {line[:200]}"
+                                break
+                    stream_process.last_error = error_msg
                     
                     # Check if stream should auto-restart by checking database status
                     should_restart = stream_process.should_auto_restart
@@ -534,6 +581,15 @@ class FFmpegProcessManager:
                 
                 # Parse output line
                 line_str = line.decode('utf-8', errors='ignore').strip()
+                
+                # Keep last 20 lines for error diagnosis
+                last_output_lines.append(line_str)
+                if len(last_output_lines) > 20:
+                    last_output_lines.pop(0)
+                
+                # Log errors and warnings immediately for visibility
+                if any(pattern in line_str for pattern in error_patterns):
+                    logger.warning(f"⚠️  FFmpeg [stream {stream_id}]: {line_str}")
                 
                 # Update metrics from FFmpeg output
                 self._parse_ffmpeg_output(stream_id, line_str)

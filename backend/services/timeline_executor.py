@@ -432,8 +432,7 @@ class TimelineExecutor:
                                         tilt,
                                         zoom,
                                     )
-                                    # Wait a moment for camera to settle
-                                    await asyncio.sleep(2)
+                                    # PTZ service now handles settle time internally
                                 else:
                                     logger.warning(f"⚠️  Failed to move camera to preset, continuing anyway")
                             except Exception as e:

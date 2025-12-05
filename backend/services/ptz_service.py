@@ -304,7 +304,10 @@ class PTZService:
             # Use first profile
             media_profile = profiles[0]
             position = self._build_absolute_position(pan, tilt, zoom)
-            if position:
+            
+            # If we have absolute position values, use AbsoluteMove only
+            # This prevents overshooting that occurs when both AbsoluteMove and GotoPreset are used
+            if position and (pan is not None or tilt is not None or zoom is not None):
                 self._debug(
                     "Dispatching AbsoluteMove",
                     profile_token=media_profile.token,
@@ -325,6 +328,10 @@ class PTZService:
                         address,
                         preset_token,
                     )
+                    # Wait for camera to settle after absolute move (prevent overshoot)
+                    await asyncio.sleep(3)
+                    logger.info("✅ Camera %s moved to preset %s", address, preset_token)
+                    return True
                 except Exception as exc:
                     logger.error(
                         "❌ AbsoluteMove failed for camera %s preset %s: %s",
@@ -332,9 +339,11 @@ class PTZService:
                         preset_token,
                         exc,
                     )
-                    # Continue with GotoPreset so behaviour remains tolerant
+                    # Fall back to GotoPreset if AbsoluteMove fails
+                    logger.info("Falling back to GotoPreset after AbsoluteMove failure")
             
-            # Create request
+            # Use GotoPreset if AbsoluteMove wasn't used or failed
+            # This is the fallback when we don't have pan/tilt/zoom values
             request = ptz_service.create_type('GotoPreset')
             request.ProfileToken = media_profile.token
             request.PresetToken = preset_token
@@ -347,6 +356,9 @@ class PTZService:
             
             # Execute move
             await loop.run_in_executor(None, ptz_service.GotoPreset, request)
+            
+            # Wait for camera to settle after GotoPreset
+            await asyncio.sleep(3)
             
             logger.info("✅ Camera %s moved to preset %s", address, preset_token)
             return True
