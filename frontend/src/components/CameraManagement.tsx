@@ -63,9 +63,10 @@ const CameraManagement: React.FC = () => {
   const loadCameras = async () => {
     try {
       const data = await cameraService.getCameras();
-      setCameras(data);
+      const camerasData = Array.isArray(data) ? data : [];
+      setCameras(camerasData);
       // Load snapshots for online cameras
-      loadSnapshots(data);
+      loadSnapshots(camerasData);
     } catch (error) {
       console.error('Failed to load cameras:', error);
     } finally {

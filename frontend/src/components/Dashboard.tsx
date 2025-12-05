@@ -56,7 +56,7 @@ const Dashboard: React.FC = () => {
         cameraService.getCameras(),
         api.get('/status/system').then(res => res.data)
       ]);
-      setCameras(camerasData);
+      setCameras(Array.isArray(camerasData) ? camerasData : []);
       setSystemStatus(statusData);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);

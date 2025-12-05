@@ -43,7 +43,7 @@ export interface CameraTestResponse {
 export const cameraService = {
   async getCameras(): Promise<CameraWithStatus[]> {
     const response = await api.get('/cameras');
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   async getCamera(id: number): Promise<CameraWithStatus> {
