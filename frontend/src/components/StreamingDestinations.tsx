@@ -147,7 +147,7 @@ const StreamingDestinations: React.FC = () => {
 
   const loadDestinations = async () => {
     try {
-      const response = await api.get('/destinations/');
+      const response = await api.get('/destinations');
       setDestinations(response.data);
     } catch (error) {
       console.error('Failed to load destinations:', error);
@@ -179,7 +179,7 @@ const StreamingDestinations: React.FC = () => {
 
   const createDestination = async () => {
     try {
-      await api.post('/destinations/', newDestination);
+      await api.post('/destinations', newDestination);
       setShowAddModal(false);
       setNewDestination({
         name: '',

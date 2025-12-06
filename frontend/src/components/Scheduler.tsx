@@ -41,7 +41,7 @@ const Scheduler: React.FC = () => {
   };
 
   const refreshSchedules = async () => {
-    const sch = await api.get('/scheduler/');
+    const sch = await api.get('/scheduler');
     setSchedules(sch.data);
   };
 
@@ -49,8 +49,8 @@ const Scheduler: React.FC = () => {
     (async () => {
       try {
         const [tl, sch] = await Promise.all([
-          api.get('/timelines/'),
-          api.get('/scheduler/'),
+          api.get('/timelines'),
+          api.get('/scheduler'),
         ]);
         setTimelines(tl.data.map((t: any) => ({ id: t.id, name: t.name, duration: t.duration })));
         setSchedules(sch.data);
@@ -117,7 +117,7 @@ const Scheduler: React.FC = () => {
     }
 
     try {
-      await api.post('/scheduler/', payload);
+      await api.post('/scheduler', payload);
       await refreshSchedules();
       await fetchRunning();
       alert('✅ Schedule created');

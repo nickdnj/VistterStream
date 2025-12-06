@@ -110,10 +110,10 @@ const StreamManagement: React.FC = () => {
   const loadData = async () => {
     try {
       const [streamsRes, camerasRes, destinationsRes, presetsRes] = await Promise.all([
-        api.get<Stream[]>('/streams/'),
-        api.get<Camera[]>('/cameras/'),
-        api.get<Destination[]>('/destinations/'),
-        api.get<Preset[]>('/presets/')
+        api.get<Stream[]>('/streams'),
+        api.get<Camera[]>('/cameras'),
+        api.get<Destination[]>('/destinations'),
+        api.get<Preset[]>('/presets')
       ]);
 
       setStreams(streamsRes.data);
@@ -167,7 +167,7 @@ const StreamManagement: React.FC = () => {
     setSaving(true);
 
     try {
-      await api.post('/streams/', {
+      await api.post('/streams', {
         ...formData,
         camera_id: parseInt(formData.camera_id, 10),
         destination_id: parseInt(formData.destination_id, 10),

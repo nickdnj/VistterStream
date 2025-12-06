@@ -114,8 +114,8 @@ const PresetManagement: React.FC = () => {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       const [camerasRes, presetsRes] = await Promise.all([
-        api.get('/cameras/', { headers }),
-        api.get('/presets/', { headers }),
+        api.get('/cameras', { headers }),
+        api.get('/presets', { headers }),
       ]);
 
       if (camerasRes.data) {

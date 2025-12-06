@@ -52,7 +52,7 @@ const AssetManagement: React.FC = () => {
 
   const loadAssets = async () => {
     try {
-      const response = await api.get('/assets/');
+      const response = await api.get('/assets');
       setAssets(response.data);
     } catch (error) {
       console.error('Failed to load assets:', error);
@@ -206,7 +206,7 @@ const AssetManagement: React.FC = () => {
         await api.put(`/assets/${selectedAsset.id}`, payload);
         alert('✅ Asset updated successfully!');
       } else {
-        await api.post('/assets/', payload);
+        await api.post('/assets', payload);
         alert('✅ Asset created successfully!');
       }
       setShowModal(false);
@@ -250,7 +250,7 @@ const AssetManagement: React.FC = () => {
         description: asset.description,
         is_active: asset.is_active,
       };
-      await api.post('/assets/', payload);
+      await api.post('/assets', payload);
       alert('✅ Asset copied');
       loadAssets();
     } catch (error: any) {

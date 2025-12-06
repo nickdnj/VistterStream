@@ -61,7 +61,7 @@ const Settings: React.FC = () => {
   const loadGeneralSettings = async () => {
     setGeneralSettingsLoading(true);
     try {
-      const response = await api.get('/settings/');
+      const response = await api.get('/settings');
       const data = response.data || {};
       setGeneralSettings({
         appliance_name: data.appliance_name || 'VistterStream Appliance',
@@ -159,7 +159,7 @@ const Settings: React.FC = () => {
     setGeneralSettingsSaving(true);
 
     try {
-      await api.post('/settings/', generalSettings);
+      await api.post('/settings', generalSettings);
       setGeneralSettingsMessage({ type: 'success', text: 'Settings saved successfully. Location synced to all assets.' });
     } catch (error) {
       console.error('Failed to save settings:', error);

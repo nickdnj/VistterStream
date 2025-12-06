@@ -374,7 +374,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadTimelines = async () => {
     try {
-      const response = await api.get('/timelines/');
+      const response = await api.get('/timelines');
       const timelinesData = Array.isArray(response.data) ? response.data : [];
       setTimelines(timelinesData);
       if (timelinesData.length > 0 && !selectedTimeline) {
@@ -407,7 +407,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadCameras = async () => {
     try {
-      const response = await api.get('/cameras/');
+      const response = await api.get('/cameras');
       const camerasData = Array.isArray(response.data) ? response.data : [];
       setCameras(camerasData);
     } catch (error) {
@@ -417,7 +417,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadPresets = async () => {
     try {
-      const response = await api.get('/presets/');
+      const response = await api.get('/presets');
       const presetsData = Array.isArray(response.data) ? response.data : [];
       setPresets(presetsData);
     } catch (error) {
@@ -427,7 +427,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadAssets = async () => {
     try {
-      const response = await api.get('/assets/');
+      const response = await api.get('/assets');
       const assetsData = Array.isArray(response.data) ? response.data : [];
       setAssets(assetsData);
     } catch (error) {
@@ -437,7 +437,7 @@ const TimelineEditor: React.FC = () => {
 
   const loadDestinations = async () => {
     try {
-      const response = await api.get('/destinations/');
+      const response = await api.get('/destinations');
       const destinationsData = Array.isArray(response.data) ? response.data : [];
       setDestinations(destinationsData.filter((d: Destination) => d.is_active));
     } catch (error) {
@@ -874,7 +874,7 @@ const TimelineEditor: React.FC = () => {
 
   const createNewTimeline = async () => {
     try {
-      const response = await api.post('/timelines/', newTimeline);
+      const response = await api.post('/timelines', newTimeline);
       setTimelines([...timelines, response.data]);
       setSelectedTimeline(response.data);
       setShowNewTimelineModal(false);
