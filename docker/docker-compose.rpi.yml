@@ -102,11 +102,8 @@ services:
     container_name: vistterstream-cloudflared
     env_file:
       - ../.env
-    # Use token-based auth - token must be set in .env file as CLOUDFLARE_TUNNEL_TOKEN
-    # Use shell to read env var from inside container ($$ escapes to $ for shell)
-    command: sh -c "cloudflared tunnel --token $${CLOUDFLARE_TUNNEL_TOKEN} run"
-    environment:
-      - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    # Cloudflared automatically reads TUNNEL_TOKEN from env_file and runs: tunnel run
+    # TUNNEL_TOKEN must be set in .env file (can be same value as CLOUDFLARE_TUNNEL_TOKEN)
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
       - cloudflared_creds:/etc/cloudflared
