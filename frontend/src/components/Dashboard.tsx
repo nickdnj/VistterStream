@@ -54,7 +54,7 @@ const Dashboard: React.FC = () => {
     try {
       const [camerasData, statusData] = await Promise.all([
         cameraService.getCameras(),
-        api.get('/status/system/').then(res => res.data)
+        api.get('/status/system').then(res => res.data)
       ]);
       setCameras(Array.isArray(camerasData) ? camerasData : []);
       setSystemStatus(statusData);

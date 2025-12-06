@@ -156,7 +156,7 @@ const StreamingDestinations: React.FC = () => {
 
   const loadPresets = async () => {
     try {
-      const response = await api.get('/destinations/presets/');
+      const response = await api.get('/destinations/presets');
       setPresets(response.data);
     } catch (error) {
       console.error('Failed to load presets:', error);

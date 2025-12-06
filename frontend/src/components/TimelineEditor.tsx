@@ -380,7 +380,7 @@ const TimelineEditor: React.FC = () => {
       if (timelinesData.length > 0 && !selectedTimeline) {
         // Check for active/running timeline first
         try {
-          const activeResp = await api.get('/timeline-execution/active/');
+          const activeResp = await api.get('/timeline-execution/active');
           const activeIds = Array.isArray(activeResp.data?.active_timeline_ids) ? activeResp.data.active_timeline_ids : [];
           
           if (activeIds.length > 0) {
@@ -810,7 +810,7 @@ const TimelineEditor: React.FC = () => {
 
     // Check if another timeline is already running (MVP: only one stream at a time)
     try {
-      const activeResp = await api.get('/timeline-execution/active/');
+      const activeResp = await api.get('/timeline-execution/active');
       const activeIds = activeResp.data?.active_timeline_ids || [];
       
       if (activeIds.length > 0 && !activeIds.includes(selectedTimeline.id)) {
