@@ -68,7 +68,7 @@ def enrich_stream(stream_db: Stream, db: Session) -> dict:
     
     return stream_dict
 
-@router.get("/")
+@router.get("")
 async def get_streams(db: Session = Depends(get_db)):
     """Get all streams"""
     streams = db.query(Stream).all()
@@ -83,7 +83,7 @@ async def get_stream(stream_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Stream not found")
     return stream
 
-@router.post("/")
+@router.post("")
 async def create_stream(stream_data: StreamCreate, db: Session = Depends(get_db)):
     """Create a new stream"""
     try:

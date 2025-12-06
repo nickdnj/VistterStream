@@ -22,7 +22,7 @@ from services.camera_service import CameraService
 
 router = APIRouter()
 
-@router.get("/", response_model=List[CameraWithStatus])
+@router.get("", response_model=List[CameraWithStatus])
 async def get_cameras(db: Session = Depends(get_db)):
     """Get all cameras with their current status"""
     camera_service = CameraService(db)
@@ -37,7 +37,7 @@ async def get_camera(camera_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Camera not found")
     return camera
 
-@router.post("/", response_model=CameraSchema)
+@router.post("", response_model=CameraSchema)
 async def create_camera(camera: CameraCreate, db: Session = Depends(get_db)):
     """Create a new camera"""
     camera_service = CameraService(db)

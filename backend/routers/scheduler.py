@@ -36,7 +36,7 @@ class TriggerScheduleRequest(BaseModel):
     force: bool = False
 
 
-@router.get("/")
+@router.get("")
 def list_schedules(db: Session = Depends(get_db)):
     items = db.query(Schedule).all()
     return [
@@ -58,7 +58,7 @@ def list_schedules(db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/")
+@router.post("")
 def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db)):
     # Validate timelines
     tl_ids = [t.timeline_id for t in payload.timelines]
