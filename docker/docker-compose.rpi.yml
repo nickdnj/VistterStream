@@ -103,7 +103,8 @@ services:
     env_file:
       - ../.env
     # Use token-based auth - token must be set in .env file as CLOUDFLARE_TUNNEL_TOKEN
-    command: cloudflared tunnel --token ${CLOUDFLARE_TUNNEL_TOKEN} run
+    # Use shell to read env var from inside container ($$ escapes to $ for shell)
+    command: sh -c "cloudflared tunnel --token $${CLOUDFLARE_TUNNEL_TOKEN} run"
     environment:
       - CLOUDFLARE_TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
     volumes:
