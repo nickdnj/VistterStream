@@ -312,39 +312,39 @@ class PTZService:
             )
             
             if has_valid_position:
-            position = self._build_absolute_position(pan, tilt, zoom)
-            if position:
-                self._debug(
+                position = self._build_absolute_position(pan, tilt, zoom)
+                if position:
+                    self._debug(
                         "Dispatching AbsoluteMove (valid position)",
-                    profile_token=media_profile.token,
-                    pan=pan,
-                    tilt=tilt,
-                    zoom=zoom,
-                )
-                try:
-                    abs_move_request = ptz_service.create_type("AbsoluteMove")
-                    abs_move_request.ProfileToken = media_profile.token
-                    abs_move_request.Position = position
-                    await loop.run_in_executor(
-                        None,
-                        partial(ptz_service.AbsoluteMove, abs_move_request),
+                        profile_token=media_profile.token,
+                        pan=pan,
+                        tilt=tilt,
+                        zoom=zoom,
                     )
-                    logger.info(
-                        "🧭 Absolute move completed for camera %s (preset %s)",
-                        address,
-                        preset_token,
-                    )
+                    try:
+                        abs_move_request = ptz_service.create_type("AbsoluteMove")
+                        abs_move_request.ProfileToken = media_profile.token
+                        abs_move_request.Position = position
+                        await loop.run_in_executor(
+                            None,
+                            partial(ptz_service.AbsoluteMove, abs_move_request),
+                        )
+                        logger.info(
+                            "🧭 Absolute move completed for camera %s (preset %s)",
+                            address,
+                            preset_token,
+                        )
                         # Wait for camera to settle after absolute move
                         await asyncio.sleep(2)
                         logger.info("✅ Camera %s moved to preset %s", address, preset_token)
                         return True
-                except Exception as exc:
-                    logger.error(
-                        "❌ AbsoluteMove failed for camera %s preset %s: %s",
-                        address,
-                        preset_token,
-                        exc,
-                    )
+                    except Exception as exc:
+                        logger.error(
+                            "❌ AbsoluteMove failed for camera %s preset %s: %s",
+                            address,
+                            preset_token,
+                            exc,
+                        )
                         # Fall back to GotoPreset if AbsoluteMove fails
                         logger.info("Falling back to GotoPreset after AbsoluteMove failure")
             else:

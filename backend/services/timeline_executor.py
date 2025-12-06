@@ -556,75 +556,75 @@ class TimelineExecutor:
                 
                 # Only restart FFmpeg if needed
                 if needs_restart:
-                # Stop existing stream if running
+                    # Stop existing stream if running
                     if stream_running:
-                try:
+                        try:
                             reason = "camera changed" if not same_camera else "overlays changed"
                             logger.debug(f"Stopping existing stream {timeline_id} ({reason})...")
-                    await ffmpeg_manager.stop_stream(timeline_id)
-                except KeyError:
-                    logger.debug(f"No existing stream to stop")
-                    pass  # Not running yet
-                except Exception as e:
-                    logger.error(f"Error stopping stream: {e}")
-                    traceback.print_exc()
+                            await ffmpeg_manager.stop_stream(timeline_id)
+                        except KeyError:
+                            logger.debug(f"No existing stream to stop")
+                            pass  # Not running yet
+                        except Exception as e:
+                            logger.error(f"Error stopping stream: {e}")
+                            traceback.print_exc()
                     
-                # Start new stream with this camera and overlays
-                overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
-                logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
-                try:
-                    await ffmpeg_manager.start_stream(
-                        stream_id=timeline_id,
-                        input_url=rtsp_url,
-                        output_urls=output_urls,
-                        profile=encoding_profile or EncodingProfile.reliability_profile(
-                            ffmpeg_manager.hw_capabilities
-                        ),
-                        overlay_images=overlay_images if overlay_images else None
-                    )
-                    logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
-                    
-                    # Notify watchdog manager about the stream start
+                    # Start new stream with this camera and overlays
+                    overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
+                    logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
                     try:
-                        from services.watchdog_manager import get_watchdog_manager
-                        from models.destination import StreamingDestination
+                        await ffmpeg_manager.start_stream(
+                            stream_id=timeline_id,
+                            input_url=rtsp_url,
+                            output_urls=output_urls,
+                            profile=encoding_profile or EncodingProfile.reliability_profile(
+                                ffmpeg_manager.hw_capabilities
+                            ),
+                            overlay_images=overlay_images if overlay_images else None
+                        )
+                        logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
                         
-                        watchdog_manager = get_watchdog_manager()
-                        
-                        # Find destination IDs that match the output URLs
+                        # Notify watchdog manager about the stream start
+                        try:
+                            from services.watchdog_manager import get_watchdog_manager
+                            from models.destination import StreamingDestination
+                            
+                            watchdog_manager = get_watchdog_manager()
+                            
+                            # Find destination IDs that match the output URLs
                             dest_ids = []
                             dest_db = SessionLocal()
-                        try:
-                            for output_url in output_urls:
-                                # Match destinations by their full RTMP URL
+                            try:
+                                for output_url in output_urls:
+                                    # Match destinations by their full RTMP URL
                                     destinations = dest_db.query(StreamingDestination).all()
-                                for dest in destinations:
-                                    if dest.get_full_rtmp_url() == output_url:
+                                    for dest in destinations:
+                                        if dest.get_full_rtmp_url() == output_url:
                                             dest_ids.append(dest.id)
-                                        break
-                            
-                            # Notify watchdog manager
+                                            break
+                                
+                                # Notify watchdog manager
                                 if dest_ids:
-                                await watchdog_manager.notify_stream_started(
+                                    await watchdog_manager.notify_stream_started(
                                         destination_ids=dest_ids,
-                                    stream_id=timeline_id,
+                                        stream_id=timeline_id,
                                         db_session=dest_db
-                                )
+                                    )
                                     logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} → destinations {dest_ids}")
-                        finally:
+                            finally:
                                 dest_db.close()
+                        except Exception as e:
+                            logger.warning(f"Failed to notify watchdog manager: {e}")
                     except Exception as e:
-                        logger.warning(f"Failed to notify watchdog manager: {e}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
-                    traceback.print_exc()
-                    # Clean up temp files
-                    for temp_file in temp_files:
-                        try:
-                            os.unlink(temp_file)
-                        except:
-                            pass
-                    raise
+                        logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
+                        traceback.print_exc()
+                        # Clean up temp files
+                        for temp_file in temp_files:
+                            try:
+                                os.unlink(temp_file)
+                            except:
+                                pass
+                        raise
                 else:
                     # Same camera, same overlays - just log that we're continuing
                     logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
