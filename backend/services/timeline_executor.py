@@ -19,6 +19,7 @@ from models.database import Camera, Preset
 from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile
 from services.ptz_service import get_ptz_service
 from models.schemas import StreamStatus
+from utils.google_drive import parse_google_drawing_url
 import base64
 
 logger = logging.getLogger(__name__)
@@ -361,6 +362,22 @@ class TimelineExecutor:
                             tmp.write(response.content)
                             logger.info(f"📥 Downloaded API image for asset '{asset.name}' to {tmp.name}")
                             return tmp.name
+            elif asset.type == 'google_drawing' and asset.file_path:
+                # Parse Google Drive Drawing URL and download PNG
+                export_url = parse_google_drawing_url(asset.file_path)
+                if not export_url:
+                    logger.warning(f"⚠️  Invalid Google Drive Drawing URL for asset '{asset.name}': {asset.file_path}")
+                    return None
+                
+                async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                    response = await client.get(export_url)
+                    if response.status_code == 200:
+                        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                            tmp.write(response.content)
+                            logger.info(f"📥 Downloaded Google Drawing PNG for asset '{asset.name}' to {tmp.name}")
+                            return tmp.name
+                    else:
+                        logger.warning(f"⚠️  Failed to download Google Drawing for asset '{asset.name}': HTTP {response.status_code}")
             elif asset.type == 'static_image' and asset.file_path:
                 # Convert URL path to filesystem path if needed
                 file_path = asset.file_path

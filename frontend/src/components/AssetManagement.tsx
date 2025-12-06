@@ -5,7 +5,7 @@ import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline';
 interface Asset {
   id: number;
   name: string;
-  type: 'static_image' | 'api_image' | 'video' | 'graphic';
+  type: 'static_image' | 'api_image' | 'video' | 'graphic' | 'google_drawing';
   file_path: string | null;
   api_url: string | null;
   api_refresh_interval: number;
@@ -34,7 +34,7 @@ const AssetManagement: React.FC = () => {
 
   const [formData, setFormData] = useState({
     name: '',
-    type: 'api_image' as 'static_image' | 'api_image' | 'video' | 'graphic',
+    type: 'api_image' as 'static_image' | 'api_image' | 'video' | 'graphic' | 'google_drawing',
     file_path: '',
     api_url: '',
     api_refresh_interval: 30,
@@ -282,8 +282,17 @@ const AssetManagement: React.FC = () => {
       case 'api_image': return '🌐';
       case 'video': return '🎥';
       case 'graphic': return '🎨';
+      case 'google_drawing': return '📊';
       default: return '📄';
     }
+  };
+
+  const parseGoogleDrawingUrl = (url: string): string | null => {
+    if (!url) return null;
+    const match = url.match(/\/drawings\/d\/([a-zA-Z0-9_-]+)/);
+    if (!match) return null;
+    const fileId = match[1];
+    return `https://docs.google.com/drawings/d/${fileId}/export/png`;
   };
 
   const getPositionLabel = (x: number, y: number) => {
@@ -363,6 +372,16 @@ const AssetManagement: React.FC = () => {
                     onError={(e) => {
                       (e.target as HTMLVideoElement).style.display = 'none';
                       (e.target as HTMLVideoElement).parentElement!.innerHTML = `<div class="text-6xl">${getAssetTypeIcon(asset.type)}</div>`;
+                    }}
+                  />
+                ) : asset.type === 'google_drawing' && asset.file_path ? (
+                  <img 
+                    src={parseGoogleDrawingUrl(asset.file_path) || asset.file_path} 
+                    alt={asset.name}
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      (e.target as HTMLImageElement).parentElement!.innerHTML = `<div class="text-6xl">${getAssetTypeIcon(asset.type)}</div>`;
                     }}
                   />
                 ) : (
@@ -487,6 +506,7 @@ const AssetManagement: React.FC = () => {
                     { value: 'static_image', label: 'Static Image', icon: '🖼️', desc: 'Upload PNG, JPEG, etc.' },
                     { value: 'video', label: 'Video', icon: '🎥', desc: 'Upload MP4, MOV, etc.' },
                     { value: 'graphic', label: 'Graphic', icon: '🎨', desc: 'Custom graphic overlay' },
+                    { value: 'google_drawing', label: 'Google Drawing', icon: '📊', desc: 'Google Drive Drawing (shared link)' },
                   ].map((type) => (
                     <button
                       key={type.value}
@@ -543,6 +563,51 @@ const AssetManagement: React.FC = () => {
                     />
                     <p className="mt-1 text-xs text-gray-400">How often to fetch updated content (1-3600 seconds)</p>
                   </div>
+                </div>
+              )}
+
+              {/* Google Drawing Configuration */}
+              {formData.type === 'google_drawing' && (
+                <div className="space-y-4 p-4 bg-dark-700/50 rounded-lg border border-dark-600">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Google Drive Drawing URL *
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.file_path}
+                      onChange={(e) => setFormData({ ...formData, file_path: e.target.value })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      required
+                      placeholder="https://docs.google.com/drawings/d/.../edit?usp=sharing"
+                    />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Paste the "shared with anyone" link to your Google Drive Drawing
+                    </p>
+                  </div>
+
+                  {/* Preview if URL is valid */}
+                  {formData.file_path && parseGoogleDrawingUrl(formData.file_path) && (
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Preview
+                      </label>
+                      <div className="border border-dark-600 rounded-lg p-4 bg-dark-800">
+                        <img
+                          src={parseGoogleDrawingUrl(formData.file_path)!}
+                          alt="Google Drawing Preview"
+                          className="max-w-full max-h-48 mx-auto rounded"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            const parent = (e.target as HTMLImageElement).parentElement;
+                            if (parent) {
+                              parent.innerHTML = '<p class="text-sm text-gray-400 text-center">Preview unavailable. Make sure the drawing is shared with "Anyone with the link".</p>';
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -773,7 +838,7 @@ const AssetManagement: React.FC = () => {
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={uploading || (formData.type === 'api_image' && !formData.api_url) || ((formData.type === 'static_image' || formData.type === 'video') && !selectedFile && !formData.file_path)}
+                  disabled={uploading || (formData.type === 'api_image' && !formData.api_url) || ((formData.type === 'static_image' || formData.type === 'video') && !selectedFile && !formData.file_path) || (formData.type === 'google_drawing' && !formData.file_path)}
                 >
                   {uploading ? 'Uploading...' : selectedAsset ? 'Update Asset' : 'Create Asset'}
                 </button>

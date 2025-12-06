@@ -95,7 +95,7 @@ class Preset(PresetBase):
 # Asset schemas
 class AssetBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    type: str = Field(..., pattern="^(static_image|api_image|video|graphic)$")
+    type: str = Field(..., pattern="^(static_image|api_image|video|graphic|google_drawing)$")
     file_path: Optional[str] = None
     api_url: Optional[str] = None
     api_refresh_interval: int = Field(default=30, ge=1, le=3600)
@@ -111,7 +111,7 @@ class AssetCreate(AssetBase):
 
 class AssetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
-    type: Optional[str] = Field(None, pattern="^(static_image|api_image|video|graphic)$")
+    type: Optional[str] = Field(None, pattern="^(static_image|api_image|video|graphic|google_drawing)$")
     file_path: Optional[str] = None
     api_url: Optional[str] = None
     api_refresh_interval: Optional[int] = Field(None, ge=1, le=3600)

@@ -1390,6 +1390,7 @@ const TimelineEditor: React.FC = () => {
                             {asset.type === 'static_image' && '🖼️'}
                             {asset.type === 'video' && '🎥'}
                             {asset.type === 'graphic' && '🎨'}
+                            {asset.type === 'google_drawing' && '📊'}
                           </span>
                           <div className="flex-1 min-w-0">
                             <div className="text-white text-sm font-medium truncate">{asset.name}</div>
@@ -1722,6 +1723,7 @@ const TimelineEditor: React.FC = () => {
                                     {asset.type === 'static_image' && '🖼️'}
                                     {asset.type === 'video' && '🎥'}
                                     {asset.type === 'graphic' && '🎨'}
+                                    {asset.type === 'google_drawing' && '📊'}
                                     {' '}{asset.type.replace('_', ' ')}
                                   </div>
                                 )}

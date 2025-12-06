@@ -50,7 +50,7 @@ def create_asset(asset_data: AssetCreate, db: Session = Depends(get_db)):
     if asset_data.type == "api_image":
         if not asset_data.api_url:
             raise HTTPException(status_code=400, detail="api_url is required for api_image type")
-    elif asset_data.type in ["static_image", "video", "graphic"]:
+    elif asset_data.type in ["static_image", "video", "graphic", "google_drawing"]:
         if not asset_data.file_path:
             raise HTTPException(status_code=400, detail="file_path is required for this asset type")
     

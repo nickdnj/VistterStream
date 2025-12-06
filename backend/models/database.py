@@ -90,7 +90,7 @@ class Asset(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    type = Column(String, nullable=False)  # "static_image", "api_image", "video", "graphic"
+    type = Column(String, nullable=False)  # "static_image", "api_image", "video", "graphic", "google_drawing"
     
     # For static images/videos
     file_path = Column(String)  # Local file path or URL
