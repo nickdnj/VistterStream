@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
@@ -114,6 +115,7 @@ const MIN_ZOOM = 2; // Minimum pixels per second (extended range for 10-minute v
 const MAX_ZOOM = 200; // Maximum pixels per second
 
 const TimelineEditor: React.FC = () => {
+  const location = useLocation();
   const [timelines, setTimelines] = useState<Timeline[]>([]);
   const [selectedTimeline, setSelectedTimeline] = useState<Timeline | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -199,7 +201,17 @@ const TimelineEditor: React.FC = () => {
 
   // Playhead and zoom controls (local-only, no live preview)
   const [playheadTime, setPlayheadTime] = useState(0);
-  const [zoomLevel, setZoomLevel] = useState(40); // pixels per second (default 40)
+  // Initialize zoom level from sessionStorage or default to 40
+  const [zoomLevel, setZoomLevel] = useState(() => {
+    const savedZoom = sessionStorage.getItem('timeline-zoom-level');
+    if (savedZoom) {
+      const zoom = parseFloat(savedZoom);
+      if (zoom >= MIN_ZOOM && zoom <= MAX_ZOOM) {
+        return zoom;
+      }
+    }
+    return 40; // pixels per second (default 40)
+  });
 
   // New timeline form
   const [newTimeline, setNewTimeline] = useState<Timeline>({
@@ -231,6 +243,18 @@ const TimelineEditor: React.FC = () => {
     };
     loadAllData();
   }, []);
+
+  // Save zoom level to sessionStorage whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem('timeline-zoom-level', zoomLevel.toString());
+  }, [zoomLevel]);
+
+  // Reload destinations when navigating to timelines page (e.g., returning from Settings)
+  useEffect(() => {
+    if (location.pathname === '/timelines') {
+      loadDestinations();
+    }
+  }, [location.pathname]);
 
   // Load custom order from localStorage on mount
   useEffect(() => {
