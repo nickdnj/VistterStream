@@ -100,7 +100,7 @@ class TimelineResponse(BaseModel):
 
 
 # API Endpoints
-@router.get("/", response_model=List[TimelineResponse])
+@router.get("", response_model=List[TimelineResponse])
 def get_timelines(db: Session = Depends(get_db)):
     """Get all timelines"""
     timelines = db.query(Timeline).all()
@@ -116,7 +116,7 @@ def get_timeline(timeline_id: int, db: Session = Depends(get_db)):
     return timeline
 
 
-@router.post("/", response_model=TimelineResponse)
+@router.post("", response_model=TimelineResponse)
 def create_timeline(timeline_data: TimelineCreate, db: Session = Depends(get_db)):
     """Create a new timeline"""
     try:

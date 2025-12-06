@@ -38,7 +38,7 @@ class SettingsUpdate(BaseModel):
     longitude: Optional[float] = None
 
 
-@router.get("/", response_model=SettingsResponse)
+@router.get("", response_model=SettingsResponse)
 def get_settings(db: Session = Depends(get_db)):
     """Get current system settings"""
     settings = db.query(Settings).first()
@@ -56,7 +56,7 @@ def get_settings(db: Session = Depends(get_db)):
     return settings
 
 
-@router.post("/", response_model=SettingsResponse)
+@router.post("", response_model=SettingsResponse)
 def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_db)):
     """Update system settings and sync location to all assets"""
     settings = db.query(Settings).first()

@@ -24,7 +24,7 @@ router = APIRouter(
 UPLOAD_DIR = Path("uploads/assets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-@router.get("/", response_model=List[AssetSchema])
+@router.get("", response_model=List[AssetSchema])
 def get_assets(
     skip: int = 0,
     limit: int = 100,
@@ -42,7 +42,7 @@ def get_asset(asset_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Asset not found")
     return asset
 
-@router.post("/", response_model=AssetSchema)
+@router.post("", response_model=AssetSchema)
 def create_asset(asset_data: AssetCreate, db: Session = Depends(get_db)):
     """Create a new asset"""
     

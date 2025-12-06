@@ -26,7 +26,7 @@ def _mask_secret(value: Optional[str]) -> str:
     return f"{value[0]}***{value[-1]}"
 
 
-@router.get("/", response_model=List[PresetSchema])
+@router.get("", response_model=List[PresetSchema])
 def get_presets(camera_id: int = None, db: Session = Depends(get_db)):
     """Get all presets, optionally filtered by camera"""
     query = db.query(Preset)
@@ -44,7 +44,7 @@ def get_preset(preset_id: int, db: Session = Depends(get_db)):
     return preset
 
 
-@router.post("/", response_model=PresetSchema, status_code=201)
+@router.post("", response_model=PresetSchema, status_code=201)
 def create_preset(preset: PresetCreate, db: Session = Depends(get_db)):
     """Create a new preset"""
     # Verify camera exists

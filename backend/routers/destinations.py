@@ -227,7 +227,7 @@ def get_platform_presets():
     return PLATFORM_PRESETS
 
 
-@router.get("/", response_model=List[DestinationResponse])
+@router.get("", response_model=List[DestinationResponse])
 def get_destinations(db: Session = Depends(get_db)):
     """Get all streaming destinations"""
     destinations = db.query(StreamingDestination).order_by(StreamingDestination.created_at.desc()).all()
@@ -243,7 +243,7 @@ def get_destination(destination_id: int, db: Session = Depends(get_db)):
     return _serialize_destination(destination)
 
 
-@router.post("/", response_model=DestinationResponse)
+@router.post("", response_model=DestinationResponse)
 def create_destination(destination_data: DestinationCreate, db: Session = Depends(get_db)):
     """Create a new streaming destination"""
     try:
