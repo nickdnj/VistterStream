@@ -100,6 +100,8 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: vistterstream-cloudflared
+    env_file:
+      - ../.env
     # Use token-based auth - token must be set in .env file as CLOUDFLARE_TUNNEL_TOKEN
     command: cloudflared tunnel --token ${CLOUDFLARE_TUNNEL_TOKEN} run
     environment:

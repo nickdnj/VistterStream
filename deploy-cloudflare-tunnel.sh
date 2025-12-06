@@ -1,10 +1,10 @@
 #!/bin/bash
 # Deployment script for Cloudflare Tunnel setup
-# Run this script to deploy to remote device at 192.168.86.33
+# Run this script to deploy to remote device
+# Default: 192.168.12.107 (can be overridden with REMOTE_HOST env var)
 
-REMOTE_HOST="192.168.86.33"
-REMOTE_USER="vistter"
-REMOTE_PASS="cathie19"
+REMOTE_HOST="${REMOTE_HOST:-192.168.12.107}"
+REMOTE_USER="${REMOTE_USER:-vistter}"
 REMOTE_DIR="VistterStream"
 
 echo "═══════════════════════════════════════════════════════════════"
