@@ -14,7 +14,6 @@ from services.timeline_executor import get_timeline_executor
 from services.seamless_timeline_executor import get_seamless_timeline_executor
 from services.ffmpeg_manager import EncodingProfile
 from services.youtube_api_helper import YouTubeAPIHelper, YouTubeAPIError
-from services.youtube_oauth import DatabaseYouTubeTokenProvider
 from datetime import datetime
 import logging
 
@@ -64,11 +63,9 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     # This allows streams to restart without manual intervention
     for dest in destinations:
         if (dest.platform == "youtube" and 
-            dest.youtube_oauth_connected and 
             dest.youtube_broadcast_id):
             try:
                 logger.info(f"Checking YouTube broadcast status for destination {dest.id} ({dest.name})")
-                provider = DatabaseYouTubeTokenProvider(dest)
                 helper = YouTubeAPIHelper(token_provider=provider)
                 
                 async with helper:

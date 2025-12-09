@@ -496,10 +496,20 @@ class FFmpegProcessManager:
         last_output_lines = []
         error_patterns = ['error', 'Error', 'ERROR', 'failed', 'Failed', 'timeout', 'Timeout', 'Connection refused', 'Connection reset']
         
+        # Buffer for incomplete lines
+        line_buffer = ""
+        
         try:
             while not self._shutdown_event.is_set():
-                # Read line from stderr
-                line = await process.stderr.readline()
+                # Read in chunks to avoid buffer overflow ("Separator not found")
+                try:
+                    chunk = await asyncio.wait_for(process.stderr.read(8192), timeout=60.0)
+                except asyncio.TimeoutError:
+                    if process.returncode is not None:
+                        chunk = b''
+                    else:
+                        continue
+                line = chunk
                 
                 if not line:
                     # Process ended - capture any remaining output before it dies

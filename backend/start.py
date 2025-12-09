@@ -47,11 +47,6 @@ def ensure_streaming_destination_oauth_columns() -> None:
     """Ensure the streaming_destinations table has the OAuth columns."""
 
     columns_to_add = [
-        ("youtube_access_token", "TEXT"),
-        ("youtube_refresh_token", "TEXT"),
-        ("youtube_token_expiry", "DATETIME"),
-        ("youtube_oauth_scope", "TEXT"),
-        ("youtube_oauth_state", "TEXT"),
     ]
 
     try:
