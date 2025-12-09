@@ -65,10 +65,17 @@ class WatchdogManager:
         
         # Auto-detect stream_id if not provided
         if stream_id is None:
-            from services.ffmpeg_manager import FFmpegProcessManager
-            ffmpeg_manager = FFmpegProcessManager()
+            # Use the FFmpegProcessManager from timeline_executor (not a new instance!)
+            from services.timeline_executor import get_timeline_executor
+            executor = get_timeline_executor()
             destination_url = destination.get_full_rtmp_url()
-            stream_id = ffmpeg_manager.find_stream_by_destination_url(destination_url)
+            
+            # Search through all active FFmpeg managers for this destination
+            for tid, ffmpeg_manager in executor.ffmpeg_managers.items():
+                found_stream_id = ffmpeg_manager.find_stream_by_destination_url(destination_url)
+                if found_stream_id is not None:
+                    stream_id = found_stream_id
+                    break
             
             if stream_id is None:
                 logger.warning(

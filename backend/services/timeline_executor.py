@@ -125,6 +125,8 @@ class TimelineExecutor:
         if timeline_id in self.ffmpeg_managers:
             ffmpeg_manager = self.ffmpeg_managers[timeline_id]
             try:
+                # Unregister callback before stopping
+                ffmpeg_manager.unregister_stream_died_callback(timeline_id)
                 await ffmpeg_manager.stop_stream(timeline_id)
             except Exception as e:
                 logger.error(f"Error stopping FFmpeg for timeline {timeline_id}: {e}")
@@ -133,6 +135,23 @@ class TimelineExecutor:
         del self.active_timelines[timeline_id]
         logger.info(f"Stopped timeline {timeline_id}")
         return True
+    
+    async def _on_ffmpeg_died(self, stream_id: int, error_msg: str):
+        """
+        Callback when FFmpeg process dies unexpectedly.
+        This updates the timeline state so status endpoints reflect reality.
+        """
+        logger.error(f"💀 FFmpeg died for timeline {stream_id}: {error_msg}")
+        
+        # Update playback position to indicate error
+        if stream_id in self.playback_positions:
+            self.playback_positions[stream_id]["status"] = "error"
+            self.playback_positions[stream_id]["error"] = error_msg
+        
+        # Note: We don't cancel the timeline task here because the watchdog
+        # should handle recovery. If watchdog is disabled, the timeline
+        # will eventually error out when it tries to use the dead FFmpeg.
+        logger.warning(f"Timeline {stream_id} FFmpeg died - watchdog should attempt recovery")
         
     async def _execute_timeline(
         self,
@@ -600,6 +619,12 @@ class TimelineExecutor:
                             overlay_images=overlay_images if overlay_images else None
                         )
                         logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
+                        
+                        # Register callback to detect when FFmpeg dies
+                        ffmpeg_manager.register_stream_died_callback(
+                            timeline_id,
+                            self._on_ffmpeg_died
+                        )
                         
                         # Notify watchdog manager about the stream start
                         try:

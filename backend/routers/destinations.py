@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/destinations", tags=["destinations"])
 
 
 class YouTubeWatchdogConfig(BaseModel):
-    enable_watchdog: bool = False
+    enable_watchdog: bool = True
     youtube_api_key: Optional[str] = None
     youtube_stream_id: Optional[str] = None
     youtube_broadcast_id: Optional[str] = None
@@ -33,7 +33,7 @@ class DestinationCreate(BaseModel):
     stream_key: str
     description: str = ""
     channel_id: Optional[str] = None
-    enable_watchdog: bool = False
+    enable_watchdog: bool = True
     youtube_api_key: Optional[str] = None
     youtube_stream_id: Optional[str] = None
     youtube_broadcast_id: Optional[str] = None
@@ -75,7 +75,7 @@ class DestinationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_used: Optional[datetime] = None
-    enable_watchdog: bool = False
+    enable_watchdog: bool = True
     youtube_api_key: Optional[str] = None
     youtube_stream_id: Optional[str] = None
     youtube_broadcast_id: Optional[str] = None

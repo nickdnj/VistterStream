@@ -111,6 +111,8 @@ class FFmpegProcessManager:
         self.hw_capabilities: Optional[HardwareCapabilities] = None
         self._monitoring_tasks: Dict[int, asyncio.Task] = {}
         self._shutdown_event = asyncio.Event()
+        # Callbacks for when stream dies unexpectedly
+        self._on_stream_died_callbacks: Dict[int, Callable] = {}
     
     async def initialize(self):
         """Initialize the manager and detect hardware"""
@@ -311,6 +313,22 @@ class FFmpegProcessManager:
     async def get_all_streams(self) -> List[StreamProcess]:
         """Get all stream processes"""
         return list(self.processes.values())
+    
+    def register_stream_died_callback(self, stream_id: int, callback: Callable):
+        """
+        Register a callback to be called when a stream dies unexpectedly.
+        
+        Args:
+            stream_id: Stream identifier
+            callback: Async callable that takes (stream_id: int, error_msg: str)
+        """
+        self._on_stream_died_callbacks[stream_id] = callback
+        logger.debug(f"Registered stream died callback for stream {stream_id}")
+    
+    def unregister_stream_died_callback(self, stream_id: int):
+        """Remove the stream died callback for a stream"""
+        if stream_id in self._on_stream_died_callbacks:
+            del self._on_stream_died_callbacks[stream_id]
     
     async def shutdown_all(self):
         """Shutdown all running streams"""
@@ -552,6 +570,15 @@ class FFmpegProcessManager:
                                 error_msg = f"Process exited with code {returncode}. Last error: {line[:200]}"
                                 break
                     stream_process.last_error = error_msg
+                    
+                    # Notify any registered callbacks that stream died
+                    if stream_id in self._on_stream_died_callbacks:
+                        try:
+                            callback = self._on_stream_died_callbacks[stream_id]
+                            logger.info(f"Invoking stream died callback for stream {stream_id}")
+                            asyncio.create_task(callback(stream_id, error_msg))
+                        except Exception as e:
+                            logger.error(f"Error invoking stream died callback: {e}")
                     
                     # Check if stream should auto-restart by checking database status
                     should_restart = stream_process.should_auto_restart

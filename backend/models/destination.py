@@ -25,7 +25,7 @@ class StreamingDestination(Base):
     is_active = Column(Boolean, default=True)
     
     # Watchdog configuration
-    enable_watchdog = Column(Boolean, default=False)
+    enable_watchdog = Column(Boolean, default=True)
     youtube_api_key = Column(String)
     youtube_stream_id = Column(String)
     youtube_broadcast_id = Column(String)
