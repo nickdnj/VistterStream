@@ -216,6 +216,21 @@ class LocalStreamWatchdog:
                     )
                     is_healthy = False
             
+            # Check timeline progress (detect stalled timeline even if FFmpeg is healthy)
+            if is_healthy:
+                stall_threshold = 300  # 5 minutes without segment progress
+                if self.stream_id in executor._last_segment_time:
+                    last_progress = executor._last_segment_time[self.stream_id]
+                    stall_duration = (datetime.utcnow() - last_progress).total_seconds()
+                    if stall_duration > stall_threshold:
+                        self.logger.warning(
+                            f"Timeline {self.stream_id} appears stalled - no segment progress for {stall_duration:.0f}s "
+                            f"(threshold: {stall_threshold}s)"
+                        )
+                        is_healthy = False
+                    else:
+                        self.logger.debug(f"Timeline {self.stream_id} last segment: {stall_duration:.0f}s ago")
+            
             # Update health state
             if is_healthy:
                 self.health_state.mark_healthy()

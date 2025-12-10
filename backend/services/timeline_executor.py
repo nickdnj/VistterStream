@@ -48,6 +48,8 @@ class TimelineExecutor:
         self.timeline_destinations: Dict[int, List[str]] = {}  # timeline_id -> [destination names]
         # Track destination IDs for each active timeline (for auto-selection in UI)
         self.timeline_destination_ids: Dict[int, List[int]] = {}  # timeline_id -> [destination IDs]
+        # Track last segment completion time for stall detection
+        self._last_segment_time: Dict[int, datetime] = {}  # timeline_id -> last segment completion time
         
     async def start_timeline(
         self,
@@ -82,6 +84,9 @@ class TimelineExecutor:
         if destination_ids:
             self.timeline_destination_ids[timeline_id] = destination_ids
             
+        # Initialize heartbeat for stall detection
+        self._last_segment_time[timeline_id] = datetime.utcnow()
+        
         # Create execution task
         task = asyncio.create_task(
             self._execute_timeline(timeline_id, output_urls, encoding_profile)
@@ -111,6 +116,8 @@ class TimelineExecutor:
             del self.timeline_destinations[timeline_id]
         if timeline_id in self.timeline_destination_ids:
             del self.timeline_destination_ids[timeline_id]
+        if timeline_id in self._last_segment_time:
+            del self._last_segment_time[timeline_id]
             
         # Notify watchdog manager that stream is stopping
         try:
@@ -251,18 +258,30 @@ class TimelineExecutor:
                     current_overlay_ids = self._get_overlay_ids_at_time(timeline, seg_start)
 
                     # Execute this segment with current video and overlays
-                    await self._execute_segment(
-                        timeline_id=timeline_id,
-                        seg_start=seg_start,
-                        duration=duration,
-                        video_cue=video_cue,
-                        ffmpeg_manager=ffmpeg_manager,
-                        output_urls=output_urls,
-                        encoding_profile=encoding_profile,
-                        db=db,
-                        last_camera_preset=(last_camera_id, last_preset_id),
-                        last_overlay_ids=last_overlay_ids
-                    )
+                    try:
+                        await self._execute_segment(
+                            timeline_id=timeline_id,
+                            seg_start=seg_start,
+                            duration=duration,
+                            video_cue=video_cue,
+                            ffmpeg_manager=ffmpeg_manager,
+                            output_urls=output_urls,
+                            encoding_profile=encoding_profile,
+                            db=db,
+                            last_camera_preset=(last_camera_id, last_preset_id),
+                            last_overlay_ids=last_overlay_ids
+                        )
+                    except asyncio.CancelledError:
+                        raise  # Re-raise cancellation
+                    except Exception as seg_error:
+                        logger.error(
+                            f"Error executing segment {seg_index+1}/{len(segments)} at t={seg_start:.2f}s: {seg_error}",
+                            exc_info=True
+                        )
+                        # Update heartbeat even on error so watchdog knows we're making progress
+                        self._last_segment_time[timeline_id] = datetime.utcnow()
+                        # Continue to next segment instead of crashing the whole timeline
+                        continue
 
                     # Cancel position updates
                     if timeline_id in self._position_update_tasks:
@@ -597,7 +616,20 @@ class TimelineExecutor:
                         try:
                             reason = "camera changed" if not same_camera else "overlays changed"
                             logger.debug(f"Stopping existing stream {timeline_id} ({reason})...")
-                            await ffmpeg_manager.stop_stream(timeline_id)
+                            await asyncio.wait_for(
+                                ffmpeg_manager.stop_stream(timeline_id),
+                                timeout=30.0
+                            )
+                        except asyncio.TimeoutError:
+                            logger.error(f"Timeout stopping FFmpeg for timeline {timeline_id} - forcing kill")
+                            # Try to force kill if timeout
+                            try:
+                                if timeline_id in ffmpeg_manager.processes:
+                                    proc = ffmpeg_manager.processes[timeline_id].process
+                                    if proc:
+                                        proc.kill()
+                            except Exception:
+                                pass
                         except KeyError:
                             logger.debug(f"No existing stream to stop")
                             pass  # Not running yet
@@ -609,14 +641,17 @@ class TimelineExecutor:
                     overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
                     logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
                     try:
-                        await ffmpeg_manager.start_stream(
-                            stream_id=timeline_id,
-                            input_url=rtsp_url,
-                            output_urls=output_urls,
-                            profile=encoding_profile or EncodingProfile.reliability_profile(
-                                ffmpeg_manager.hw_capabilities
+                        await asyncio.wait_for(
+                            ffmpeg_manager.start_stream(
+                                stream_id=timeline_id,
+                                input_url=rtsp_url,
+                                output_urls=output_urls,
+                                profile=encoding_profile or EncodingProfile.reliability_profile(
+                                    ffmpeg_manager.hw_capabilities
+                                ),
+                                overlay_images=overlay_images if overlay_images else None
                             ),
-                            overlay_images=overlay_images if overlay_images else None
+                            timeout=60.0  # Allow up to 60s for stream to start
                         )
                         logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
                         
@@ -657,6 +692,15 @@ class TimelineExecutor:
                                 dest_db.close()
                         except Exception as e:
                             logger.warning(f"Failed to notify watchdog manager: {e}")
+                    except asyncio.TimeoutError:
+                        logger.error(f"❌ Timeout starting FFmpeg stream {timeline_id}")
+                        # Clean up temp files
+                        for temp_file in temp_files:
+                            try:
+                                os.unlink(temp_file)
+                            except:
+                                pass
+                        raise RuntimeError(f"Timeout starting FFmpeg stream {timeline_id}")
                     except Exception as e:
                         logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
                         traceback.print_exc()
@@ -675,6 +719,9 @@ class TimelineExecutor:
                 logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
                 await asyncio.sleep(duration)
                 logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
+                
+                # Update heartbeat for stall detection
+                self._last_segment_time[timeline_id] = datetime.utcnow()
                 
                 # Clean up temp files after cue completes
                 for temp_file in temp_files:
