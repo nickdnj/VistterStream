@@ -156,14 +156,12 @@ const TimelineEditor: React.FC = () => {
   const hasYoutubeDestination = !!selectedYoutubeDestination;
   
   // Studio URL with fallback: video ID (from broadcast) > channel ID > generic studio
+  // Includes ?c={channel_id} parameter to help YouTube switch to correct account context
   const youtubeStudioUrl = youtubeVideoId
-    ? `https://studio.youtube.com/video/${youtubeVideoId}/livestreaming`
+    ? `https://studio.youtube.com/video/${youtubeVideoId}/livestreaming${youtubeChannelId ? `?c=${youtubeChannelId}` : ''}`
     : youtubeChannelId
-    ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming`
+    ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming?c=${youtubeChannelId}`
     : 'https://studio.youtube.com/livestreaming';
-  const youtubeChannelUrl = youtubeChannelId
-    ? `https://www.youtube.com/channel/${youtubeChannelId}/live`
-    : 'https://www.youtube.com/live';
 
   const [cameraSnapshots, setCameraSnapshots] = useState<Record<number, string>>({});
 
@@ -1524,21 +1522,6 @@ const TimelineEditor: React.FC = () => {
                       }
                     >
                       Studio ↗
-                    </a>
-                    
-                    {/* Channel button - always active */}
-                    <a
-                      href={youtubeChannelUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
-                      title={
-                        youtubeChannelId
-                          ? "Preview public channel page in new tab"
-                          : "Open YouTube Live"
-                      }
-                    >
-                      Channel ↗
                     </a>
                   </div>
                 </div>
