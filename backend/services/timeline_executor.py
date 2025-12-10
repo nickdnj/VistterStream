@@ -57,7 +57,8 @@ class TimelineExecutor:
         output_urls: list[str],
         encoding_profile: Optional[EncodingProfile] = None,
         destination_names: Optional[List[str]] = None,
-        destination_ids: Optional[List[int]] = None
+        destination_ids: Optional[List[int]] = None,
+        start_position: Optional[float] = None
     ) -> bool:
         """
         Start executing a timeline.
@@ -68,6 +69,7 @@ class TimelineExecutor:
             encoding_profile: Encoding settings
             destination_names: Names of the destinations for display
             destination_ids: IDs of the destinations for UI auto-selection
+            start_position: Start from this time offset in seconds (for jump-to feature)
             
         Returns:
             bool: Success status
@@ -89,11 +91,12 @@ class TimelineExecutor:
         
         # Create execution task
         task = asyncio.create_task(
-            self._execute_timeline(timeline_id, output_urls, encoding_profile)
+            self._execute_timeline(timeline_id, output_urls, encoding_profile, start_position)
         )
         self.active_timelines[timeline_id] = task
         
-        logger.info(f"Started timeline {timeline_id}")
+        start_info = f" from {start_position}s" if start_position else ""
+        logger.info(f"Started timeline {timeline_id}{start_info}")
         return True
         
     async def stop_timeline(self, timeline_id: int) -> bool:
@@ -164,12 +167,16 @@ class TimelineExecutor:
         self,
         timeline_id: int,
         output_urls: list[str],
-        encoding_profile: Optional[EncodingProfile]
+        encoding_profile: Optional[EncodingProfile],
+        start_position: Optional[float] = None
     ):
         """
         Main timeline execution loop.
         
         This is the magic that switches between cameras!
+        
+        Args:
+            start_position: If provided, skip segments before this time and start from here
         """
         db = SessionLocal()
         
@@ -227,6 +234,21 @@ class TimelineExecutor:
                     duration = max(0.0, seg_end - seg_start)
                     if duration <= 0.0:
                         continue
+
+                    # Handle start_position: skip segments that end before start position
+                    if start_position is not None and start_position > 0:
+                        if seg_end <= start_position:
+                            # This segment ends before our start position, skip it entirely
+                            logger.debug(f"Skipping segment {seg_index+1} (ends at {seg_end:.2f}s, before start_position {start_position:.2f}s)")
+                            continue
+                        
+                        if seg_start < start_position < seg_end:
+                            # This segment contains our start position - adjust duration
+                            time_to_skip = start_position - seg_start
+                            duration = duration - time_to_skip
+                            logger.info(f"Starting mid-segment at {start_position:.2f}s (skipping {time_to_skip:.2f}s of segment)")
+                            # Clear start_position so we don't skip again on subsequent loops
+                            start_position = None
 
                     # Determine active video cue at segment start
                     active_video_cues = [

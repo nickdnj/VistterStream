@@ -201,6 +201,13 @@ const TimelineEditor: React.FC = () => {
     itemId: number;
   } | null>(null);
 
+  // Context menu for timeline "Go to here" feature
+  const [timelineContextMenu, setTimelineContextMenu] = useState<{
+    x: number;
+    y: number;
+    time: number;
+  } | null>(null);
+
   // Custom order state (persisted to localStorage)
   const [cameraOrder, setCameraOrder] = useState<number[]>([]);
   const [assetOrder, setAssetOrder] = useState<number[]>([]);
@@ -294,9 +301,12 @@ const TimelineEditor: React.FC = () => {
     if (timelineOrder.length) localStorage.setItem('timeline-timeline-order', JSON.stringify(timelineOrder));
   }, [timelineOrder]);
 
-  // Close context menu when clicking elsewhere
+  // Close context menus when clicking elsewhere
   useEffect(() => {
-    const handleClick = () => setContextMenu(null);
+    const handleClick = () => {
+      setContextMenu(null);
+      setTimelineContextMenu(null);
+    };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
@@ -907,6 +917,67 @@ const TimelineEditor: React.FC = () => {
     } catch (error) {
       console.error('Failed to stop timeline:', error);
       alert('Failed to stop timeline');
+    }
+  };
+
+  const handleJumpToPosition = async (targetTime: number) => {
+    // Close the context menu
+    setTimelineContextMenu(null);
+
+    if (!selectedTimeline || !selectedTimeline.id) {
+      alert('⚠️ No timeline selected');
+      return;
+    }
+
+    if (selectedDestinations.length === 0) {
+      alert('⚠️ Please select at least one destination first');
+      return;
+    }
+
+    // Check if timeline has cues
+    const hasCues = selectedTimeline.tracks.some(t => t.cues.length > 0);
+    if (!hasCues) {
+      alert('⚠️ Timeline has no cues!');
+      return;
+    }
+
+    setStarting(true);
+    try {
+      // Stop the timeline if it's running
+      if (isRunning) {
+        try {
+          await api.post(`/timeline-execution/stop/${selectedTimeline.id}`);
+          console.log('🛑 Stopped timeline for jump');
+          await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause
+        } catch (stopError) {
+          console.log('Timeline was not running');
+        }
+      }
+
+      // Start timeline from the target position
+      console.log(`▶️ Starting timeline from ${targetTime.toFixed(1)}s`);
+      const response = await api.post('/timeline-execution/start', {
+        timeline_id: selectedTimeline.id,
+        destination_ids: selectedDestinations,
+        start_position: targetTime
+      });
+      
+      setIsRunning(true);
+      // Update playhead to the jump position
+      setPlayheadTime(targetTime);
+      
+      // Refresh status from backend
+      try { 
+        await api.get(`/timeline-execution/status/${selectedTimeline.id}`)
+          .then(r => setIsRunning(Boolean(r.data?.is_running))); 
+      } catch {}
+      
+      console.log(`✅ Jumped to ${formatTime(targetTime)}`);
+    } catch (error: any) {
+      console.error('Failed to jump to position:', error);
+      alert(`❌ Failed to jump to position:\n${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -1728,6 +1799,17 @@ const TimelineEditor: React.FC = () => {
                           handleTrackDrop(e, trackIndex, dropTime);
                         }}
                         onDragOver={handleDragOver}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const clickX = e.clientX - rect.left;
+                          const clickTime = Math.max(0, Math.min(clickX / zoomLevel, selectedTimeline.duration));
+                          setTimelineContextMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            time: clickTime
+                          });
+                        }}
                       >
                         {track.cues.length === 0 && (
                           <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm pointer-events-none">
@@ -2032,6 +2114,25 @@ const TimelineEditor: React.FC = () => {
             className="w-full px-4 py-2 text-left text-sm text-white hover:bg-dark-600 transition-colors flex items-center gap-2"
           >
             <span>🔽</span> Move down
+          </button>
+        </div>
+      )}
+
+      {/* Timeline Context Menu - "Go to here" */}
+      {timelineContextMenu && (
+        <div
+          className="fixed bg-dark-700 border border-dark-600 rounded-lg shadow-xl py-1 z-50 min-w-[160px]"
+          style={{ left: timelineContextMenu.x, top: timelineContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-4 py-1 text-xs text-gray-400 border-b border-dark-600">
+            Jump to {formatTime(timelineContextMenu.time)}
+          </div>
+          <button
+            onClick={() => handleJumpToPosition(timelineContextMenu.time)}
+            className="w-full px-4 py-2 text-left text-sm text-white hover:bg-dark-600 transition-colors flex items-center gap-2"
+          >
+            <span>▶️</span> Go to here
           </button>
         </div>
       )}

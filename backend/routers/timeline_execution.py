@@ -24,6 +24,7 @@ class StartTimelineRequest(BaseModel):
     timeline_id: int
     destination_ids: list[int]  # List of destination IDs to stream to
     encoding_profile: Optional[dict] = None  # Optional custom encoding
+    start_position: Optional[float] = None  # Start from this time offset (seconds)
 
 
 class TimelineStatusResponse(BaseModel):
@@ -67,7 +68,8 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
         output_urls=output_urls,
         encoding_profile=None,  # TODO: Support custom encoding profiles
         destination_names=destination_names,
-        destination_ids=request.destination_ids
+        destination_ids=request.destination_ids,
+        start_position=request.start_position
     )
     
     if not success:
