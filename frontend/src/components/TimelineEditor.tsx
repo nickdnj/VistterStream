@@ -125,6 +125,8 @@ const TimelineEditor: React.FC = () => {
   const [selectedDestinations, setSelectedDestinations] = useState<number[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showNewTimelineModal, setShowNewTimelineModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -162,6 +164,20 @@ const TimelineEditor: React.FC = () => {
     : youtubeChannelId
     ? `https://studio.youtube.com/channel/${youtubeChannelId}/livestreaming?c=${youtubeChannelId}`
     : 'https://studio.youtube.com/livestreaming';
+
+  // Watch URL for sharing (direct link to the live stream)
+  const youtubeWatchUrl = youtubeVideoId 
+    ? `https://www.youtube.com/watch?v=${youtubeVideoId}` 
+    : null;
+
+  // Copy share URL to clipboard
+  const handleCopyShareUrl = async () => {
+    if (youtubeWatchUrl) {
+      await navigator.clipboard.writeText(youtubeWatchUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   const [cameraSnapshots, setCameraSnapshots] = useState<Record<number, string>>({});
 
@@ -1523,6 +1539,17 @@ const TimelineEditor: React.FC = () => {
                     >
                       Studio ↗
                     </a>
+                    
+                    {/* Share button - only when broadcast ID available */}
+                    {youtubeVideoId && (
+                      <button
+                        onClick={() => setShowShareModal(true)}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium whitespace-nowrap transition-colors"
+                        title="Share stream link"
+                      >
+                        Share
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1886,6 +1913,97 @@ const TimelineEditor: React.FC = () => {
                 Create
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && youtubeWatchUrl && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-md border border-dark-700">
+            <h2 className="text-xl font-bold text-white mb-4">Share Stream</h2>
+            
+            {/* URL Display */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stream Link</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={youtubeWatchUrl}
+                  className="flex-1 px-3 py-2 bg-dark-900 border border-dark-600 rounded-md text-white font-mono text-sm"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  onClick={handleCopyShareUrl}
+                  className={`px-4 py-2 rounded-md font-medium transition-colors whitespace-nowrap ${
+                    copied 
+                      ? 'bg-green-600 text-white' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  {copied ? '✓ Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            {/* Social Share Buttons */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Share on</label>
+              <div className="flex gap-2">
+                {/* Twitter/X */}
+                <a
+                  href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(youtubeWatchUrl)}&text=${encodeURIComponent('Watch live now!')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 px-3 py-2 bg-black hover:bg-gray-900 text-white rounded-md text-sm font-medium text-center transition-colors border border-gray-700"
+                  title="Share on X (Twitter)"
+                >
+                  𝕏
+                </a>
+                
+                {/* Facebook */}
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(youtubeWatchUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium text-center transition-colors"
+                  title="Share on Facebook"
+                >
+                  Facebook
+                </a>
+                
+                {/* LinkedIn */}
+                <a
+                  href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(youtubeWatchUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-md text-sm font-medium text-center transition-colors"
+                  title="Share on LinkedIn"
+                >
+                  LinkedIn
+                </a>
+                
+                {/* WhatsApp */}
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent('Watch live now! ' + youtubeWatchUrl)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium text-center transition-colors"
+                  title="Share on WhatsApp"
+                >
+                  WhatsApp
+                </a>
+              </div>
+            </div>
+
+            {/* Close Button */}
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="w-full px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
