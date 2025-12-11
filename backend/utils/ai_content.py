@@ -14,9 +14,9 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Try to import OpenAI
+# Try to import OpenAI (v1.0.0+ client-based API)
 try:
-    import openai
+    from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -190,8 +190,8 @@ async def generate_headlines(ai_config: Dict) -> List[str]:
         return generate_placeholder_headlines(ai_config)
     
     try:
-        # Set API key
-        openai.api_key = api_key
+        # Create OpenAI client (v1.0.0+ API)
+        client = OpenAI(api_key=api_key)
         
         # Format the prompt
         prompt = format_prompt(ai_config)
@@ -199,7 +199,7 @@ async def generate_headlines(ai_config: Dict) -> List[str]:
         logger.info(f"Generating headlines with model={model}, temp={temperature}")
         
         # Make API call
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=model,
             messages=[
                 {
@@ -216,8 +216,8 @@ async def generate_headlines(ai_config: Dict) -> List[str]:
             response_format={"type": "json_object"}
         )
         
-        # Extract response
-        response_text = response['choices'][0]['message']['content'].strip()
+        # Extract response (v1.0.0+ uses attribute access)
+        response_text = response.choices[0].message.content.strip()
         
         # Parse headlines
         headlines = extract_headlines_from_response(response_text)

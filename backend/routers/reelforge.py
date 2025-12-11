@@ -135,13 +135,13 @@ def test_openai_connection(db: Session = Depends(get_db)):
         }
     
     try:
-        import openai
+        from openai import OpenAI
         
         api_key = _decrypt_api_key(settings.openai_api_key_enc)
-        openai.api_key = api_key
+        client = OpenAI(api_key=api_key)
         
-        # Make a simple test call
-        response = openai.ChatCompletion.create(
+        # Make a simple test call (v1.0.0+ API)
+        response = client.chat.completions.create(
             model=settings.openai_model or "gpt-4o-mini",
             messages=[
                 {"role": "user", "content": "Say 'Hello' in one word."}
