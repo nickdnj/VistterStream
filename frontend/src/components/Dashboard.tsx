@@ -8,7 +8,6 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   XCircleIcon,
-  PlusIcon,
 } from '@heroicons/react/24/outline';
 
 interface SystemStatus {
@@ -25,9 +24,25 @@ interface SystemStatus {
   timeline_destinations?: string[];
 }
 
+interface Destination {
+  id: number;
+  name: string;
+  platform: string;
+  youtube_broadcast_id?: string;
+  youtube_stream_id?: string;
+}
+
+interface ActiveStreamInfo {
+  timelineId: number;
+  timelineName: string;
+  youtubeVideoId: string | null;
+  destinationName: string | null;
+}
+
 const Dashboard: React.FC = () => {
   const [cameras, setCameras] = useState<CameraWithStatus[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [activeStreamInfo, setActiveStreamInfo] = useState<ActiveStreamInfo | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Dashboard metric visibility preferences (stored in localStorage)
@@ -52,12 +67,67 @@ const Dashboard: React.FC = () => {
 
   const loadData = async () => {
     try {
+      // Refresh metric visibility from localStorage (for live settings updates)
+      setShowMemoryUsage(localStorage.getItem('dashboard_show_memory') !== 'false');
+      setShowNetworkUsage(localStorage.getItem('dashboard_show_network') !== 'false');
+      setShowDiskUsage(localStorage.getItem('dashboard_show_disk') !== 'false');
+
       const [camerasData, statusData] = await Promise.all([
         cameraService.getCameras(),
         api.get('/status/system').then(res => res.data)
       ]);
       setCameras(Array.isArray(camerasData) ? camerasData : []);
       setSystemStatus(statusData);
+
+      // Fetch active stream info for YouTube embed
+      try {
+        const activeResp = await api.get('/timeline-execution/active');
+        const activeIds = activeResp.data?.active_timeline_ids || [];
+        
+        if (activeIds.length > 0) {
+          const timelineId = activeIds[0];
+          const statusResp = await api.get(`/timeline-execution/status/${timelineId}`);
+          const timelineName = statusResp.data?.timeline_name || 'Active Stream';
+          const destinationIds = statusResp.data?.destination_ids || [];
+          
+          // Fetch destinations to get YouTube broadcast ID
+          if (destinationIds.length > 0) {
+            const destResp = await api.get('/destinations');
+            const destinations: Destination[] = destResp.data || [];
+            
+            // Find YouTube destination with broadcast ID
+            const youtubeDestination = destinations.find((d: Destination) => 
+              destinationIds.includes(d.id) && 
+              (d.platform === 'youtube' || d.platform === 'youtube_oauth') &&
+              (d.youtube_broadcast_id || d.youtube_stream_id)
+            );
+            
+            if (youtubeDestination) {
+              setActiveStreamInfo({
+                timelineId,
+                timelineName,
+                youtubeVideoId: youtubeDestination.youtube_broadcast_id || youtubeDestination.youtube_stream_id || null,
+                destinationName: youtubeDestination.name
+              });
+            } else {
+              // Active stream but no YouTube destination with video ID
+              setActiveStreamInfo({
+                timelineId,
+                timelineName,
+                youtubeVideoId: null,
+                destinationName: destinations.find((d: Destination) => destinationIds.includes(d.id))?.name || null
+              });
+            }
+          } else {
+            setActiveStreamInfo(null);
+          }
+        } else {
+          setActiveStreamInfo(null);
+        }
+      } catch (streamError) {
+        console.log('No active stream info available');
+        setActiveStreamInfo(null);
+      }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -113,6 +183,60 @@ const Dashboard: React.FC = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">Dashboard</h1>
         <p className="mt-2 text-gray-400">Monitor your streaming appliance status</p>
+      </div>
+
+      {/* Live Stream Embed */}
+      <div className="mb-8">
+        {activeStreamInfo?.youtubeVideoId ? (
+          <div className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src={`https://www.youtube.com/embed/${activeStreamInfo.youtubeVideoId}?autoplay=1&mute=1`}
+                title="Live Stream"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+              <div className="absolute top-3 left-3 flex items-center gap-2">
+                <div className="bg-red-600 px-2 py-1 rounded text-xs font-bold text-white flex items-center gap-1">
+                  <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                  LIVE
+                </div>
+                <div className="bg-black/70 px-2 py-1 rounded text-xs text-white">
+                  {activeStreamInfo.timelineName}
+                  {activeStreamInfo.destinationName && ` → ${activeStreamInfo.destinationName}`}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : activeStreamInfo ? (
+          <div className="bg-dark-800 rounded-lg border border-dark-700 p-8 text-center">
+            <div className="text-4xl mb-3">📡</div>
+            <h3 className="text-lg font-semibold text-white mb-1">Stream Active</h3>
+            <p className="text-gray-400 text-sm">
+              {activeStreamInfo.timelineName} is streaming
+              {activeStreamInfo.destinationName && ` to ${activeStreamInfo.destinationName}`}
+            </p>
+            <p className="text-gray-500 text-xs mt-2">
+              YouTube preview requires a Broadcast ID configured in your destination
+            </p>
+          </div>
+        ) : (
+          <div className="bg-dark-800 rounded-lg border border-dark-700 p-8 text-center">
+            <div className="text-4xl mb-3">📺</div>
+            <h3 className="text-lg font-semibold text-white mb-1">No Active Stream</h3>
+            <p className="text-gray-400 text-sm">
+              Start a timeline to see your live stream here
+            </p>
+            <Link
+              to="/timelines"
+              className="inline-block mt-4 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-md transition-colors"
+            >
+              Go to Timeline Editor
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* System Status Cards */}
@@ -252,11 +376,10 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-white">Cameras</h2>
           <Link
-            to="/cameras"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 transition-colors"
+            to="/settings"
+            className="text-sm text-primary-400 hover:text-primary-300 transition-colors"
           >
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Add Camera
+            Manage in Settings →
           </Link>
         </div>
 
@@ -264,13 +387,12 @@ const Dashboard: React.FC = () => {
           <div className="bg-dark-800 rounded-lg p-8 border border-dark-700 text-center">
             <CameraIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-white mb-2">No cameras configured</h3>
-            <p className="text-gray-400 mb-4">Get started by adding your first camera</p>
+            <p className="text-gray-400 mb-4">Configure cameras in Settings → Cameras</p>
             <Link
-              to="/cameras"
+              to="/settings"
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 transition-colors"
             >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Add Camera
+              Go to Settings
             </Link>
           </div>
         ) : (

@@ -543,7 +543,6 @@ const Settings: React.FC = () => {
                     checked={localStorage.getItem('dashboard_show_memory') !== 'false'}
                     onChange={(e) => {
                       localStorage.setItem('dashboard_show_memory', e.target.checked.toString());
-                      window.location.reload();
                     }}
                   />
                   <div className="w-11 h-6 bg-dark-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
@@ -562,7 +561,6 @@ const Settings: React.FC = () => {
                     checked={localStorage.getItem('dashboard_show_network') !== 'false'}
                     onChange={(e) => {
                       localStorage.setItem('dashboard_show_network', e.target.checked.toString());
-                      window.location.reload();
                     }}
                   />
                   <div className="w-11 h-6 bg-dark-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
@@ -581,7 +579,6 @@ const Settings: React.FC = () => {
                     checked={localStorage.getItem('dashboard_show_disk') !== 'false'}
                     onChange={(e) => {
                       localStorage.setItem('dashboard_show_disk', e.target.checked.toString());
-                      window.location.reload();
                     }}
                   />
                   <div className="w-11 h-6 bg-dark-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
@@ -589,9 +586,9 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-md">
-              <p className="text-sm text-blue-300">
-                ℹ️ <strong>Note:</strong> Changes to dashboard metrics will take effect after a page refresh.
+            <div className="mt-6 p-4 bg-green-900/20 border border-green-500/30 rounded-md">
+              <p className="text-sm text-green-300">
+                ✓ Changes take effect automatically within a few seconds on the Dashboard.
               </p>
             </div>
           </div>
