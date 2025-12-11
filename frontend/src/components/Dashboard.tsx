@@ -179,14 +179,14 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-6">
+    <div className="h-full overflow-y-auto p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">Dashboard</h1>
         <p className="mt-2 text-gray-400">Monitor your streaming appliance status</p>
       </div>
 
       {/* Live Stream Embed */}
-      <div className="mb-8">
+      <div className="mb-8 max-w-4xl mx-auto">
         {activeStreamInfo?.youtubeVideoId ? (
           <div className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
             <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
