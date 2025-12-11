@@ -30,6 +30,17 @@ const Settings: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
+  // Dashboard metric visibility toggles
+  const [showMemory, setShowMemory] = useState(() => 
+    localStorage.getItem('dashboard_show_memory') !== 'false'
+  );
+  const [showNetwork, setShowNetwork] = useState(() => 
+    localStorage.getItem('dashboard_show_network') !== 'false'
+  );
+  const [showDisk, setShowDisk] = useState(() => 
+    localStorage.getItem('dashboard_show_disk') !== 'false'
+  );
+  
   // General settings state
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
     appliance_name: 'VistterStream Appliance',
@@ -540,8 +551,9 @@ const Settings: React.FC = () => {
                   <input
                     type="checkbox"
                     className="sr-only peer"
-                    checked={localStorage.getItem('dashboard_show_memory') !== 'false'}
+                    checked={showMemory}
                     onChange={(e) => {
+                      setShowMemory(e.target.checked);
                       localStorage.setItem('dashboard_show_memory', e.target.checked.toString());
                     }}
                   />
@@ -558,8 +570,9 @@ const Settings: React.FC = () => {
                   <input
                     type="checkbox"
                     className="sr-only peer"
-                    checked={localStorage.getItem('dashboard_show_network') !== 'false'}
+                    checked={showNetwork}
                     onChange={(e) => {
+                      setShowNetwork(e.target.checked);
                       localStorage.setItem('dashboard_show_network', e.target.checked.toString());
                     }}
                   />
@@ -576,8 +589,9 @@ const Settings: React.FC = () => {
                   <input
                     type="checkbox"
                     className="sr-only peer"
-                    checked={localStorage.getItem('dashboard_show_disk') !== 'false'}
+                    checked={showDisk}
                     onChange={(e) => {
+                      setShowDisk(e.target.checked);
                       localStorage.setItem('dashboard_show_disk', e.target.checked.toString());
                     }}
                   />
