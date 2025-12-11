@@ -142,7 +142,7 @@ def test_openai_connection(db: Session = Depends(get_db)):
         
         # Make a simple test call (v1.0.0+ API)
         response = client.chat.completions.create(
-            model=settings.openai_model or "gpt-4o-mini",
+            model=settings.openai_model or "gpt-5-mini",
             messages=[
                 {"role": "user", "content": "Say 'Hello' in one word."}
             ],
@@ -152,7 +152,7 @@ def test_openai_connection(db: Session = Depends(get_db)):
         return {
             "success": True,
             "message": "Connection successful!",
-            "model_used": settings.openai_model or "gpt-4o-mini"
+            "model_used": settings.openai_model or "gpt-5-mini"
         }
         
     except ImportError:

@@ -57,7 +57,7 @@ class ReelForgeSettings(Base):
     
     # OpenAI Configuration
     openai_api_key_enc = Column(String)  # Encrypted API key (base64 encoded)
-    openai_model = Column(String, default="gpt-4o-mini")  # Model to use
+    openai_model = Column(String, default="gpt-5-mini")  # Model to use
     
     # System Prompt (editable)
     system_prompt = Column(String, default="""You are a social media content creator specializing in short-form video content like TikTok, Instagram Reels, and YouTube Shorts. You create short, punchy headlines that grab attention.

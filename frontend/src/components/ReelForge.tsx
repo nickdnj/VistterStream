@@ -111,7 +111,7 @@ const ReelForge: React.FC = () => {
   
   // Settings form state
   const [settingsApiKey, setSettingsApiKey] = useState('');
-  const [settingsModel, setSettingsModel] = useState('gpt-4o-mini');
+  const [settingsModel, setSettingsModel] = useState('gpt-5-mini');
   const [settingsSystemPrompt, setSettingsSystemPrompt] = useState('');
   const [settingsTemperature, setSettingsTemperature] = useState(0.8);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -172,7 +172,7 @@ const ReelForge: React.FC = () => {
       
       const loadedSettings = settingsRes.data;
       setSettings(loadedSettings);
-      setSettingsModel(loadedSettings?.openai_model || 'gpt-4o-mini');
+      setSettingsModel(loadedSettings?.openai_model || 'gpt-5-mini');
       setSettingsSystemPrompt(loadedSettings?.system_prompt || '');
       setSettingsTemperature(loadedSettings?.temperature || 0.8);
     } catch (err) {
@@ -758,10 +758,14 @@ const ReelForge: React.FC = () => {
                 onChange={e => setSettingsModel(e.target.value)}
                 className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white"
               >
-                <option value="gpt-4o-mini">GPT-4o Mini (Fast & Cheap)</option>
-                <option value="gpt-4o">GPT-4o (Best Quality)</option>
+                <option value="gpt-5-mini">GPT-5 Mini (Fast & Smart)</option>
+                <option value="gpt-5">GPT-5 (Most Advanced)</option>
+                <option value="o1-mini">o1 Mini (Reasoning)</option>
+                <option value="o1">o1 (Advanced Reasoning)</option>
+                <option value="gpt-4o-mini">GPT-4o Mini (Budget)</option>
+                <option value="gpt-4o">GPT-4o</option>
                 <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fastest)</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Legacy)</option>
               </select>
             </div>
             

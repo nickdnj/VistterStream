@@ -562,7 +562,7 @@ class ReelCaptureQueueItem(BaseModel):
 
 class ReelForgeSettingsBase(BaseModel):
     """Base schema for ReelForge settings"""
-    openai_model: str = Field(default="gpt-4o-mini", description="OpenAI model to use for content generation")
+    openai_model: str = Field(default="gpt-5-mini", description="OpenAI model to use for content generation")
     system_prompt: str = Field(
         default="""You are a social media content creator specializing in short-form video content like TikTok, Instagram Reels, and YouTube Shorts. You create short, punchy headlines that grab attention.
 

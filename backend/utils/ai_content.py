@@ -37,7 +37,7 @@ def get_reelforge_settings() -> Tuple[Optional[str], str, str, float, int]:
         settings = db.query(ReelForgeSettings).first()
         
         if not settings:
-            return (None, "gpt-4o-mini", get_default_system_prompt(), 0.8, 500)
+            return (None, "gpt-5-mini", get_default_system_prompt(), 0.8, 500)
         
         api_key = None
         if settings.openai_api_key_enc:
@@ -48,7 +48,7 @@ def get_reelforge_settings() -> Tuple[Optional[str], str, str, float, int]:
         
         return (
             api_key,
-            settings.openai_model or "gpt-4o-mini",
+            settings.openai_model or "gpt-5-mini",
             settings.system_prompt or get_default_system_prompt(),
             settings.temperature or 0.8,
             settings.max_tokens or 500
