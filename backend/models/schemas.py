@@ -276,3 +276,270 @@ class HardwareCapabilitiesSchema(BaseModel):
     platform: str = Field(..., description="Platform (pi5, mac, software)")
     max_concurrent_streams: int = Field(..., description="Maximum concurrent streams supported")
     supports_hardware: bool = Field(..., description="Whether hardware acceleration is available")
+
+
+# ============================================================================
+# ReelForge Schemas - Automated Social Media Content Generation
+# ============================================================================
+
+class ReelPanDirection(str, Enum):
+    LEFT_TO_RIGHT = "left_to_right"
+    RIGHT_TO_LEFT = "right_to_left"
+    CENTER = "center"
+
+
+class ReelPublishMode(str, Enum):
+    MANUAL = "manual"
+    AUTO = "auto"
+    SCHEDULED = "scheduled"
+
+
+class ReelPostStatus(str, Enum):
+    QUEUED = "queued"
+    CAPTURING = "capturing"
+    PROCESSING = "processing"
+    READY = "ready"
+    FAILED = "failed"
+
+
+class ReelExportStatus(str, Enum):
+    EXPORTED = "exported"  # User downloaded the video
+    POSTED = "posted"  # User marked as manually posted
+
+
+class ReelPlatform(str, Enum):
+    YOUTUBE_SHORTS = "youtube_shorts"
+    INSTAGRAM_REELS = "instagram_reels"
+    TIKTOK = "tiktok"
+    FACEBOOK_REELS = "facebook_reels"
+
+
+# AI Configuration Schema
+class ReelAIConfig(BaseModel):
+    """AI content generation configuration"""
+    tone: str = Field(default="casual", description="Content tone (casual, professional, excited, etc.)")
+    voice: str = Field(default="friendly local guide", description="Voice/persona for content")
+    instructions: str = Field(default="", description="General instructions for AI content generation")
+    prompt_1: str = Field(default="Morning greeting with current conditions", description="First headline prompt")
+    prompt_2: str = Field(default="Weather and conditions update", description="Second headline prompt")
+    prompt_3: str = Field(default="Highlight of the day", description="Third headline prompt")
+    prompt_4: str = Field(default="Call to action", description="Fourth headline prompt")
+    prompt_5: str = Field(default="Sign off with social links", description="Fifth headline prompt")
+
+
+# Generated Headline Schema
+class ReelHeadline(BaseModel):
+    """Individual generated headline with timing"""
+    text: str
+    start_time: float = Field(description="Start time in seconds")
+    duration: float = Field(default=6.0, description="Duration in seconds")
+
+
+# ReelTemplate Schemas
+class ReelTemplateBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    camera_id: Optional[int] = None
+    preset_id: Optional[int] = None
+    clip_duration: int = Field(default=30, ge=10, le=60, description="Clip duration in seconds")
+    pan_direction: ReelPanDirection = ReelPanDirection.LEFT_TO_RIGHT
+    pan_speed: float = Field(default=1.0, ge=0.5, le=2.0)
+    ai_config: ReelAIConfig = Field(default_factory=ReelAIConfig)
+    overlay_style: str = Field(default="bottom_text")
+    font_family: str = Field(default="Arial")
+    font_size: int = Field(default=48, ge=12, le=120)
+    text_color: str = Field(default="#FFFFFF")
+    text_shadow: bool = True
+    text_background: str = Field(default="rgba(0,0,0,0.5)")
+    text_position_y: float = Field(default=0.8, ge=0.0, le=1.0)
+    publish_mode: ReelPublishMode = ReelPublishMode.MANUAL
+    schedule_times: List[str] = Field(default_factory=list, description="Schedule times in HH:MM format")
+    default_title_template: str = Field(default="{headline_1}")
+    default_description_template: Optional[str] = None
+    default_hashtags: str = Field(default="#shorts")
+
+
+class ReelTemplateCreate(ReelTemplateBase):
+    pass
+
+
+class ReelTemplateUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    camera_id: Optional[int] = None
+    preset_id: Optional[int] = None
+    clip_duration: Optional[int] = Field(None, ge=10, le=60)
+    pan_direction: Optional[ReelPanDirection] = None
+    pan_speed: Optional[float] = Field(None, ge=0.5, le=2.0)
+    ai_config: Optional[ReelAIConfig] = None
+    overlay_style: Optional[str] = None
+    font_family: Optional[str] = None
+    font_size: Optional[int] = Field(None, ge=12, le=120)
+    text_color: Optional[str] = None
+    text_shadow: Optional[bool] = None
+    text_background: Optional[str] = None
+    text_position_y: Optional[float] = Field(None, ge=0.0, le=1.0)
+    publish_mode: Optional[ReelPublishMode] = None
+    schedule_times: Optional[List[str]] = None
+    default_title_template: Optional[str] = None
+    default_description_template: Optional[str] = None
+    default_hashtags: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ReelTemplate(ReelTemplateBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+        use_enum_values = True
+
+
+# ReelPost Schemas
+class ReelPostBase(BaseModel):
+    template_id: Optional[int] = None
+    camera_id: int
+    preset_id: Optional[int] = None
+
+
+class ReelPostCreate(ReelPostBase):
+    """Create a new post by queueing a capture"""
+    pass
+
+
+class ReelPostQueue(BaseModel):
+    """Queue a capture request"""
+    camera_id: int
+    preset_id: Optional[int] = None
+    template_id: Optional[int] = None
+
+
+class ReelPost(BaseModel):
+    id: int
+    template_id: Optional[int] = None
+    status: ReelPostStatus
+    error_message: Optional[str] = None
+    camera_id: int
+    preset_id: Optional[int] = None
+    source_clip_path: Optional[str] = None
+    portrait_clip_path: Optional[str] = None
+    output_path: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    generated_headlines: List[ReelHeadline] = Field(default_factory=list)
+    download_count: int = 0
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    capture_started_at: Optional[datetime] = None
+    capture_completed_at: Optional[datetime] = None
+    processing_started_at: Optional[datetime] = None
+    processing_completed_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+        use_enum_values = True
+
+
+class ReelPostWithDetails(ReelPost):
+    """Post with related camera/preset/template names"""
+    camera_name: Optional[str] = None
+    preset_name: Optional[str] = None
+    template_name: Optional[str] = None
+
+
+# ReelPublishTarget Schemas (platform preferences for manual posting)
+class ReelPublishTargetBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    platform: ReelPlatform
+    default_title_template: str = Field(default="{headline_1}")
+    default_description_template: Optional[str] = None
+    default_hashtags: Optional[str] = None
+
+
+class ReelPublishTargetCreate(ReelPublishTargetBase):
+    pass
+
+
+class ReelPublishTargetUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    platform: Optional[ReelPlatform] = None
+    default_title_template: Optional[str] = None
+    default_description_template: Optional[str] = None
+    default_hashtags: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ReelPublishTarget(ReelPublishTargetBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+        use_enum_values = True
+
+
+# ReelExport Schemas (tracking manual downloads/posts)
+class ReelExportBase(BaseModel):
+    post_id: int
+    target_id: Optional[int] = None  # Optional platform preference
+    title: Optional[str] = None
+    description: Optional[str] = None
+    hashtags: Optional[str] = None
+
+
+class ReelExportCreate(ReelExportBase):
+    pass
+
+
+class ReelExportUpdate(BaseModel):
+    """Update export status after manual posting"""
+    status: Optional[ReelExportStatus] = None
+    platform_url: Optional[str] = None  # User can add URL after manual posting
+
+
+class ReelExport(ReelExportBase):
+    id: int
+    status: ReelExportStatus
+    platform_url: Optional[str] = None
+    exported_at: datetime
+    posted_at: Optional[datetime] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+        use_enum_values = True
+
+
+# Camera selection for ReelForge UI
+class CameraWithPresets(BaseModel):
+    """Camera with its presets for ReelForge selection UI"""
+    id: int
+    name: str
+    type: CameraType
+    presets: List[Preset] = Field(default_factory=list)
+    
+    class Config:
+        from_attributes = True
+        use_enum_values = True
+
+
+# Capture Queue Status
+class ReelCaptureQueueItem(BaseModel):
+    """Item in the capture queue"""
+    id: int
+    post_id: int
+    camera_id: int
+    preset_id: Optional[int] = None
+    status: str
+    priority: int = 0
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+    camera_name: Optional[str] = None
+    preset_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True

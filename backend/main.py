@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 # Import routers
-from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog, settings
+from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog, settings, reelforge
 from routers import presets as presets_router
 
 # Import health monitor
@@ -99,6 +99,7 @@ app.include_router(settings.router)  # System settings
 app.include_router(scheduler.router)
 # Preview disabled per refactor away from local HLS preview
 app.include_router(emergency.router)  # Emergency controls (kill all streams)
+app.include_router(reelforge.router)  # ReelForge - automated social media content generation
 
 # Serve static files (React build)
 # Support both Vite (dist) and CRA (build)

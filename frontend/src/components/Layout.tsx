@@ -12,6 +12,7 @@ import {
   ArrowRightOnRectangleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 
 interface LayoutProps {
@@ -27,6 +28,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Timelines', href: '/timelines', icon: FilmIcon },
+    { name: 'ReelForge', href: '/reelforge', icon: SparklesIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];
 

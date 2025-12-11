@@ -7,6 +7,7 @@ import PresetManagement from './components/PresetManagement';
 import TimelineEditor from './components/TimelineEditor';
 import StreamingDestinations from './components/StreamingDestinations';
 import Settings from './components/Settings';
+import ReelForge from './components/ReelForge';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -26,6 +27,7 @@ function App() {
                     <Route path="/cameras" element={<Navigate to="/settings" replace />} />
                     <Route path="/streams" element={<Navigate to="/timelines" replace />} />
                     <Route path="/timelines" element={<TimelineEditor />} />
+                    <Route path="/reelforge" element={<ReelForge />} />
                     <Route path="/destinations" element={<StreamingDestinations />} />
                     <Route path="/presets" element={<PresetManagement />} />
                     <Route path="/scheduler" element={<Navigate to="/settings" replace />} />
@@ -54,6 +56,13 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <TimelineEditor />
+                </Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/reelforge" element={
+              <ProtectedRoute>
+                <Layout>
+                  <ReelForge />
                 </Layout>
               </ProtectedRoute>
             } />
