@@ -577,6 +577,9 @@ Guidelines:
     temperature: float = Field(default=0.8, ge=0.0, le=1.0, description="AI creativity (0=focused, 1=creative)")
     max_tokens: int = Field(default=500, ge=100, le=2000, description="Maximum tokens in AI response")
     default_template_id: Optional[int] = None
+    # Weather Integration
+    tempest_api_url: str = Field(default="http://tempest-weather:8080", description="TempestWeather API URL")
+    weather_enabled: bool = Field(default=True, description="Enable weather data in AI prompts")
 
 
 class ReelForgeSettingsCreate(ReelForgeSettingsBase):
@@ -592,6 +595,8 @@ class ReelForgeSettingsUpdate(BaseModel):
     temperature: Optional[float] = Field(None, ge=0.0, le=1.0)
     max_tokens: Optional[int] = Field(None, ge=100, le=2000)
     default_template_id: Optional[int] = None
+    tempest_api_url: Optional[str] = None
+    weather_enabled: Optional[bool] = None
 
 
 class ReelForgeSettings(ReelForgeSettingsBase):

@@ -192,6 +192,8 @@ export interface ReelForgeSettings {
   temperature: number;
   max_tokens: number;
   default_template_id: number | null;
+  tempest_api_url: string;
+  weather_enabled: boolean;
   has_api_key: boolean;
   created_at: string;
   updated_at: string | null;
@@ -204,12 +206,25 @@ export interface ReelForgeSettingsUpdate {
   temperature?: number;
   max_tokens?: number;
   default_template_id?: number;
+  tempest_api_url?: string;
+  weather_enabled?: boolean;
 }
 
 export interface ConnectionTestResult {
   success: boolean;
   message: string;
   model_used?: string;
+}
+
+export interface WeatherTestResult {
+  success: boolean;
+  message: string;
+  api_url: string;
+}
+
+export interface TemplateVariables {
+  variables: Record<string, string>;
+  usage: string;
 }
 
 // API Service
@@ -332,6 +347,16 @@ export const reelforgeService = {
 
   async testConnection(): Promise<ConnectionTestResult> {
     const response = await api.post('/reelforge/settings/test');
+    return response.data;
+  },
+
+  async testWeatherConnection(): Promise<WeatherTestResult> {
+    const response = await api.post('/reelforge/settings/weather-test');
+    return response.data;
+  },
+
+  async getTemplateVariables(): Promise<TemplateVariables> {
+    const response = await api.get('/reelforge/settings/variables');
     return response.data;
   },
 

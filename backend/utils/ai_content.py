@@ -4,15 +4,30 @@ Ported from d3marco's seaer_ai/seaer_app.py with modifications for VistterStream
 
 Generates headlines and content for social media posts using AI.
 Settings (API key, model, system prompt) are loaded from the database.
+
+Weather and environmental data integration via TempestWeather service.
 """
 
 import json
 import logging
 import base64
+import re
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# Import weather data service
+try:
+    from services.weather_data_service import (
+        fetch_weather_data_sync,
+        get_weather_context_for_prompt,
+        get_available_variables
+    )
+    WEATHER_SERVICE_AVAILABLE = True
+except ImportError:
+    WEATHER_SERVICE_AVAILABLE = False
+    logger.warning("Weather data service not available")
 
 # Try to import OpenAI (v1.0.0+ client-based API)
 try:
@@ -69,7 +84,34 @@ Guidelines:
 - Always respond with valid JSON only"""
 
 
-def format_prompt(ai_config: Dict) -> str:
+def substitute_variables(text: str, variables: Dict) -> str:
+    """
+    Substitute template variables in text.
+    
+    Variables are in the format {variable_name} or {{variable_name}}
+    
+    Args:
+        text: Text with variable placeholders
+        variables: Dictionary of variable name -> value
+    
+    Returns:
+        Text with variables substituted
+    """
+    if not text or not variables:
+        return text
+    
+    result = text
+    
+    # Replace {var} and {{var}} patterns
+    for key, value in variables.items():
+        # Handle both single and double brace formats
+        result = result.replace(f"{{{{{key}}}}}", str(value) if value else "--")
+        result = result.replace(f"{{{key}}}", str(value) if value else "--")
+    
+    return result
+
+
+def format_prompt(ai_config: Dict, weather_data: Optional[Dict] = None) -> str:
     """
     Format the AI prompt from configuration.
     
@@ -84,6 +126,8 @@ def format_prompt(ai_config: Dict) -> str:
         "prompt_4": "Call to action",
         "prompt_5": "Sign off"
     }
+    
+    weather_data: Optional dictionary of weather/environmental variables
     """
     instructions = ai_config.get('instructions', 'Create engaging short-form video content.')
     voice = ai_config.get('voice', 'friendly guide')
@@ -99,6 +143,19 @@ def format_prompt(ai_config: Dict) -> str:
     time_of_day = "morning" if now.hour < 12 else "afternoon" if now.hour < 17 else "evening"
     date_str = now.strftime("%B %d, %Y")
     
+    # Substitute variables in instructions and prompts if we have weather data
+    if weather_data:
+        instructions = substitute_variables(instructions, weather_data)
+        prompts = [substitute_variables(p, weather_data) for p in prompts]
+    
+    # Build weather context section
+    weather_context = ""
+    if weather_data and WEATHER_SERVICE_AVAILABLE:
+        weather_context = f"""
+
+{get_weather_context_for_prompt(weather_data)}
+"""
+    
     # Build the prompt
     prompt = f"""You are creating headlines for short-form video content (like TikTok, Instagram Reels, YouTube Shorts).
 
@@ -109,7 +166,7 @@ STYLE REQUIREMENTS:
 - Make them punchy and engaging for social media
 - Current date: {date_str}
 - Time of day: {time_of_day}
-
+{weather_context}
 CONTENT INSTRUCTIONS:
 {instructions}
 
@@ -170,17 +227,32 @@ def extract_headlines_from_response(response_text: str) -> List[str]:
     return headlines[:5]
 
 
-async def generate_headlines(ai_config: Dict) -> List[str]:
+async def generate_headlines(ai_config: Dict, include_weather: bool = True) -> List[str]:
     """
     Generate 5 headlines using AI based on the configuration.
     
     Settings (API key, model, system prompt) are loaded from the database.
+    Weather data is fetched from TempestWeather service if available and enabled.
+    
+    Args:
+        ai_config: AI configuration dictionary
+        include_weather: Whether to fetch and include weather data (default True)
     
     Returns list of 5 headline strings.
     """
     
     # Get settings from database
     api_key, model, system_prompt, temperature, max_tokens = get_reelforge_settings()
+    
+    # Fetch weather data if available and enabled
+    weather_data = None
+    if include_weather and WEATHER_SERVICE_AVAILABLE:
+        try:
+            weather_data = fetch_weather_data_sync()
+            if weather_data:
+                logger.info(f"Weather data loaded: temp={weather_data.get('temperature')}, conditions={weather_data.get('conditions')}")
+        except Exception as e:
+            logger.warning(f"Could not fetch weather data: {e}")
     
     if not OPENAI_AVAILABLE or not api_key:
         if not OPENAI_AVAILABLE:
@@ -193,8 +265,8 @@ async def generate_headlines(ai_config: Dict) -> List[str]:
         # Create OpenAI client (v1.0.0+ API)
         client = OpenAI(api_key=api_key)
         
-        # Format the prompt
-        prompt = format_prompt(ai_config)
+        # Format the prompt with weather data
+        prompt = format_prompt(ai_config, weather_data)
         
         logger.info(f"Generating headlines with model={model}, temp={temperature}")
         
@@ -270,8 +342,11 @@ async def generate_headlines_with_data(
     """
     Generate headlines with additional contextual data.
     
-    This extended version allows passing weather data, custom variables, etc.
+    This extended version allows passing explicit weather data, custom variables, etc.
     to make the content more dynamic and relevant.
+    
+    Note: If weather_data is None and WEATHER_SERVICE_AVAILABLE, 
+    the main generate_headlines will fetch it automatically.
     """
     
     # Build extended instructions with data
@@ -279,13 +354,13 @@ async def generate_headlines_with_data(
     
     instructions = extended_config.get('instructions', '')
     
-    # Add weather data if provided
+    # Add weather data if explicitly provided
     if weather_data:
         weather_context = f"""
 Current conditions:
 - Temperature: {weather_data.get('temperature', 'N/A')}
 - Conditions: {weather_data.get('conditions', 'N/A')}
-- Wind: {weather_data.get('wind_speed', 'N/A')} {weather_data.get('wind_direction', '')}
+- Wind: {weather_data.get('wind', 'N/A')}
 """
         instructions = instructions + "\n\n" + weather_context
     
@@ -298,11 +373,14 @@ Current conditions:
     
     extended_config['instructions'] = instructions
     
-    return await generate_headlines(extended_config)
+    # If weather_data was explicitly passed, don't auto-fetch
+    include_weather = weather_data is None
+    
+    return await generate_headlines(extended_config, include_weather=include_weather)
 
 
 # Sync wrapper for non-async contexts
-def generate_headlines_sync(ai_config: Dict) -> List[str]:
+def generate_headlines_sync(ai_config: Dict, include_weather: bool = True) -> List[str]:
     """Synchronous wrapper for generate_headlines"""
     import asyncio
     
@@ -312,4 +390,17 @@ def generate_headlines_sync(ai_config: Dict) -> List[str]:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     
-    return loop.run_until_complete(generate_headlines(ai_config))
+    return loop.run_until_complete(generate_headlines(ai_config, include_weather=include_weather))
+
+
+# Export available variables for frontend documentation
+def get_template_variables() -> Dict[str, str]:
+    """Get available template variables for documentation"""
+    if WEATHER_SERVICE_AVAILABLE:
+        return get_available_variables()
+    return {
+        "today_date": "Current date (e.g., 'December 11, 2024')",
+        "day_of_week": "Day name (e.g., 'Wednesday')",
+        "time_of_day": "morning, afternoon, or evening",
+        "current_time": "Current time (e.g., '2:45 PM')",
+    }

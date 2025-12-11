@@ -114,9 +114,15 @@ const ReelForge: React.FC = () => {
   const [settingsModel, setSettingsModel] = useState('gpt-5-mini');
   const [settingsSystemPrompt, setSettingsSystemPrompt] = useState('');
   const [settingsTemperature, setSettingsTemperature] = useState(0.8);
+  const [settingsTempestUrl, setSettingsTempestUrl] = useState('http://tempest-weather:8080');
+  const [settingsWeatherEnabled, setSettingsWeatherEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [testingWeather, setTestingWeather] = useState(false);
   const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [weatherTestResult, setWeatherTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
+  const [showVariablesHelp, setShowVariablesHelp] = useState(false);
 
   // New Post Modal State
   const [showNewPostModal, setShowNewPostModal] = useState(false);
@@ -155,13 +161,14 @@ const ReelForge: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [camerasRes, templatesRes, postsRes, targetsRes, queueRes, settingsRes] = await Promise.all([
+      const [camerasRes, templatesRes, postsRes, targetsRes, queueRes, settingsRes, variablesRes] = await Promise.all([
         api.get('/reelforge/cameras'),
         api.get('/reelforge/templates'),
         api.get('/reelforge/posts'),
         api.get('/reelforge/targets'),
         api.get('/reelforge/queue'),
         api.get('/reelforge/settings'),
+        api.get('/reelforge/settings/variables').catch(() => ({ data: { variables: {} } })),
       ]);
 
       setCameras(camerasRes.data || []);
@@ -169,12 +176,16 @@ const ReelForge: React.FC = () => {
       setPosts(postsRes.data || []);
       setTargets(targetsRes.data || []);
       setQueue(queueRes.data || []);
-      
+
       const loadedSettings = settingsRes.data;
       setSettings(loadedSettings);
       setSettingsModel(loadedSettings?.openai_model || 'gpt-5-mini');
       setSettingsSystemPrompt(loadedSettings?.system_prompt || '');
       setSettingsTemperature(loadedSettings?.temperature || 0.8);
+      setSettingsTempestUrl(loadedSettings?.tempest_api_url || 'http://tempest-weather:8080');
+      setSettingsWeatherEnabled(loadedSettings?.weather_enabled ?? true);
+      
+      setTemplateVariables(variablesRes.data?.variables || {});
     } catch (err) {
       console.error('Failed to load ReelForge data:', err);
       setError('Failed to load data. Please try again.');
@@ -285,22 +296,38 @@ const ReelForge: React.FC = () => {
         openai_model: settingsModel,
         system_prompt: settingsSystemPrompt,
         temperature: settingsTemperature,
+        tempest_api_url: settingsTempestUrl,
+        weather_enabled: settingsWeatherEnabled,
       };
-      
+
       // Only include API key if it was changed (not empty)
       if (settingsApiKey) {
         updateData.openai_api_key = settingsApiKey;
       }
-      
+
       const response = await api.post('/reelforge/settings', updateData);
       setSettings(response.data);
       setSettingsApiKey(''); // Clear the API key field after save
       setConnectionTestResult(null);
+      setWeatherTestResult(null);
     } catch (err) {
       console.error('Failed to save settings:', err);
       setError('Failed to save settings. Please try again.');
     } finally {
       setSavingSettings(false);
+    }
+  };
+  
+  const handleTestWeatherConnection = async () => {
+    setTestingWeather(true);
+    setWeatherTestResult(null);
+    try {
+      const result = await api.post('/reelforge/settings/weather-test');
+      setWeatherTestResult(result.data);
+    } catch (err) {
+      setWeatherTestResult({ success: false, message: 'Failed to test connection' });
+    } finally {
+      setTestingWeather(false);
     }
   };
 
@@ -806,11 +833,94 @@ const ReelForge: React.FC = () => {
             </div>
           </div>
           
+          {/* Weather Data Integration */}
+          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 className="text-lg font-medium text-white mb-4">Weather Data Integration</h3>
+            <p className="text-gray-400 text-sm mb-4">
+              Connect to TempestWeather for real-time weather, tide, and astronomy data to enhance AI-generated content.
+            </p>
+            
+            <div className="space-y-4">
+              {/* Enable Toggle */}
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-300">Enable Weather Data</label>
+                <button
+                  onClick={() => setSettingsWeatherEnabled(!settingsWeatherEnabled)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    settingsWeatherEnabled ? 'bg-primary-600' : 'bg-dark-600'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      settingsWeatherEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+              
+              {/* API URL */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">TempestWeather API URL</label>
+                <input
+                  type="text"
+                  value={settingsTempestUrl}
+                  onChange={e => setSettingsTempestUrl(e.target.value)}
+                  placeholder="http://tempest-weather:8080"
+                  className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white"
+                  disabled={!settingsWeatherEnabled}
+                />
+              </div>
+              
+              {/* Test Connection */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleTestWeatherConnection}
+                  disabled={testingWeather || !settingsWeatherEnabled}
+                  className="px-4 py-2 bg-dark-600 hover:bg-dark-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {testingWeather ? 'Testing...' : 'Test Connection'}
+                </button>
+                {weatherTestResult && (
+                  <span className={`text-sm ${weatherTestResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                    {weatherTestResult.message}
+                  </span>
+                )}
+              </div>
+              
+              {/* Available Variables */}
+              {Object.keys(templateVariables).length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowVariablesHelp(!showVariablesHelp)}
+                    className="text-sm text-primary-400 hover:text-primary-300 flex items-center gap-1"
+                  >
+                    {showVariablesHelp ? '▼' : '▶'} Available Template Variables
+                  </button>
+                  {showVariablesHelp && (
+                    <div className="mt-2 bg-dark-900 rounded-lg p-4 border border-dark-600 max-h-64 overflow-y-auto">
+                      <p className="text-xs text-gray-400 mb-2">
+                        Use these in your template prompts with {'{variable_name}'} syntax:
+                      </p>
+                      <div className="grid gap-1">
+                        {Object.entries(templateVariables).map(([key, desc]) => (
+                          <div key={key} className="flex gap-2 text-xs">
+                            <code className="text-primary-400 font-mono">{'{' + key + '}'}</code>
+                            <span className="text-gray-400">{desc}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* System Prompt */}
           <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
             <h3 className="text-lg font-medium text-white mb-4">System Prompt</h3>
             <p className="text-gray-400 text-sm mb-4">
-              This is the instruction given to the AI before generating headlines. 
+              This is the instruction given to the AI before generating headlines.
               Customize it to change the AI's behavior and output style.
             </p>
             <textarea
@@ -821,7 +931,7 @@ const ReelForge: React.FC = () => {
               placeholder="Enter system prompt..."
             />
           </div>
-          
+
           {/* Save Button */}
           <div className="flex justify-end">
             <button

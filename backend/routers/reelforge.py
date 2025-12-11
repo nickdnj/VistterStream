@@ -64,6 +64,8 @@ def get_settings(db: Session = Depends(get_db)):
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
         "default_template_id": settings.default_template_id,
+        "tempest_api_url": settings.tempest_api_url or "http://tempest-weather:8080",
+        "weather_enabled": settings.weather_enabled if settings.weather_enabled is not None else True,
         "has_api_key": bool(settings.openai_api_key_enc),
         "created_at": settings.created_at,
         "updated_at": settings.updated_at
@@ -105,6 +107,12 @@ def update_settings(
     if settings_update.default_template_id is not None:
         settings.default_template_id = settings_update.default_template_id
     
+    if settings_update.tempest_api_url is not None:
+        settings.tempest_api_url = settings_update.tempest_api_url
+    
+    if settings_update.weather_enabled is not None:
+        settings.weather_enabled = settings_update.weather_enabled
+    
     settings.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(settings)
@@ -116,6 +124,8 @@ def update_settings(
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
         "default_template_id": settings.default_template_id,
+        "tempest_api_url": settings.tempest_api_url or "http://tempest-weather:8080",
+        "weather_enabled": settings.weather_enabled if settings.weather_enabled is not None else True,
         "has_api_key": bool(settings.openai_api_key_enc),
         "created_at": settings.created_at,
         "updated_at": settings.updated_at
@@ -166,6 +176,69 @@ def test_openai_connection(db: Session = Depends(get_db)):
             "success": False,
             "message": f"Connection failed: {str(e)}",
             "model_used": None
+        }
+
+
+@router.get("/settings/variables")
+def get_template_variables():
+    """Get available template variables for use in AI prompts"""
+    try:
+        from utils.ai_content import get_template_variables
+        variables = get_template_variables()
+    except ImportError:
+        # Fallback if service not available
+        variables = {
+            "today_date": "Current date (e.g., 'December 11, 2024')",
+            "day_of_week": "Day name (e.g., 'Wednesday')",
+            "time_of_day": "morning, afternoon, or evening",
+            "current_time": "Current time (e.g., '2:45 PM')",
+        }
+    
+    return {
+        "variables": variables,
+        "usage": "Use {variable_name} in your template prompts to insert dynamic values"
+    }
+
+
+@router.post("/settings/weather-test")
+def test_weather_connection(db: Session = Depends(get_db)):
+    """Test the TempestWeather connection"""
+    settings = db.query(ReelForgeSettings).first()
+    
+    api_url = "http://tempest-weather:8080"
+    if settings and settings.tempest_api_url:
+        api_url = settings.tempest_api_url
+    
+    try:
+        import httpx
+        
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{api_url}/api/data")
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract a sample of what we got
+            current = data.get("current", {})
+            temp = current.get("temperature", "N/A")
+            conditions = current.get("conditions", "N/A")
+            
+            return {
+                "success": True,
+                "message": f"Connected! Current: {temp}, {conditions}",
+                "api_url": api_url
+            }
+            
+    except ImportError:
+        return {
+            "success": False,
+            "message": "httpx package not installed",
+            "api_url": api_url
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Connection failed: {str(e)}",
+            "api_url": api_url
         }
 
 
