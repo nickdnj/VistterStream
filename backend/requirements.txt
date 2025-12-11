@@ -16,3 +16,4 @@ psutil  # System resource monitoring
 aiohttp  # YouTube API async HTTP client for watchdog
 google-auth
 google-auth-oauthlib
+openai>=1.0.0  # OpenAI API for ReelForge AI content generation
