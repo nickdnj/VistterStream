@@ -44,6 +44,7 @@ const Dashboard: React.FC = () => {
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [activeStreamInfo, setActiveStreamInfo] = useState<ActiveStreamInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [streamActionLoading, setStreamActionLoading] = useState<'stop' | 'restart' | null>(null);
 
   useEffect(() => {
     loadData();
@@ -113,6 +114,35 @@ const Dashboard: React.FC = () => {
       console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStopStream = async () => {
+    if (!activeStreamInfo?.timelineId) return;
+    setStreamActionLoading('stop');
+    try {
+      await api.post(`/timeline-execution/stop/${activeStreamInfo.timelineId}`);
+      setActiveStreamInfo(null);
+    } catch (error) {
+      console.error('Failed to stop stream:', error);
+      alert('Failed to stop stream');
+    } finally {
+      setStreamActionLoading(null);
+    }
+  };
+
+  const handleRestartStream = async () => {
+    if (!activeStreamInfo?.timelineId) return;
+    setStreamActionLoading('restart');
+    try {
+      await api.post(`/timeline-execution/stop/${activeStreamInfo.timelineId}`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await api.post('/timeline-execution/start', { timeline_id: activeStreamInfo.timelineId });
+    } catch (error) {
+      console.error('Failed to restart stream:', error);
+      alert('Failed to restart stream');
+    } finally {
+      setStreamActionLoading(null);
     }
   };
 
@@ -190,18 +220,74 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+            {/* Stream Controls */}
+            <div className="flex justify-center gap-3 p-4 bg-dark-900/50 border-t border-dark-700">
+              <button
+                onClick={handleStopStream}
+                disabled={streamActionLoading !== null}
+                className="flex-1 max-w-[140px] px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              >
+                {streamActionLoading === 'stop' ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <span>⏹</span>
+                )}
+                Stop
+              </button>
+              <button
+                onClick={handleRestartStream}
+                disabled={streamActionLoading !== null}
+                className="flex-1 max-w-[140px] px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              >
+                {streamActionLoading === 'restart' ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <span>🔄</span>
+                )}
+                Restart
+              </button>
+            </div>
           </div>
         ) : activeStreamInfo ? (
-          <div className="bg-dark-800 rounded-lg border border-dark-700 p-8 text-center">
-            <div className="text-4xl mb-3">📡</div>
-            <h3 className="text-lg font-semibold text-white mb-1">Stream Active</h3>
-            <p className="text-gray-400 text-sm">
-              {activeStreamInfo.timelineName} is streaming
-              {activeStreamInfo.destinationName && ` to ${activeStreamInfo.destinationName}`}
-            </p>
-            <p className="text-gray-500 text-xs mt-2">
-              YouTube preview requires a Broadcast ID configured in your destination
-            </p>
+          <div className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
+            <div className="p-8 text-center">
+              <div className="text-4xl mb-3">📡</div>
+              <h3 className="text-lg font-semibold text-white mb-1">Stream Active</h3>
+              <p className="text-gray-400 text-sm">
+                {activeStreamInfo.timelineName} is streaming
+                {activeStreamInfo.destinationName && ` to ${activeStreamInfo.destinationName}`}
+              </p>
+              <p className="text-gray-500 text-xs mt-2">
+                YouTube preview requires a Broadcast ID configured in your destination
+              </p>
+            </div>
+            {/* Stream Controls */}
+            <div className="flex justify-center gap-3 p-4 bg-dark-900/50 border-t border-dark-700">
+              <button
+                onClick={handleStopStream}
+                disabled={streamActionLoading !== null}
+                className="flex-1 max-w-[140px] px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              >
+                {streamActionLoading === 'stop' ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <span>⏹</span>
+                )}
+                Stop
+              </button>
+              <button
+                onClick={handleRestartStream}
+                disabled={streamActionLoading !== null}
+                className="flex-1 max-w-[140px] px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-800 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
+              >
+                {streamActionLoading === 'restart' ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <span>🔄</span>
+                )}
+                Restart
+              </button>
+            </div>
           </div>
         ) : (
           <div className="bg-dark-800 rounded-lg border border-dark-700 p-8 text-center">
