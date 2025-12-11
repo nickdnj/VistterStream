@@ -18,7 +18,7 @@ import base64
 logger = logging.getLogger(__name__)
 
 # Default TempestWeather URL (can be overridden in settings)
-DEFAULT_TEMPEST_URL = "http://tempest-weather:8085"
+DEFAULT_TEMPEST_URL = "http://host.docker.internal:8085"
 
 
 def get_tempest_api_url() -> str:
