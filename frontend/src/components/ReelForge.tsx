@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import { VariablePicker } from './VariablePicker';
 import {
   SparklesIcon,
   DocumentDuplicateIcon,
@@ -151,6 +152,41 @@ const ReelForge: React.FC = () => {
   const [templatePrompt4, setTemplatePrompt4] = useState('Call to action');
   const [templatePrompt5, setTemplatePrompt5] = useState('Sign off');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [dragOverField, setDragOverField] = useState<string | null>(null);
+
+  // Refs for text inputs to handle cursor position on drop
+  const instructionsRef = useRef<HTMLTextAreaElement>(null);
+
+  // Handle drop of variable into text field
+  const handleVariableDrop = (
+    e: React.DragEvent,
+    value: string,
+    setter: (val: string) => void,
+    fieldId: string
+  ) => {
+    e.preventDefault();
+    setDragOverField(null);
+    
+    const variable = e.dataTransfer.getData('text/plain');
+    if (!variable) return;
+    
+    // Get cursor position from the input element
+    const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+    const cursorPos = target.selectionStart ?? value.length;
+    
+    // Insert variable at cursor position
+    const newValue = value.slice(0, cursorPos) + variable + value.slice(cursorPos);
+    setter(newValue);
+  };
+
+  const handleDragOver = (e: React.DragEvent, fieldId: string) => {
+    e.preventDefault();
+    setDragOverField(fieldId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverField(null);
+  };
 
   // Load data on mount
   useEffect(() => {
@@ -1107,12 +1143,14 @@ const ReelForge: React.FC = () => {
       {/* Template Modal */}
       {showTemplateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-auto py-8">
-          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-2xl border border-dark-700 mx-4 my-auto">
+          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-5xl border border-dark-700 mx-4 my-auto">
             <h2 className="text-xl font-bold text-white mb-4">
               {editingTemplate ? 'Edit Template' : 'New Template'}
             </h2>
 
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="flex gap-6">
+              {/* Form Column */}
+              <div className="flex-1 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
               {/* Basic Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1233,29 +1271,37 @@ const ReelForge: React.FC = () => {
 
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-400 mb-2">
-                    Instructions
+                    Instructions <span className="text-xs text-gray-500">(drag variables here)</span>
                   </label>
                   <textarea
+                    ref={instructionsRef}
                     value={templateInstructions}
                     onChange={e => setTemplateInstructions(e.target.value)}
-                    placeholder="General instructions for AI content generation..."
+                    onDrop={e => handleVariableDrop(e, templateInstructions, setTemplateInstructions, 'instructions')}
+                    onDragOver={e => handleDragOver(e, 'instructions')}
+                    onDragLeave={handleDragLeave}
+                    placeholder="General instructions for AI content generation... Use {variable_name} for dynamic values"
                     rows={3}
-                    className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white"
+                    className={`w-full bg-dark-700 border rounded-lg px-3 py-2 text-white transition-colors ${
+                      dragOverField === 'instructions' 
+                        ? 'border-primary-500 bg-primary-500/10' 
+                        : 'border-dark-600'
+                    }`}
                   />
                 </div>
 
                 <div className="space-y-3">
                   <p className="text-xs text-gray-500">
-                    Define 5 headline prompts (6 seconds each in the video):
+                    Define 5 headline prompts (6 seconds each in the video). Drag variables from the right panel:
                   </p>
                   {[
-                    { label: 'Headline 1', value: templatePrompt1, setter: setTemplatePrompt1 },
-                    { label: 'Headline 2', value: templatePrompt2, setter: setTemplatePrompt2 },
-                    { label: 'Headline 3', value: templatePrompt3, setter: setTemplatePrompt3 },
-                    { label: 'Headline 4', value: templatePrompt4, setter: setTemplatePrompt4 },
-                    { label: 'Headline 5', value: templatePrompt5, setter: setTemplatePrompt5 },
-                  ].map((prompt, i) => (
-                    <div key={i}>
+                    { label: 'Headline 1', value: templatePrompt1, setter: setTemplatePrompt1, id: 'prompt1' },
+                    { label: 'Headline 2', value: templatePrompt2, setter: setTemplatePrompt2, id: 'prompt2' },
+                    { label: 'Headline 3', value: templatePrompt3, setter: setTemplatePrompt3, id: 'prompt3' },
+                    { label: 'Headline 4', value: templatePrompt4, setter: setTemplatePrompt4, id: 'prompt4' },
+                    { label: 'Headline 5', value: templatePrompt5, setter: setTemplatePrompt5, id: 'prompt5' },
+                  ].map((prompt) => (
+                    <div key={prompt.id}>
                       <label className="block text-sm font-medium text-gray-400 mb-1">
                         {prompt.label}
                       </label>
@@ -1263,11 +1309,24 @@ const ReelForge: React.FC = () => {
                         type="text"
                         value={prompt.value}
                         onChange={e => prompt.setter(e.target.value)}
-                        className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm"
+                        onDrop={e => handleVariableDrop(e, prompt.value, prompt.setter, prompt.id)}
+                        onDragOver={e => handleDragOver(e, prompt.id)}
+                        onDragLeave={handleDragLeave}
+                        className={`w-full bg-dark-700 border rounded-lg px-3 py-2 text-white text-sm transition-colors ${
+                          dragOverField === prompt.id
+                            ? 'border-primary-500 bg-primary-500/10'
+                            : 'border-dark-600'
+                        }`}
                       />
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+
+              {/* Variable Picker Column */}
+              <div className="w-72 flex-shrink-0 max-h-[70vh]">
+                <VariablePicker />
               </div>
             </div>
 

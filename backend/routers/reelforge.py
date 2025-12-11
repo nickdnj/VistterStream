@@ -200,6 +200,81 @@ def get_template_variables():
     }
 
 
+# Variable categories for grouping in the UI
+VARIABLE_CATEGORIES = {
+    "time": ["today_date", "day_of_week", "time_of_day", "current_time"],
+    "weather": ["temperature", "feels_like", "conditions", "humidity", "wind", "wind_gust", 
+                "pressure", "pressure_trend", "uv_index", "rain_today", "location"],
+    "tides": ["tide_stage", "next_tide", "next_tide_time", "tide_height", "water_temp"],
+    "astronomy": ["moon_phase", "moon_illumination", "solunar_major", "solunar_minor"],
+    "forecast": ["forecast_high", "forecast_low", "forecast_conditions"]
+}
+
+
+def categorize_variable(key: str) -> str:
+    """Determine the category for a variable"""
+    for category, keys in VARIABLE_CATEGORIES.items():
+        if key in keys:
+            return category
+    return "other"
+
+
+@router.get("/settings/variables/live")
+def get_live_variables():
+    """Get template variables with their current live values from TempestWeather"""
+    try:
+        from services.weather_data_service import fetch_weather_data_sync, get_available_variables
+        
+        # Get variable definitions
+        variables = get_available_variables()
+        
+        # Get current values from TempestWeather
+        current_values = fetch_weather_data_sync() or {}
+        
+        # Build response with categories and live values
+        result = []
+        for key, description in variables.items():
+            result.append({
+                "key": key,
+                "description": description,
+                "value": current_values.get(key, "--"),
+                "category": categorize_variable(key)
+            })
+        
+        # Sort by category then key
+        category_order = ["time", "weather", "tides", "astronomy", "forecast", "other"]
+        result.sort(key=lambda x: (category_order.index(x["category"]) if x["category"] in category_order else 99, x["key"]))
+        
+        return {
+            "variables": result,
+            "weather_connected": bool(current_values),
+            "usage": "Drag variables into text fields to insert {variable_name} syntax"
+        }
+        
+    except Exception as e:
+        # Return variables without live values if weather service fails
+        try:
+            from utils.ai_content import get_template_variables
+            variables = get_template_variables()
+        except ImportError:
+            variables = {
+                "today_date": "Current date",
+                "day_of_week": "Day name",
+                "time_of_day": "morning, afternoon, or evening",
+                "current_time": "Current time",
+            }
+        
+        return {
+            "variables": [
+                {"key": k, "description": v, "value": "--", "category": categorize_variable(k)}
+                for k, v in variables.items()
+            ],
+            "weather_connected": False,
+            "error": str(e),
+            "usage": "Drag variables into text fields to insert {variable_name} syntax"
+        }
+
+
 @router.post("/settings/weather-test")
 def test_weather_connection(db: Session = Depends(get_db)):
     """Test the TempestWeather connection"""
