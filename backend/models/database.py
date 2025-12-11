@@ -48,6 +48,39 @@ class Settings(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+class ReelForgeSettings(Base):
+    """ReelForge-specific settings for AI content generation"""
+    __tablename__ = "reelforge_settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # OpenAI Configuration
+    openai_api_key_enc = Column(String)  # Encrypted API key (base64 encoded)
+    openai_model = Column(String, default="gpt-4o-mini")  # Model to use
+    
+    # System Prompt (editable)
+    system_prompt = Column(String, default="""You are a social media content creator specializing in short-form video content like TikTok, Instagram Reels, and YouTube Shorts. You create short, punchy headlines that grab attention.
+
+Guidelines:
+- Keep headlines SHORT (under 10 words)
+- Make them engaging and scroll-stopping
+- Match the tone and voice specified
+- Use current date/time context when relevant
+- Always respond with valid JSON only""")
+    
+    # AI Generation Settings
+    temperature = Column(Float, default=0.8)  # 0.0-1.0, higher = more creative
+    max_tokens = Column(Integer, default=500)
+    
+    # Default Template
+    default_template_id = Column(Integer, ForeignKey("reel_templates.id"), nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Camera(Base):
     __tablename__ = "cameras"
     

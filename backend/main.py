@@ -156,6 +156,15 @@ async def startup_event():
         print("✅ Watchdog manager started")
     except Exception as e:
         print(f"⚠️ Failed to start watchdog manager: {e}")
+    # Start ReelForge capture scheduler
+    try:
+        print("📹 Starting ReelForge capture scheduler...")
+        from services.reelforge_capture_service import init_reelforge_capture_service
+        db = next(get_db())
+        await init_reelforge_capture_service(db)
+        print("✅ ReelForge capture scheduler started")
+    except Exception as e:
+        print(f"⚠️ Failed to start ReelForge capture scheduler: {e}")
     print("✅ All services started")
 
 @app.on_event("shutdown")
@@ -179,6 +188,14 @@ async def shutdown_event():
         watchdog_manager = get_watchdog_manager()
         await watchdog_manager.stop_all()
         print("✅ Watchdog manager stopped")
+    except Exception:
+        pass
+    # Stop ReelForge capture scheduler
+    try:
+        print("📹 Stopping ReelForge capture scheduler...")
+        from services.reelforge_capture_service import stop_reelforge_capture_service
+        await stop_reelforge_capture_service()
+        print("✅ ReelForge capture scheduler stopped")
     except Exception:
         pass
     print("✅ All services stopped")

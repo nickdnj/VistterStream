@@ -295,10 +295,53 @@ class ReelForgeCaptureService:
                 for key, item in self._capture_queue.items()
             ]
         }
+    
+    async def run_scheduler(self):
+        """
+        Background task to check for scheduled captures that are due.
+        This should be started when the application starts.
+        """
+        logger.info("📹 ReelForge: Scheduler started")
+        
+        while True:
+            try:
+                await asyncio.sleep(10)  # Check every 10 seconds
+                
+                db = SessionLocal()
+                try:
+                    # Find scheduled captures that are due
+                    now = datetime.utcnow()
+                    
+                    due_captures = db.query(ReelCaptureQueue).filter(
+                        ReelCaptureQueue.status == "waiting",
+                        ReelCaptureQueue.trigger_mode == "scheduled",
+                        ReelCaptureQueue.scheduled_at <= now
+                    ).all()
+                    
+                    for queue_item in due_captures:
+                        logger.info(f"📹 ReelForge: Scheduled capture due for post {queue_item.post_id}")
+                        
+                        # Trigger the capture
+                        await self.trigger_capture(
+                            queue_item.camera_id,
+                            queue_item.preset_id,
+                            db
+                        )
+                        
+                finally:
+                    db.close()
+                    
+            except asyncio.CancelledError:
+                logger.info("📹 ReelForge: Scheduler stopped")
+                break
+            except Exception as e:
+                logger.error(f"📹 ReelForge: Scheduler error: {e}")
+                await asyncio.sleep(30)  # Wait longer on error
 
 
 # Global instance
 _capture_service: Optional[ReelForgeCaptureService] = None
+_scheduler_task: Optional[asyncio.Task] = None
 
 
 def get_reelforge_capture_service() -> ReelForgeCaptureService:
@@ -311,6 +354,25 @@ def get_reelforge_capture_service() -> ReelForgeCaptureService:
 
 async def init_reelforge_capture_service(db: Session):
     """Initialize the capture service and load pending captures"""
+    global _scheduler_task
+    
     service = get_reelforge_capture_service()
     await service.load_pending_captures(db)
+    
+    # Start the scheduler for scheduled captures
+    _scheduler_task = asyncio.create_task(service.run_scheduler())
+    
     return service
+
+
+async def stop_reelforge_capture_service():
+    """Stop the capture service scheduler"""
+    global _scheduler_task
+    
+    if _scheduler_task:
+        _scheduler_task.cancel()
+        try:
+            await _scheduler_task
+        except asyncio.CancelledError:
+            pass
+        _scheduler_task = None

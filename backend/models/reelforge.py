@@ -179,7 +179,7 @@ class ReelExport(Base):
 
 
 class ReelCaptureQueue(Base):
-    """Queue for pending capture requests - processed by timeline executor"""
+    """Queue for pending capture requests - processed by timeline executor or scheduler"""
     __tablename__ = "reel_capture_queue"
     
     id = Column(Integer, primary_key=True, index=True)
@@ -188,6 +188,13 @@ class ReelCaptureQueue(Base):
     # Target camera/preset to capture
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=False)
     preset_id = Column(Integer, ForeignKey("presets.id"), nullable=True)
+    
+    # Trigger Mode
+    trigger_mode = Column(String, default="next_view")  # 'next_view' or 'scheduled'
+    # 'next_view': Capture when timeline switches to this camera/preset
+    # 'scheduled': Capture at the scheduled_at time
+    
+    scheduled_at = Column(DateTime)  # When to capture (for scheduled mode)
     
     # Queue Status
     status = Column(String, default="waiting")  # 'waiting', 'capturing', 'completed', 'failed'

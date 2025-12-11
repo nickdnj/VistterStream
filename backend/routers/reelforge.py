@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
+import base64
 
-from models.database import get_db, Camera, Preset
+from models.database import get_db, Camera, Preset, ReelForgeSettings
 from models.reelforge import ReelTemplate, ReelPost, ReelPublishTarget, ReelExport, ReelCaptureQueue
 from models.schemas import (
     ReelTemplateCreate, ReelTemplateUpdate, ReelTemplate as ReelTemplateSchema,
@@ -21,10 +22,151 @@ from models.schemas import (
     ReelPublishTargetCreate, ReelPublishTargetUpdate, ReelPublishTarget as ReelPublishTargetSchema,
     ReelExportCreate, ReelExportUpdate, ReelExport as ReelExportSchema,
     CameraWithPresets, Preset as PresetSchema,
-    ReelCaptureQueueItem, ReelPostStatus
+    ReelCaptureQueueItem, ReelPostStatus,
+    ReelForgeSettingsUpdate, ReelForgeSettings as ReelForgeSettingsSchema,
+    ReelForgeSettingsTestResult
 )
 
 router = APIRouter(prefix="/api/reelforge", tags=["reelforge"])
+
+
+# ============================================================================
+# Settings Endpoints
+# ============================================================================
+
+def _encrypt_api_key(api_key: str) -> str:
+    """Simple base64 encoding for API key storage (in production, use proper encryption)"""
+    return base64.b64encode(api_key.encode()).decode()
+
+
+def _decrypt_api_key(encrypted: str) -> str:
+    """Decode base64 encoded API key"""
+    return base64.b64decode(encrypted.encode()).decode()
+
+
+@router.get("/settings", response_model=ReelForgeSettingsSchema)
+def get_settings(db: Session = Depends(get_db)):
+    """Get ReelForge settings"""
+    settings = db.query(ReelForgeSettings).first()
+    
+    # If no settings exist, create default settings
+    if not settings:
+        settings = ReelForgeSettings()
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    
+    # Return with has_api_key flag
+    return {
+        "id": settings.id,
+        "openai_model": settings.openai_model,
+        "system_prompt": settings.system_prompt,
+        "temperature": settings.temperature,
+        "max_tokens": settings.max_tokens,
+        "default_template_id": settings.default_template_id,
+        "has_api_key": bool(settings.openai_api_key_enc),
+        "created_at": settings.created_at,
+        "updated_at": settings.updated_at
+    }
+
+
+@router.post("/settings", response_model=ReelForgeSettingsSchema)
+def update_settings(
+    settings_update: ReelForgeSettingsUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update ReelForge settings"""
+    settings = db.query(ReelForgeSettings).first()
+    
+    # If no settings exist, create them
+    if not settings:
+        settings = ReelForgeSettings()
+        db.add(settings)
+    
+    # Update fields
+    if settings_update.openai_api_key is not None:
+        if settings_update.openai_api_key == "":
+            settings.openai_api_key_enc = None
+        else:
+            settings.openai_api_key_enc = _encrypt_api_key(settings_update.openai_api_key)
+    
+    if settings_update.openai_model is not None:
+        settings.openai_model = settings_update.openai_model
+    
+    if settings_update.system_prompt is not None:
+        settings.system_prompt = settings_update.system_prompt
+    
+    if settings_update.temperature is not None:
+        settings.temperature = settings_update.temperature
+    
+    if settings_update.max_tokens is not None:
+        settings.max_tokens = settings_update.max_tokens
+    
+    if settings_update.default_template_id is not None:
+        settings.default_template_id = settings_update.default_template_id
+    
+    settings.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(settings)
+    
+    return {
+        "id": settings.id,
+        "openai_model": settings.openai_model,
+        "system_prompt": settings.system_prompt,
+        "temperature": settings.temperature,
+        "max_tokens": settings.max_tokens,
+        "default_template_id": settings.default_template_id,
+        "has_api_key": bool(settings.openai_api_key_enc),
+        "created_at": settings.created_at,
+        "updated_at": settings.updated_at
+    }
+
+
+@router.post("/settings/test", response_model=ReelForgeSettingsTestResult)
+def test_openai_connection(db: Session = Depends(get_db)):
+    """Test the OpenAI connection with current settings"""
+    settings = db.query(ReelForgeSettings).first()
+    
+    if not settings or not settings.openai_api_key_enc:
+        return {
+            "success": False,
+            "message": "No API key configured",
+            "model_used": None
+        }
+    
+    try:
+        import openai
+        
+        api_key = _decrypt_api_key(settings.openai_api_key_enc)
+        openai.api_key = api_key
+        
+        # Make a simple test call
+        response = openai.ChatCompletion.create(
+            model=settings.openai_model or "gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": "Say 'Hello' in one word."}
+            ],
+            max_tokens=10
+        )
+        
+        return {
+            "success": True,
+            "message": "Connection successful!",
+            "model_used": settings.openai_model or "gpt-4o-mini"
+        }
+        
+    except ImportError:
+        return {
+            "success": False,
+            "message": "OpenAI package not installed",
+            "model_used": None
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Connection failed: {str(e)}",
+            "model_used": None
+        }
 
 
 # ============================================================================
@@ -251,13 +393,18 @@ def queue_capture(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Queue a new capture request - will be processed when timeline hits the camera/preset"""
+    """Queue a new capture request
+    
+    Trigger modes:
+    - 'next_view': Capture when timeline naturally switches to this camera/preset
+    - 'scheduled': Capture at the specified scheduled_at time
+    """
     try:
         # Validate camera exists
         camera = db.query(Camera).filter(Camera.id == queue_data.camera_id).first()
         if not camera:
             raise HTTPException(status_code=400, detail="Camera not found")
-        
+
         # Validate preset exists and belongs to camera if specified
         if queue_data.preset_id:
             preset = db.query(Preset).filter(Preset.id == queue_data.preset_id).first()
@@ -265,13 +412,18 @@ def queue_capture(
                 raise HTTPException(status_code=400, detail="Preset not found")
             if preset.camera_id != queue_data.camera_id:
                 raise HTTPException(status_code=400, detail="Preset does not belong to specified camera")
-        
+
         # Validate template exists if specified
         if queue_data.template_id:
             template = db.query(ReelTemplate).filter(ReelTemplate.id == queue_data.template_id).first()
             if not template:
                 raise HTTPException(status_code=400, detail="Template not found")
         
+        # Validate trigger mode and scheduled_at
+        trigger_mode = queue_data.trigger_mode or "next_view"
+        if trigger_mode == "scheduled" and not queue_data.scheduled_at:
+            raise HTTPException(status_code=400, detail="scheduled_at is required for scheduled trigger mode")
+
         # Create the post record
         post = ReelPost(
             template_id=queue_data.template_id,
@@ -281,19 +433,21 @@ def queue_capture(
         )
         db.add(post)
         db.flush()
-        
+
         # Create queue entry
         queue_entry = ReelCaptureQueue(
             post_id=post.id,
             camera_id=queue_data.camera_id,
             preset_id=queue_data.preset_id,
+            trigger_mode=trigger_mode,
+            scheduled_at=queue_data.scheduled_at,
             status="waiting"
         )
         db.add(queue_entry)
-        
+
         db.commit()
         db.refresh(post)
-        
+
         return post
         
     except HTTPException:
@@ -571,7 +725,7 @@ def get_capture_queue(db: Session = Depends(get_db)):
         ReelCaptureQueue.priority.desc(),
         ReelCaptureQueue.created_at
     ).all()
-    
+
     result = []
     for item in queue_items:
         result.append({
@@ -579,6 +733,8 @@ def get_capture_queue(db: Session = Depends(get_db)):
             "post_id": item.post_id,
             "camera_id": item.camera_id,
             "preset_id": item.preset_id,
+            "trigger_mode": item.trigger_mode or "next_view",
+            "scheduled_at": item.scheduled_at,
             "status": item.status,
             "priority": item.priority,
             "created_at": item.created_at,
@@ -586,7 +742,7 @@ def get_capture_queue(db: Session = Depends(get_db)):
             "camera_name": item.camera.name if item.camera else None,
             "preset_name": item.preset.name if item.preset else None
         })
-    
+
     return result
 
 

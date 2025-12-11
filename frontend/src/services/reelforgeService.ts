@@ -120,6 +120,8 @@ export interface ReelPostQueue {
   camera_id: number;
   preset_id?: number;
   template_id?: number;
+  trigger_mode?: 'next_view' | 'scheduled';
+  scheduled_at?: string;
 }
 
 export interface ReelPostMetadata {
@@ -173,12 +175,41 @@ export interface CaptureQueueItem {
   post_id: number;
   camera_id: number;
   preset_id: number | null;
+  trigger_mode: 'next_view' | 'scheduled';
+  scheduled_at: string | null;
   status: string;
   priority: number;
   created_at: string;
   expires_at: string | null;
   camera_name?: string | null;
   preset_name?: string | null;
+}
+
+export interface ReelForgeSettings {
+  id: number;
+  openai_model: string;
+  system_prompt: string;
+  temperature: number;
+  max_tokens: number;
+  default_template_id: number | null;
+  has_api_key: boolean;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface ReelForgeSettingsUpdate {
+  openai_api_key?: string;
+  openai_model?: string;
+  system_prompt?: string;
+  temperature?: number;
+  max_tokens?: number;
+  default_template_id?: number;
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  message: string;
+  model_used?: string;
 }
 
 // API Service
@@ -286,6 +317,22 @@ export const reelforgeService = {
 
   async deleteTarget(id: number): Promise<void> {
     await api.delete(`/reelforge/targets/${id}`);
+  },
+
+  // Settings
+  async getSettings(): Promise<ReelForgeSettings> {
+    const response = await api.get('/reelforge/settings');
+    return response.data;
+  },
+
+  async updateSettings(data: ReelForgeSettingsUpdate): Promise<ReelForgeSettings> {
+    const response = await api.post('/reelforge/settings', data);
+    return response.data;
+  },
+
+  async testConnection(): Promise<ConnectionTestResult> {
+    const response = await api.post('/reelforge/settings/test');
+    return response.data;
   },
 
   // Capture Queue

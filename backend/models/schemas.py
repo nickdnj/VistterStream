@@ -415,6 +415,8 @@ class ReelPostQueue(BaseModel):
     camera_id: int
     preset_id: Optional[int] = None
     template_id: Optional[int] = None
+    trigger_mode: str = Field(default="next_view", description="'next_view' or 'scheduled'")
+    scheduled_at: Optional[datetime] = Field(None, description="When to capture (for scheduled mode)")
 
 
 class ReelPost(BaseModel):
@@ -527,6 +529,12 @@ class CameraWithPresets(BaseModel):
         use_enum_values = True
 
 
+# Capture Trigger Mode
+class ReelTriggerMode(str, Enum):
+    NEXT_VIEW = "next_view"  # Capture when timeline hits this camera/preset
+    SCHEDULED = "scheduled"  # Capture at scheduled time
+
+
 # Capture Queue Status
 class ReelCaptureQueueItem(BaseModel):
     """Item in the capture queue"""
@@ -534,6 +542,8 @@ class ReelCaptureQueueItem(BaseModel):
     post_id: int
     camera_id: int
     preset_id: Optional[int] = None
+    trigger_mode: ReelTriggerMode = ReelTriggerMode.NEXT_VIEW
+    scheduled_at: Optional[datetime] = None
     status: str
     priority: int = 0
     created_at: datetime
@@ -543,3 +553,60 @@ class ReelCaptureQueueItem(BaseModel):
     
     class Config:
         from_attributes = True
+        use_enum_values = True
+
+
+# ============================================================================
+# ReelForge Settings Schemas
+# ============================================================================
+
+class ReelForgeSettingsBase(BaseModel):
+    """Base schema for ReelForge settings"""
+    openai_model: str = Field(default="gpt-4o-mini", description="OpenAI model to use for content generation")
+    system_prompt: str = Field(
+        default="""You are a social media content creator specializing in short-form video content like TikTok, Instagram Reels, and YouTube Shorts. You create short, punchy headlines that grab attention.
+
+Guidelines:
+- Keep headlines SHORT (under 10 words)
+- Make them engaging and scroll-stopping
+- Match the tone and voice specified
+- Use current date/time context when relevant
+- Always respond with valid JSON only""",
+        description="System prompt for AI headline generation"
+    )
+    temperature: float = Field(default=0.8, ge=0.0, le=1.0, description="AI creativity (0=focused, 1=creative)")
+    max_tokens: int = Field(default=500, ge=100, le=2000, description="Maximum tokens in AI response")
+    default_template_id: Optional[int] = None
+
+
+class ReelForgeSettingsCreate(ReelForgeSettingsBase):
+    """Schema for creating ReelForge settings"""
+    openai_api_key: Optional[str] = Field(None, description="OpenAI API key (will be encrypted)")
+
+
+class ReelForgeSettingsUpdate(BaseModel):
+    """Schema for updating ReelForge settings"""
+    openai_api_key: Optional[str] = Field(None, description="OpenAI API key (will be encrypted)")
+    openai_model: Optional[str] = None
+    system_prompt: Optional[str] = None
+    temperature: Optional[float] = Field(None, ge=0.0, le=1.0)
+    max_tokens: Optional[int] = Field(None, ge=100, le=2000)
+    default_template_id: Optional[int] = None
+
+
+class ReelForgeSettings(ReelForgeSettingsBase):
+    """Schema for ReelForge settings response"""
+    id: int
+    has_api_key: bool = Field(description="Whether an API key is configured (key itself is not returned)")
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ReelForgeSettingsTestResult(BaseModel):
+    """Result of testing OpenAI connection"""
+    success: bool
+    message: str
+    model_used: Optional[str] = None

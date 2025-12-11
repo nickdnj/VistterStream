@@ -168,6 +168,11 @@ class SeamlessTimelineExecutor:
                 
                 monitor_task = asyncio.create_task(log_ffmpeg_output())
                 
+                # Start ReelForge capture monitoring
+                capture_task = asyncio.create_task(
+                    self._monitor_reelforge_captures(timeline, video_cues, db)
+                )
+                
                 # Wait for process or cancellation
                 if timeline.loop:
                     # For looping timelines, FFmpeg will loop forever
@@ -178,6 +183,7 @@ class SeamlessTimelineExecutor:
                     process.terminate()
                 
                 monitor_task.cancel()
+                capture_task.cancel()
                 
                 execution.completed_at = datetime.utcnow()
                 execution.status = "completed"
@@ -206,6 +212,88 @@ class SeamlessTimelineExecutor:
             db.commit()
         finally:
             db.close()
+    
+    async def _monitor_reelforge_captures(
+        self,
+        timeline: Timeline,
+        video_cues: List[TimelineCue],
+        db: Session
+    ):
+        """
+        Monitor timeline execution and trigger ReelForge captures when
+        the timeline switches to a camera/preset that has a pending capture.
+        """
+        try:
+            from services.reelforge_capture_service import get_reelforge_capture_service
+            from models.reelforge import ReelCaptureQueue
+            
+            capture_service = get_reelforge_capture_service()
+            
+            # Build a timeline of camera switches
+            camera_switches = []
+            for cue in video_cues:
+                camera_id = cue.action_params.get('camera_id')
+                preset_id = cue.action_params.get('preset_id')
+                if camera_id:
+                    camera_switches.append({
+                        'start_time': cue.start_time,
+                        'duration': cue.duration,
+                        'camera_id': camera_id,
+                        'preset_id': preset_id
+                    })
+            
+            logger.info(f"📹 ReelForge: Monitoring {len(camera_switches)} camera segments for captures")
+            
+            start_time = datetime.utcnow()
+            triggered_captures = set()  # Track which captures we've already triggered
+            
+            while True:
+                await asyncio.sleep(1)  # Check every second
+                
+                # Calculate elapsed time in timeline (accounting for loops)
+                elapsed = (datetime.utcnow() - start_time).total_seconds()
+                if timeline.loop and timeline.duration > 0:
+                    elapsed = elapsed % timeline.duration
+                
+                # Find current camera/preset
+                current_camera_id = None
+                current_preset_id = None
+                for switch in camera_switches:
+                    if switch['start_time'] <= elapsed < switch['start_time'] + switch['duration']:
+                        current_camera_id = switch['camera_id']
+                        current_preset_id = switch['preset_id']
+                        break
+                
+                if current_camera_id is None:
+                    continue
+                
+                # Check for pending captures with next_view mode
+                capture_key = (current_camera_id, current_preset_id)
+                if capture_key in triggered_captures:
+                    continue  # Already triggered this one
+                
+                # Check if there's a pending capture for this camera/preset
+                pending = capture_service.get_pending_capture(current_camera_id, current_preset_id)
+                if pending and pending.trigger_mode == "next_view":
+                    logger.info(f"📹 ReelForge: Triggering capture for camera={current_camera_id}, preset={current_preset_id}")
+                    
+                    # Create a new db session for the capture
+                    capture_db = SessionLocal()
+                    try:
+                        await capture_service.trigger_capture(
+                            current_camera_id,
+                            current_preset_id,
+                            capture_db
+                        )
+                        triggered_captures.add(capture_key)
+                    finally:
+                        capture_db.close()
+                    
+        except asyncio.CancelledError:
+            logger.debug("ReelForge capture monitor cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"ReelForge capture monitor error: {e}")
     
     async def _preposition_ptz_cameras(self, video_cues: List[TimelineCue], db: Session):
         """Move all PTZ cameras to their presets BEFORE streaming starts"""

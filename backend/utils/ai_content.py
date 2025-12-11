@@ -3,12 +3,13 @@ AI Content Generation for ReelForge
 Ported from d3marco's seaer_ai/seaer_app.py with modifications for VistterStream.
 
 Generates headlines and content for social media posts using AI.
+Settings (API key, model, system prompt) are loaded from the database.
 """
 
 import json
 import logging
-import os
-from typing import Dict, List, Optional
+import base64
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,52 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
     logger.warning("OpenAI package not installed. AI content generation will use placeholders.")
+
+
+def get_reelforge_settings() -> Tuple[Optional[str], str, str, float, int]:
+    """
+    Get ReelForge settings from the database.
+    
+    Returns:
+        Tuple of (api_key, model, system_prompt, temperature, max_tokens)
+    """
+    from models.database import SessionLocal, ReelForgeSettings
+    
+    db = SessionLocal()
+    try:
+        settings = db.query(ReelForgeSettings).first()
+        
+        if not settings:
+            return (None, "gpt-4o-mini", get_default_system_prompt(), 0.8, 500)
+        
+        api_key = None
+        if settings.openai_api_key_enc:
+            try:
+                api_key = base64.b64decode(settings.openai_api_key_enc.encode()).decode()
+            except:
+                pass
+        
+        return (
+            api_key,
+            settings.openai_model or "gpt-4o-mini",
+            settings.system_prompt or get_default_system_prompt(),
+            settings.temperature or 0.8,
+            settings.max_tokens or 500
+        )
+    finally:
+        db.close()
+
+
+def get_default_system_prompt() -> str:
+    """Get the default system prompt"""
+    return """You are a social media content creator specializing in short-form video content like TikTok, Instagram Reels, and YouTube Shorts. You create short, punchy headlines that grab attention.
+
+Guidelines:
+- Keep headlines SHORT (under 10 words)
+- Make them engaging and scroll-stopping
+- Match the tone and voice specified
+- Use current date/time context when relevant
+- Always respond with valid JSON only"""
 
 
 def format_prompt(ai_config: Dict) -> str:
@@ -127,14 +174,19 @@ async def generate_headlines(ai_config: Dict) -> List[str]:
     """
     Generate 5 headlines using AI based on the configuration.
     
+    Settings (API key, model, system prompt) are loaded from the database.
+    
     Returns list of 5 headline strings.
     """
     
-    # Check for API key
-    api_key = os.getenv("OPENAI_API_KEY")
+    # Get settings from database
+    api_key, model, system_prompt, temperature, max_tokens = get_reelforge_settings()
     
     if not OPENAI_AVAILABLE or not api_key:
-        logger.warning("OpenAI not available, generating placeholder headlines")
+        if not OPENAI_AVAILABLE:
+            logger.warning("OpenAI package not available, generating placeholder headlines")
+        else:
+            logger.warning("No API key configured, generating placeholder headlines")
         return generate_placeholder_headlines(ai_config)
     
     try:
@@ -144,21 +196,23 @@ async def generate_headlines(ai_config: Dict) -> List[str]:
         # Format the prompt
         prompt = format_prompt(ai_config)
         
+        logger.info(f"Generating headlines with model={model}, temp={temperature}")
+        
         # Make API call
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # Use faster/cheaper model for headlines
+            model=model,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a social media content creator. You create short, punchy headlines for video content. Always respond with valid JSON only."
+                    "content": system_prompt
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            temperature=0.8,
-            max_tokens=500,
+            temperature=temperature,
+            max_tokens=max_tokens,
             response_format={"type": "json_object"}
         )
         
@@ -200,11 +254,11 @@ def generate_placeholder_headlines(ai_config: Dict) -> List[str]:
         ]
     else:
         return [
-            f"Hey! Happy {time_of_day}! 👋",
-            "Check this out! 🔥",
+            f"Hey! Happy {time_of_day}!",
+            "Check this out!",
             "You won't believe this!",
-            "Come hang with us! 🎉",
-            "See you next time! ✌️"
+            "Come hang with us!",
+            "See you next time!"
         ]
 
 
