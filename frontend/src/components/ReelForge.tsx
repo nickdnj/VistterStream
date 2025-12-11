@@ -114,7 +114,7 @@ const ReelForge: React.FC = () => {
   const [settingsModel, setSettingsModel] = useState('gpt-5-mini');
   const [settingsSystemPrompt, setSettingsSystemPrompt] = useState('');
   const [settingsTemperature, setSettingsTemperature] = useState(0.8);
-  const [settingsTempestUrl, setSettingsTempestUrl] = useState('http://tempest-weather:8080');
+  const [settingsTempestUrl, setSettingsTempestUrl] = useState('http://tempest-weather:8085');
   const [settingsWeatherEnabled, setSettingsWeatherEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -182,7 +182,7 @@ const ReelForge: React.FC = () => {
       setSettingsModel(loadedSettings?.openai_model || 'gpt-5-mini');
       setSettingsSystemPrompt(loadedSettings?.system_prompt || '');
       setSettingsTemperature(loadedSettings?.temperature || 0.8);
-      setSettingsTempestUrl(loadedSettings?.tempest_api_url || 'http://tempest-weather:8080');
+      setSettingsTempestUrl(loadedSettings?.tempest_api_url || 'http://tempest-weather:8085');
       setSettingsWeatherEnabled(loadedSettings?.weather_enabled ?? true);
       
       setTemplateVariables(variablesRes.data?.variables || {});
@@ -865,7 +865,7 @@ const ReelForge: React.FC = () => {
                   type="text"
                   value={settingsTempestUrl}
                   onChange={e => setSettingsTempestUrl(e.target.value)}
-                  placeholder="http://tempest-weather:8080"
+                  placeholder="http://tempest-weather:8085"
                   className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white"
                   disabled={!settingsWeatherEnabled}
                 />

@@ -77,7 +77,7 @@ Guidelines:
     default_template_id = Column(Integer, ForeignKey("reel_templates.id"), nullable=True)
     
     # Weather Data Integration (TempestWeather API)
-    tempest_api_url = Column(String, default="http://tempest-weather:8080")  # TempestWeather service URL
+    tempest_api_url = Column(String, default="http://tempest-weather:8085")  # TempestWeather service URL
     weather_enabled = Column(Boolean, default=True)  # Enable weather data in AI prompts
     
     # Metadata

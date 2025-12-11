@@ -578,7 +578,7 @@ Guidelines:
     max_tokens: int = Field(default=500, ge=100, le=2000, description="Maximum tokens in AI response")
     default_template_id: Optional[int] = None
     # Weather Integration
-    tempest_api_url: str = Field(default="http://tempest-weather:8080", description="TempestWeather API URL")
+    tempest_api_url: str = Field(default="http://tempest-weather:8085", description="TempestWeather API URL")
     weather_enabled: bool = Field(default=True, description="Enable weather data in AI prompts")
 
 

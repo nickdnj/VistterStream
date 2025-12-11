@@ -71,7 +71,7 @@ def run_migration():
         
         # Columns to add
         weather_columns = [
-            ("tempest_api_url", "TEXT DEFAULT 'http://tempest-weather:8080'"),
+            ("tempest_api_url", "TEXT DEFAULT 'http://tempest-weather:8085'"),
             ("weather_enabled", "BOOLEAN DEFAULT 1"),
         ]
         

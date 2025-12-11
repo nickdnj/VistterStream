@@ -64,7 +64,7 @@ def get_settings(db: Session = Depends(get_db)):
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
         "default_template_id": settings.default_template_id,
-        "tempest_api_url": settings.tempest_api_url or "http://tempest-weather:8080",
+        "tempest_api_url": settings.tempest_api_url or "http://tempest-weather:8085",
         "weather_enabled": settings.weather_enabled if settings.weather_enabled is not None else True,
         "has_api_key": bool(settings.openai_api_key_enc),
         "created_at": settings.created_at,
@@ -124,7 +124,7 @@ def update_settings(
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
         "default_template_id": settings.default_template_id,
-        "tempest_api_url": settings.tempest_api_url or "http://tempest-weather:8080",
+        "tempest_api_url": settings.tempest_api_url or "http://tempest-weather:8085",
         "weather_enabled": settings.weather_enabled if settings.weather_enabled is not None else True,
         "has_api_key": bool(settings.openai_api_key_enc),
         "created_at": settings.created_at,
@@ -205,7 +205,7 @@ def test_weather_connection(db: Session = Depends(get_db)):
     """Test the TempestWeather connection"""
     settings = db.query(ReelForgeSettings).first()
     
-    api_url = "http://tempest-weather:8080"
+    api_url = "http://tempest-weather:8085"
     if settings and settings.tempest_api_url:
         api_url = settings.tempest_api_url
     
