@@ -310,6 +310,26 @@ class ReelForgeProcessor:
                 for i in range(num_slides)
             ]
     
+    def _split_into_lines(self, text: str, max_chars: int = 25) -> List[str]:
+        """Split text into multiple lines for word wrapping"""
+        words = text.split()
+        lines = []
+        current_line = []
+        current_length = 0
+        
+        for word in words:
+            if current_length + len(word) + 1 > max_chars and current_line:
+                lines.append(" ".join(current_line))
+                current_line = [word]
+                current_length = len(word)
+            else:
+                current_line.append(word)
+                current_length += len(word) + 1
+        
+        if current_line:
+            lines.append(" ".join(current_line))
+        return lines if lines else [text]
+    
     async def _render_text_overlays(
         self,
         post_id: int,
@@ -319,6 +339,10 @@ class ReelForgeProcessor:
     ) -> Optional[str]:
         """
         Render text overlays onto the portrait video using FFmpeg drawtext filter.
+        Features:
+        - Vertically centered text
+        - Word wrapping for long text
+        - Typewriter effect (words appear one at a time)
         """
         try:
             output_path = str(self._outputs_dir / f"{post_id}.mp4")
@@ -329,39 +353,66 @@ class ReelForgeProcessor:
             text_color = template.text_color if template else "#FFFFFF"
             text_shadow = template.text_shadow if template else True
             text_background = template.text_background if template else "rgba(0,0,0,0.5)"
-            text_position_y = template.text_position_y if template else 0.8
+            text_position_y = template.text_position_y if template else 0.5  # Centered vertically
             
             # Convert hex color to FFmpeg format
             if text_color.startswith("#"):
                 text_color = text_color[1:]  # Remove #
             
-            # Build drawtext filter for each headline
-            # FFmpeg drawtext with enable expression for timing
+            # Build drawtext filters with typewriter effect
             drawtext_filters = []
             
             for headline in headlines:
                 text = headline["text"]
-                start_time = headline["start_time"]
-                end_time = start_time + headline["duration"]
+                headline_start = headline["start_time"]
+                headline_end = headline_start + headline["duration"]
                 
-                # Escape special characters for FFmpeg
-                text_escaped = text.replace("'", "'\\''").replace(":", "\\:")
+                # Split text into lines for word wrapping
+                lines = self._split_into_lines(text, max_chars=25)
                 
-                # Build filter string
-                filter_str = (
-                    f"drawtext=text='{text_escaped}'"
-                    f":fontsize={font_size}"
-                    f":fontcolor=white"
-                    f":x=(w-text_w)/2"  # Center horizontally
-                    f":y=h*{text_position_y}"  # Position vertically
-                    f":enable='between(t,{start_time},{end_time})'"
-                )
+                # Calculate vertical positioning for multiple lines
+                # Center the text block around the specified Y position
+                line_height = font_size * 1.4  # Line height with some spacing
+                total_height = len(lines) * line_height
                 
-                # Add shadow if enabled
-                if text_shadow:
-                    filter_str += f":shadowcolor=black:shadowx=2:shadowy=2"
+                # For typewriter effect: reveal lines one at a time
+                # Use 60% of headline duration for line reveal, 40% for all lines visible
+                reveal_duration = headline["duration"] * 0.6
+                line_interval = reveal_duration / len(lines) if len(lines) > 0 else 0
                 
-                drawtext_filters.append(filter_str)
+                # Create drawtext filter for each line with staggered timing
+                for line_idx, line in enumerate(lines):
+                    line_start = headline_start + (line_idx * line_interval)
+                    
+                    # Escape special characters for FFmpeg
+                    line_escaped = line.replace("'", "'\\''").replace(":", "\\:").replace("\\", "\\\\")
+                    
+                    # Calculate Y position - center the block, then offset each line
+                    y_offset = line_idx * line_height
+                    # Center text block vertically, accounting for total height
+                    y_expr = f"(h*{text_position_y} - {total_height/2} + {y_offset})"
+                    
+                    # Build filter string
+                    filter_str = (
+                        f"drawtext=text='{line_escaped}'"
+                        f":fontsize={font_size}"
+                        f":fontcolor=white"
+                        f":x=(w-text_w)/2"  # Center horizontally
+                        f":y={y_expr}"
+                        f":enable='between(t,{line_start:.2f},{headline_end:.2f})'"
+                    )
+                    
+                    # Add shadow for readability
+                    if text_shadow:
+                        filter_str += f":shadowcolor=black:shadowx=3:shadowy=3"
+                    
+                    drawtext_filters.append(filter_str)
+            
+            if not drawtext_filters:
+                # No text to render, just copy the video
+                import shutil
+                shutil.copy(portrait_path, output_path)
+                return output_path
             
             # Combine all filters
             filter_complex = ",".join(drawtext_filters)
@@ -380,7 +431,7 @@ class ReelForgeProcessor:
                 output_path
             ]
             
-            logger.debug(f"🎬 ReelForge: Text overlay command: {' '.join(ffmpeg_cmd[:8])}...")
+            logger.debug(f"🎬 ReelForge: Text overlay command with {len(drawtext_filters)} word filters")
             
             process = await asyncio.create_subprocess_exec(
                 *ffmpeg_cmd,
