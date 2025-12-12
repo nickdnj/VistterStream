@@ -296,12 +296,30 @@ const ReelForge: React.FC = () => {
     }
   };
 
-  const handleTriggerQueue = async (queueId: number) => {
+  const [executingQueueId, setExecutingQueueId] = useState<number | null>(null);
+
+  const handleExecuteCapture = async (queueId: number) => {
+    setExecutingQueueId(queueId);
     try {
-      await api.post(`/reelforge/queue/${queueId}/trigger`);
-      loadData();
+      await api.post(`/reelforge/queue/${queueId}/execute`);
+      // Start polling for status updates
+      const pollInterval = setInterval(async () => {
+        await loadData();
+        // Check if capture is still in progress
+        const item = queue.find(q => q.id === queueId);
+        if (!item || item.status !== 'capturing') {
+          clearInterval(pollInterval);
+          setExecutingQueueId(null);
+        }
+      }, 2000);
+      // Stop polling after 2 minutes max
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        setExecutingQueueId(null);
+      }, 120000);
     } catch (err) {
-      console.error('Failed to trigger queue item:', err);
+      console.error('Failed to execute capture:', err);
+      setExecutingQueueId(null);
     }
   };
 
@@ -613,26 +631,43 @@ const ReelForge: React.FC = () => {
                   <div className="flex items-center gap-2">
                     {isWaiting && (
                       <button
-                        onClick={() => handleTriggerQueue(item.id)}
-                        className="px-3 py-1 text-xs bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors"
+                        onClick={() => handleExecuteCapture(item.id)}
+                        disabled={executingQueueId !== null}
+                        className="px-3 py-1 text-xs bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                       >
-                        Trigger Now
+                        {executingQueueId === item.id ? (
+                          <>
+                            <ArrowPathIcon className="w-3 h-3 animate-spin" />
+                            Capturing...
+                          </>
+                        ) : (
+                          'Capture Now'
+                        )}
                       </button>
+                    )}
+                    {isCapturing && (
+                      <span className="px-3 py-1 text-xs bg-blue-600/20 text-blue-400 rounded flex items-center gap-1">
+                        <ArrowPathIcon className="w-3 h-3 animate-spin" />
+                        Capturing...
+                      </span>
                     )}
                     {isFailed && (
                       <button
-                        onClick={() => handleRetryQueue(item.id)}
-                        className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
+                        onClick={() => handleExecuteCapture(item.id)}
+                        disabled={executingQueueId !== null}
+                        className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors disabled:opacity-50"
                       >
                         Retry
                       </button>
                     )}
-                    <button
-                      onClick={() => handleCancelQueue(item.id)}
-                      className="px-3 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
-                    >
-                      Cancel
-                    </button>
+                    {!isCapturing && (
+                      <button
+                        onClick={() => handleCancelQueue(item.id)}
+                        className="px-3 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </div>
               );

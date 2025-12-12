@@ -13,8 +13,12 @@ from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
 import base64
+import asyncio
+import logging
 
-from models.database import get_db, Camera, Preset, ReelForgeSettings
+from models.database import get_db, SessionLocal, Camera, Preset, ReelForgeSettings
+
+logger = logging.getLogger(__name__)
 from models.reelforge import ReelTemplate, ReelPost, ReelPublishTarget, ReelExport, ReelCaptureQueue
 from models.schemas import (
     ReelTemplateCreate, ReelTemplateUpdate, ReelTemplate as ReelTemplateSchema,
@@ -1001,6 +1005,198 @@ def retry_queued_capture(queue_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to retry capture: {str(e)}")
+
+
+@router.post("/queue/{queue_id}/execute")
+async def execute_capture_now(
+    queue_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Immediately execute a capture with active control:
+    1. Pause the timeline (if running)
+    2. Move PTZ camera to target preset
+    3. Wait for camera to settle
+    4. Execute FFmpeg capture
+    5. Resume timeline
+    
+    This is the "Capture Now" action that takes immediate control.
+    """
+    queue_item = db.query(ReelCaptureQueue).filter(ReelCaptureQueue.id == queue_id).first()
+    if not queue_item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+    
+    if queue_item.status not in ["waiting", "failed"]:
+        raise HTTPException(status_code=400, detail=f"Cannot execute - capture is {queue_item.status}")
+    
+    # Update status to show we're starting
+    queue_item.status = "capturing"
+    queue_item.error_message = None
+    queue_item.started_at = datetime.utcnow()
+    queue_item.attempt_count = (queue_item.attempt_count or 0) + 1
+    queue_item.last_attempt_at = datetime.utcnow()
+    
+    # Update associated post
+    post = db.query(ReelPost).filter(ReelPost.id == queue_item.post_id).first()
+    if post:
+        post.status = "capturing"
+        post.error_message = None
+    
+    db.commit()
+    
+    # Start the capture in background
+    background_tasks.add_task(
+        _execute_capture_active,
+        queue_id=queue_id,
+        camera_id=queue_item.camera_id,
+        preset_id=queue_item.preset_id,
+        post_id=queue_item.post_id
+    )
+    
+    return {
+        "message": "Capture started",
+        "queue_id": queue_id,
+        "status": "capturing",
+        "steps": [
+            "Pausing timeline...",
+            "Moving camera to preset...",
+            "Waiting for settle...",
+            "Capturing video...",
+            "Resuming timeline..."
+        ]
+    }
+
+
+async def _execute_capture_active(
+    queue_id: int,
+    camera_id: int,
+    preset_id: Optional[int],
+    post_id: int
+):
+    """
+    Execute the active capture flow:
+    1. Pause timeline
+    2. Move camera to preset
+    3. Wait for settle
+    4. Capture
+    5. Resume timeline
+    """
+    import base64
+    from services.seamless_timeline_executor import get_seamless_timeline_executor
+    from services.ptz_service import get_ptz_service
+    from services.reelforge_capture_service import get_reelforge_capture_service
+    
+    db = SessionLocal()
+    timeline_was_running = False
+    
+    try:
+        # Get camera and preset info
+        camera = db.query(Camera).filter(Camera.id == camera_id).first()
+        preset = db.query(Preset).filter(Preset.id == preset_id).first() if preset_id else None
+        queue_item = db.query(ReelCaptureQueue).filter(ReelCaptureQueue.id == queue_id).first()
+        post = db.query(ReelPost).filter(ReelPost.id == post_id).first()
+        
+        if not camera:
+            raise Exception(f"Camera {camera_id} not found")
+        
+        # Step 1: Pause the timeline if running
+        executor = get_seamless_timeline_executor()
+        if executor.is_running():
+            timeline_was_running = True
+            logger.info(f"📹 ReelForge: Pausing timeline for capture...")
+            await executor.pause()
+            await asyncio.sleep(1)  # Brief pause
+        
+        # Step 2: Move camera to preset
+        if preset:
+            logger.info(f"📹 ReelForge: Moving {camera.name} to preset '{preset.name}'...")
+            
+            password = None
+            if camera.password_enc:
+                try:
+                    password = base64.b64decode(camera.password_enc).decode()
+                except:
+                    pass
+            
+            if password:
+                ptz_service = get_ptz_service()
+                pan = preset.pan if preset.pan is not None else 0.0
+                tilt = preset.tilt if preset.tilt is not None else 0.0
+                zoom = preset.zoom if preset.zoom is not None else 1.0
+                
+                try:
+                    await ptz_service.move_to_preset(
+                        address=camera.address,
+                        port=camera.onvif_port,
+                        username=camera.username,
+                        password=password,
+                        preset_token=preset.camera_preset_token or str(preset_id),
+                        pan=pan,
+                        tilt=tilt,
+                        zoom=zoom,
+                    )
+                except Exception as e:
+                    logger.warning(f"📹 ReelForge: PTZ move warning: {e}")
+        
+        # Step 3: Wait for camera to settle
+        logger.info(f"📹 ReelForge: Waiting for camera settle (3s)...")
+        await asyncio.sleep(3)
+        
+        # Step 4: Execute capture
+        logger.info(f"📹 ReelForge: Starting video capture...")
+        capture_service = get_reelforge_capture_service()
+        
+        # Use the capture service's trigger method
+        await capture_service.trigger_capture(camera_id, preset_id, db)
+        
+        # Wait for capture to complete (check status periodically)
+        # Get clip duration from template
+        clip_duration = 30
+        if post and post.template_id:
+            template = db.query(ReelTemplate).filter(ReelTemplate.id == post.template_id).first()
+            if template:
+                clip_duration = template.clip_duration
+        
+        logger.info(f"📹 ReelForge: Capturing for {clip_duration}s...")
+        
+        # Wait for capture to finish (with buffer for processing)
+        await asyncio.sleep(clip_duration + 5)
+        
+        logger.info(f"📹 ReelForge: Capture complete!")
+        
+    except Exception as e:
+        logger.error(f"📹 ReelForge: Active capture failed: {e}")
+        
+        # Update status to failed
+        try:
+            queue_item = db.query(ReelCaptureQueue).filter(ReelCaptureQueue.id == queue_id).first()
+            post = db.query(ReelPost).filter(ReelPost.id == post_id).first()
+            
+            if queue_item:
+                queue_item.status = "failed"
+                queue_item.error_message = str(e)[:500]
+                queue_item.completed_at = datetime.utcnow()
+            
+            if post:
+                post.status = "failed"
+                post.error_message = str(e)[:500]
+            
+            db.commit()
+        except:
+            pass
+    
+    finally:
+        # Step 5: Resume timeline if it was running
+        if timeline_was_running:
+            logger.info(f"📹 ReelForge: Resuming timeline...")
+            try:
+                executor = get_seamless_timeline_executor()
+                await executor.resume()
+            except Exception as e:
+                logger.warning(f"📹 ReelForge: Could not resume timeline: {e}")
+        
+        db.close()
 
 
 # ============================================================================

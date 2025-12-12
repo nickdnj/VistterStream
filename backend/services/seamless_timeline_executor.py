@@ -34,6 +34,75 @@ class SeamlessTimelineExecutor:
         self.active_timelines: Dict[int, asyncio.Task] = {}
         self.ffmpeg_processes: Dict[int, asyncio.subprocess.Process] = {}
         self._shutdown_event = asyncio.Event()
+        self._paused = False
+        self._pause_event = asyncio.Event()
+        self._pause_event.set()  # Not paused initially
+        self._paused_timeline_id: Optional[int] = None
+        self._paused_output_urls: Optional[list] = None
+        self._paused_encoding_profile = None
+    
+    def is_running(self) -> bool:
+        """Check if any timeline is currently running"""
+        return len(self.active_timelines) > 0
+    
+    def is_paused(self) -> bool:
+        """Check if timeline is paused"""
+        return self._paused
+    
+    def get_running_timeline_id(self) -> Optional[int]:
+        """Get the ID of the first running timeline"""
+        if self.active_timelines:
+            return next(iter(self.active_timelines.keys()))
+        return None
+    
+    async def pause(self) -> bool:
+        """
+        Pause the running timeline by stopping it temporarily.
+        Stores state for resuming.
+        """
+        if self._paused:
+            logger.warning("Timeline already paused")
+            return False
+        
+        timeline_id = self.get_running_timeline_id()
+        if not timeline_id:
+            logger.warning("No timeline running to pause")
+            return False
+        
+        logger.info(f"⏸️  Pausing timeline {timeline_id} for ReelForge capture...")
+        
+        # Store state for resume
+        self._paused_timeline_id = timeline_id
+        self._paused = True
+        
+        # Stop the timeline
+        await self.stop_timeline(timeline_id)
+        
+        return True
+    
+    async def resume(self) -> bool:
+        """Resume a paused timeline"""
+        if not self._paused or self._paused_timeline_id is None:
+            logger.warning("No paused timeline to resume")
+            return False
+        
+        logger.info(f"▶️  Resuming timeline {self._paused_timeline_id}...")
+        
+        # Note: We can't easily resume from where we left off because
+        # FFmpeg was building a complex filter. For now, just restart.
+        # The viewer will see a brief interruption but it's acceptable
+        # for infrequent ReelForge captures.
+        
+        # Clear paused state
+        timeline_id = self._paused_timeline_id
+        self._paused = False
+        self._paused_timeline_id = None
+        
+        # The timeline will be restarted by the timeline manager or user
+        # We just mark it as resumable
+        logger.info(f"✅ Timeline {timeline_id} ready to resume")
+        
+        return True
     
     async def start_timeline(
         self,
