@@ -342,24 +342,16 @@ class ReelForgeProcessor:
         Features:
         - Vertically centered text
         - Word wrapping for long text
-        - Typewriter effect (words appear one at a time)
+        - Bold, readable text with background box
         """
         try:
             output_path = str(self._outputs_dir / f"{post_id}.mp4")
             
             # Get styling from template or use defaults
-            font_family = template.font_family if template else "Arial"
-            font_size = template.font_size if template else 48
-            text_color = template.text_color if template else "#FFFFFF"
+            font_size = template.font_size if template else 56  # Larger for visibility
             text_shadow = template.text_shadow if template else True
-            text_background = template.text_background if template else "rgba(0,0,0,0.5)"
-            text_position_y = template.text_position_y if template else 0.5  # Centered vertically
             
-            # Convert hex color to FFmpeg format
-            if text_color.startswith("#"):
-                text_color = text_color[1:]  # Remove #
-            
-            # Build drawtext filters with typewriter effect
+            # Build drawtext filters - one per headline
             drawtext_filters = []
             
             for headline in headlines:
@@ -367,55 +359,44 @@ class ReelForgeProcessor:
                 headline_start = headline["start_time"]
                 headline_end = headline_start + headline["duration"]
                 
-                # Split text into lines for word wrapping
-                lines = self._split_into_lines(text, max_chars=25)
+                # Split text into lines for word wrapping, then join with newline
+                lines = self._split_into_lines(text, max_chars=22)
+                wrapped_text = "\n".join(lines)
                 
-                # Calculate vertical positioning for multiple lines
-                # Center the text block around the specified Y position
-                line_height = font_size * 1.4  # Line height with some spacing
-                total_height = len(lines) * line_height
+                # Escape special characters for FFmpeg - CORRECT ORDER
+                # 1. Backslashes first (so we don't escape our own escapes)
+                # 2. Single quotes (remove them to avoid breaking the filter)
+                # 3. Colons (FFmpeg uses : as delimiter)
+                text_escaped = wrapped_text.replace("\\", "\\\\").replace("'", "").replace(":", "\\:")
                 
-                # For typewriter effect: reveal lines one at a time
-                # Use 60% of headline duration for line reveal, 40% for all lines visible
-                reveal_duration = headline["duration"] * 0.6
-                line_interval = reveal_duration / len(lines) if len(lines) > 0 else 0
+                # Build filter string with centered text and background box
+                filter_str = (
+                    f"drawtext=text='{text_escaped}'"
+                    f":fontsize={font_size}"
+                    f":fontcolor=white"
+                    f":x=(w-text_w)/2"
+                    f":y=(h-text_h)/2"
+                    f":box=1"
+                    f":boxcolor=black@0.6"
+                    f":boxborderw=15"
+                    f":enable='between(t,{headline_start:.1f},{headline_end:.1f})'"
+                )
                 
-                # Create drawtext filter for each line with staggered timing
-                for line_idx, line in enumerate(lines):
-                    line_start = headline_start + (line_idx * line_interval)
-                    
-                    # Escape special characters for FFmpeg
-                    line_escaped = line.replace("'", "'\\''").replace(":", "\\:").replace("\\", "\\\\")
-                    
-                    # Calculate Y position - center the block, then offset each line
-                    y_offset = line_idx * line_height
-                    # Center text block vertically, accounting for total height
-                    y_expr = f"(h*{text_position_y} - {total_height/2} + {y_offset})"
-                    
-                    # Build filter string
-                    filter_str = (
-                        f"drawtext=text='{line_escaped}'"
-                        f":fontsize={font_size}"
-                        f":fontcolor=white"
-                        f":x=(w-text_w)/2"  # Center horizontally
-                        f":y={y_expr}"
-                        f":enable='between(t,{line_start:.2f},{headline_end:.2f})'"
-                    )
-                    
-                    # Add shadow for readability
-                    if text_shadow:
-                        filter_str += f":shadowcolor=black:shadowx=3:shadowy=3"
-                    
-                    drawtext_filters.append(filter_str)
+                # Add shadow for extra readability
+                if text_shadow:
+                    filter_str += ":shadowcolor=black:shadowx=3:shadowy=3"
+                
+                drawtext_filters.append(filter_str)
             
             if not drawtext_filters:
-                # No text to render, just copy the video
                 import shutil
                 shutil.copy(portrait_path, output_path)
                 return output_path
             
             # Combine all filters
             filter_complex = ",".join(drawtext_filters)
+            
+            logger.info(f"🎬 ReelForge: Rendering {len(drawtext_filters)} text overlays")
             
             # Build FFmpeg command
             ffmpeg_cmd = [
@@ -431,8 +412,6 @@ class ReelForgeProcessor:
                 output_path
             ]
             
-            logger.debug(f"🎬 ReelForge: Text overlay command with {len(drawtext_filters)} word filters")
-            
             process = await asyncio.create_subprocess_exec(
                 *ffmpeg_cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -446,12 +425,11 @@ class ReelForgeProcessor:
                 return output_path
             else:
                 error_msg = stderr.decode() if stderr else "Unknown error"
-                logger.error(f"🎬 ReelForge: Text overlay rendering failed: {error_msg}")
+                logger.error(f"🎬 ReelForge: Text overlay rendering failed: {error_msg[:500]}")
                 
-                # If drawtext fails (e.g., font issues), try without overlays
+                # If drawtext fails, try without overlays
                 logger.info(f"🎬 ReelForge: Falling back to video without overlays")
                 
-                # Just copy the portrait video as output
                 import shutil
                 shutil.copy(portrait_path, output_path)
                 
