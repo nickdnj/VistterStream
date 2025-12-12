@@ -1143,14 +1143,9 @@ async def _execute_capture_active(
         logger.info(f"📹 ReelForge: Waiting for camera settle (3s)...")
         await asyncio.sleep(3)
         
-        # Step 4: Execute capture
+        # Step 4: Execute capture directly via FFmpeg
         logger.info(f"📹 ReelForge: Starting video capture...")
-        capture_service = get_reelforge_capture_service()
         
-        # Use the capture service's trigger method
-        await capture_service.trigger_capture(camera_id, preset_id, db)
-        
-        # Wait for capture to complete (check status periodically)
         # Get clip duration from template
         clip_duration = 30
         if post and post.template_id:
@@ -1158,12 +1153,58 @@ async def _execute_capture_active(
             if template:
                 clip_duration = template.clip_duration
         
-        logger.info(f"📹 ReelForge: Capturing for {clip_duration}s...")
+        # Build RTSP URL
+        rtsp_password = base64.b64decode(camera.password_enc).decode() if camera.password_enc else None
+        if camera.username and rtsp_password:
+            rtsp_url = f"rtsp://{camera.username}:{rtsp_password}@{camera.address}:{camera.port}{camera.stream_path}"
+        else:
+            rtsp_url = f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
         
-        # Wait for capture to finish (with buffer for processing)
-        await asyncio.sleep(clip_duration + 5)
+        # Create output directory and path
+        from pathlib import Path
+        clips_dir = Path("/data/uploads/reelforge/clips")
+        clips_dir.mkdir(parents=True, exist_ok=True)
+        output_path = clips_dir / f"{post_id}.mp4"
         
-        logger.info(f"📹 ReelForge: Capture complete!")
+        # Build FFmpeg command
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            '-rtsp_transport', 'tcp',
+            '-i', rtsp_url,
+            '-t', str(clip_duration),
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-movflags', '+faststart',
+            str(output_path)
+        ]
+        
+        logger.info(f"📹 ReelForge: Capturing {clip_duration}s from {camera.name}...")
+        
+        # Execute FFmpeg
+        process = await asyncio.create_subprocess_exec(
+            *ffmpeg_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await process.communicate()
+        
+        # Check result
+        if process.returncode == 0 and output_path.exists():
+            logger.info(f"📹 ReelForge: Capture complete! Saved to {output_path}")
+            
+            # Update database
+            if post:
+                post.source_clip_path = str(output_path)
+                post.capture_completed_at = datetime.utcnow()
+                post.status = "processing"
+            if queue_item:
+                queue_item.status = "completed"
+                queue_item.completed_at = datetime.utcnow()
+            db.commit()
+        else:
+            error_msg = stderr.decode()[:500] if stderr else "Unknown error"
+            raise Exception(f"FFmpeg failed: {error_msg}")
         
     except Exception as e:
         logger.error(f"📹 ReelForge: Active capture failed: {e}")
