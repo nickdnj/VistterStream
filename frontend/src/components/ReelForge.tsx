@@ -80,9 +80,15 @@ interface QueueItem {
   trigger_mode: string;
   scheduled_at: string | null;
   status: string;
+  priority: number;
   camera_name: string | null;
   preset_name: string | null;
   created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  attempt_count: number;
+  last_attempt_at: string | null;
 }
 
 interface ReelForgeSettings {
@@ -287,6 +293,24 @@ const ReelForge: React.FC = () => {
       loadData();
     } catch (err) {
       console.error('Failed to cancel queue item:', err);
+    }
+  };
+
+  const handleTriggerQueue = async (queueId: number) => {
+    try {
+      await api.post(`/reelforge/queue/${queueId}/trigger`);
+      loadData();
+    } catch (err) {
+      console.error('Failed to trigger queue item:', err);
+    }
+  };
+
+  const handleRetryQueue = async (queueId: number) => {
+    try {
+      await api.post(`/reelforge/queue/${queueId}/retry`);
+      loadData();
+    } catch (err) {
+      console.error('Failed to retry queue item:', err);
     }
   };
 
@@ -512,27 +536,107 @@ const ReelForge: React.FC = () => {
         </button>
       </div>
 
-      {/* Capture Queue Alert */}
+      {/* Capture Queue */}
       {queue.length > 0 && (
-        <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-          <div className="flex items-center gap-2 text-yellow-400 mb-2">
-            <ClockIcon className="w-5 h-5" />
-            <span className="font-medium">{queue.length} capture(s) waiting in queue</span>
+        <div className="mb-6 p-4 bg-dark-800 border border-dark-700 rounded-lg">
+          <div className="flex items-center gap-2 text-white mb-3">
+            <QueueListIcon className="w-5 h-5" />
+            <span className="font-medium">{queue.length} item(s) in queue</span>
           </div>
-          <div className="space-y-2">
-            {queue.map(item => (
-              <div key={item.id} className="flex items-center justify-between text-sm">
-                <span className="text-gray-300">
-                  {item.camera_name} {item.preset_name && `> ${item.preset_name}`}
-                </span>
-                <button
-                  onClick={() => handleCancelQueue(item.id)}
-                  className="text-red-400 hover:text-red-300"
+          <div className="space-y-3">
+            {queue.map(item => {
+              const isWaiting = item.status === 'waiting';
+              const isFailed = item.status === 'failed';
+              const isCapturing = item.status === 'capturing';
+              
+              return (
+                <div 
+                  key={item.id} 
+                  className={`p-3 rounded-lg border ${
+                    isFailed 
+                      ? 'bg-red-500/10 border-red-500/30' 
+                      : isCapturing 
+                        ? 'bg-blue-500/10 border-blue-500/30'
+                        : 'bg-dark-700 border-dark-600'
+                  }`}
                 >
-                  Cancel
-                </button>
-              </div>
-            ))}
+                  {/* Header row */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {/* Status badge */}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        isFailed 
+                          ? 'bg-red-500/20 text-red-400' 
+                          : isCapturing 
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : item.priority >= 100
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : 'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {isFailed ? 'Failed' : isCapturing ? 'Capturing' : item.priority >= 100 ? 'Prioritized' : 'Waiting'}
+                      </span>
+                      {/* Camera/Preset */}
+                      <span className="text-white font-medium">
+                        {item.camera_name} {item.preset_name && `> ${item.preset_name}`}
+                      </span>
+                    </div>
+                    {/* Attempt count */}
+                    {item.attempt_count > 0 && (
+                      <span className="text-xs text-gray-500">
+                        Attempts: {item.attempt_count}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Info row */}
+                  <div className="flex items-center gap-4 text-xs text-gray-400 mb-2">
+                    <span>
+                      Mode: {item.trigger_mode === 'scheduled' && item.scheduled_at 
+                        ? `Scheduled ${formatDate(item.scheduled_at)}`
+                        : 'Next View'}
+                    </span>
+                    <span>Created: {formatDate(item.created_at)}</span>
+                    {item.last_attempt_at && (
+                      <span>Last attempt: {formatDate(item.last_attempt_at)}</span>
+                    )}
+                  </div>
+                  
+                  {/* Error message */}
+                  {isFailed && item.error_message && (
+                    <div className="mb-2 p-2 bg-red-500/10 rounded text-xs text-red-400">
+                      <ExclamationCircleIcon className="w-4 h-4 inline mr-1" />
+                      {item.error_message}
+                    </div>
+                  )}
+                  
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2">
+                    {isWaiting && (
+                      <button
+                        onClick={() => handleTriggerQueue(item.id)}
+                        className="px-3 py-1 text-xs bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors"
+                      >
+                        Trigger Now
+                      </button>
+                    )}
+                    {isFailed && (
+                      <button
+                        onClick={() => handleRetryQueue(item.id)}
+                        className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
+                      >
+                        Retry
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleCancelQueue(item.id)}
+                      className="px-3 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

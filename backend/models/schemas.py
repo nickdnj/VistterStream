@@ -548,8 +548,14 @@ class ReelCaptureQueueItem(BaseModel):
     priority: int = 0
     created_at: datetime
     expires_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     camera_name: Optional[str] = None
     preset_name: Optional[str] = None
+    # Error tracking
+    error_message: Optional[str] = None
+    attempt_count: int = 0
+    last_attempt_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

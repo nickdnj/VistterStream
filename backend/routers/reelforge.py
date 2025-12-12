@@ -862,14 +862,23 @@ def get_cameras_with_presets(db: Session = Depends(get_db)):
 # ============================================================================
 
 @router.get("/queue", response_model=List[ReelCaptureQueueItem])
-def get_capture_queue(db: Session = Depends(get_db)):
-    """Get current capture queue"""
-    queue_items = db.query(ReelCaptureQueue).options(
+def get_capture_queue(
+    include_failed: bool = True,
+    db: Session = Depends(get_db)
+):
+    """Get current capture queue including waiting and optionally failed items"""
+    query = db.query(ReelCaptureQueue).options(
         joinedload(ReelCaptureQueue.camera),
         joinedload(ReelCaptureQueue.preset)
-    ).filter(
-        ReelCaptureQueue.status == "waiting"
-    ).order_by(
+    )
+    
+    # Include waiting and optionally failed items
+    if include_failed:
+        query = query.filter(ReelCaptureQueue.status.in_(["waiting", "capturing", "failed"]))
+    else:
+        query = query.filter(ReelCaptureQueue.status == "waiting")
+    
+    queue_items = query.order_by(
         ReelCaptureQueue.priority.desc(),
         ReelCaptureQueue.created_at
     ).all()
@@ -887,8 +896,13 @@ def get_capture_queue(db: Session = Depends(get_db)):
             "priority": item.priority,
             "created_at": item.created_at,
             "expires_at": item.expires_at,
+            "started_at": item.started_at,
+            "completed_at": item.completed_at,
             "camera_name": item.camera.name if item.camera else None,
-            "preset_name": item.preset.name if item.preset else None
+            "preset_name": item.preset.name if item.preset else None,
+            "error_message": item.error_message,
+            "attempt_count": item.attempt_count or 0,
+            "last_attempt_at": item.last_attempt_at
         })
 
     return result
@@ -917,6 +931,76 @@ def cancel_queued_capture(queue_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to cancel capture: {str(e)}")
+
+
+@router.post("/queue/{queue_id}/trigger")
+def trigger_queued_capture(queue_id: int, db: Session = Depends(get_db)):
+    """
+    Prioritize a queued capture to trigger on next timeline match.
+    Sets high priority so it captures next time the camera/preset becomes active.
+    """
+    queue_item = db.query(ReelCaptureQueue).filter(ReelCaptureQueue.id == queue_id).first()
+    if not queue_item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+    
+    if queue_item.status not in ["waiting", "failed"]:
+        raise HTTPException(status_code=400, detail=f"Cannot trigger - capture is {queue_item.status}")
+    
+    try:
+        # Reset status to waiting if it was failed
+        if queue_item.status == "failed":
+            queue_item.status = "waiting"
+            queue_item.error_message = None
+        
+        # Set high priority so it's next in line
+        queue_item.priority = 100
+        
+        db.commit()
+        return {
+            "message": "Capture prioritized - will trigger on next timeline match",
+            "queue_id": queue_id,
+            "priority": queue_item.priority
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to trigger capture: {str(e)}")
+
+
+@router.post("/queue/{queue_id}/retry")
+def retry_queued_capture(queue_id: int, db: Session = Depends(get_db)):
+    """
+    Retry a failed capture. Resets status to waiting and clears error.
+    """
+    queue_item = db.query(ReelCaptureQueue).filter(ReelCaptureQueue.id == queue_id).first()
+    if not queue_item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+    
+    if queue_item.status != "failed":
+        raise HTTPException(status_code=400, detail=f"Can only retry failed captures - status is {queue_item.status}")
+    
+    try:
+        # Reset to waiting status
+        queue_item.status = "waiting"
+        queue_item.error_message = None
+        queue_item.started_at = None
+        queue_item.completed_at = None
+        # Keep attempt_count to track total attempts
+        
+        # Also reset the associated post if it was marked failed
+        post = db.query(ReelPost).filter(ReelPost.id == queue_item.post_id).first()
+        if post and post.status == "failed":
+            post.status = "queued"
+            post.error_message = None
+        
+        db.commit()
+        return {
+            "message": "Capture reset for retry",
+            "queue_id": queue_id,
+            "attempt_count": queue_item.attempt_count
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to retry capture: {str(e)}")
 
 
 # ============================================================================

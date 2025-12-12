@@ -206,6 +206,11 @@ class ReelCaptureQueue(Base):
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
     
+    # Error tracking
+    error_message = Column(String, nullable=True)  # Error details if failed
+    attempt_count = Column(Integer, default=0)     # Number of capture attempts
+    last_attempt_at = Column(DateTime)             # When last attempt occurred
+    
     # Relationships
     post = relationship("ReelPost", foreign_keys=[post_id])
     camera = relationship("Camera", foreign_keys=[camera_id])

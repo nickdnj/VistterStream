@@ -120,9 +120,12 @@ class ReelForgeCaptureService:
             if template:
                 clip_duration = template.clip_duration
         
-        # Update statuses
+        # Update statuses and tracking
         queue_item.status = "capturing"
         queue_item.started_at = datetime.utcnow()
+        queue_item.attempt_count = (queue_item.attempt_count or 0) + 1
+        queue_item.last_attempt_at = datetime.utcnow()
+        queue_item.error_message = None  # Clear any previous error
         post.status = "capturing"
         post.capture_started_at = datetime.utcnow()
         db.commit()
@@ -215,7 +218,9 @@ class ReelForgeCaptureService:
                 
             else:
                 error_msg = stderr.decode() if stderr else "Unknown error"
-                logger.error(f"📹 ReelForge: Capture failed for post {post_id}: {error_msg}")
+                # Truncate error message for display
+                error_display = error_msg[:500] if len(error_msg) > 500 else error_msg
+                logger.error(f"📹 ReelForge: Capture failed for post {post_id}: {error_display}")
                 
                 # Update database with error
                 post = db.query(ReelPost).filter(ReelPost.id == post_id).first()
@@ -223,10 +228,12 @@ class ReelForgeCaptureService:
                 
                 if post:
                     post.status = "failed"
-                    post.error_message = f"Capture failed: {error_msg[:500]}"
+                    post.error_message = f"Capture failed: {error_display}"
                 
                 if queue_item:
                     queue_item.status = "failed"
+                    queue_item.error_message = f"FFmpeg error: {error_display}"
+                    queue_item.completed_at = datetime.utcnow()
                 
                 db.commit()
                 
@@ -236,15 +243,29 @@ class ReelForgeCaptureService:
                         del self._capture_queue[key]
         
         except Exception as e:
-            logger.error(f"📹 ReelForge: Capture exception for post {post_id}: {e}")
+            error_str = str(e)[:500]
+            logger.error(f"📹 ReelForge: Capture exception for post {post_id}: {error_str}")
             
             # Update database with error
             try:
                 post = db.query(ReelPost).filter(ReelPost.id == post_id).first()
+                queue_item = db.query(ReelCaptureQueue).filter(ReelCaptureQueue.id == queue_id).first()
+                
                 if post:
                     post.status = "failed"
-                    post.error_message = str(e)[:500]
-                    db.commit()
+                    post.error_message = f"Capture error: {error_str}"
+                
+                if queue_item:
+                    queue_item.status = "failed"
+                    queue_item.error_message = f"Exception: {error_str}"
+                    queue_item.completed_at = datetime.utcnow()
+                
+                db.commit()
+                
+                # Remove from in-memory queue
+                async with self._lock:
+                    if key in self._capture_queue:
+                        del self._capture_queue[key]
             except:
                 pass
         
