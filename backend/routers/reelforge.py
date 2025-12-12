@@ -1202,6 +1202,19 @@ async def _execute_capture_active(
                 queue_item.status = "completed"
                 queue_item.completed_at = datetime.utcnow()
             db.commit()
+            
+            # Trigger processing pipeline
+            logger.info(f"📹 ReelForge: Triggering processing pipeline...")
+            try:
+                from services.reelforge_processor import get_reelforge_processor
+                processor = get_reelforge_processor()
+                asyncio.create_task(processor.process_post(post_id))
+            except Exception as proc_error:
+                logger.error(f"📹 ReelForge: Failed to trigger processing: {proc_error}")
+                # Set to ready anyway so user can access raw clip
+                if post:
+                    post.status = "ready"
+                    db.commit()
         else:
             error_msg = stderr.decode()[:500] if stderr else "Unknown error"
             raise Exception(f"FFmpeg failed: {error_msg}")
