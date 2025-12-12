@@ -13,6 +13,7 @@ import logging
 import httpx
 from datetime import datetime
 from typing import Dict, Optional
+from zoneinfo import ZoneInfo
 import base64
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,24 @@ def is_weather_enabled() -> bool:
         pass
     
     return True
+
+
+def get_timezone() -> ZoneInfo:
+    """Get the timezone from Settings (general app settings)"""
+    try:
+        from models.database import SessionLocal, Settings
+        
+        db = SessionLocal()
+        try:
+            settings = db.query(Settings).first()
+            if settings and settings.timezone:
+                return ZoneInfo(settings.timezone)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Could not get timezone from settings: {e}")
+    
+    return ZoneInfo("America/New_York")
 
 
 async def fetch_weather_data(units: str = "imperial") -> Optional[Dict]:
@@ -132,8 +151,9 @@ def parse_weather_data(raw_data: Dict, units: str = "imperial") -> Dict:
     """
     variables = {}
     
-    # System variables (always available)
-    now = datetime.now()
+    # System variables (always available) - use timezone from Settings
+    tz = get_timezone()
+    now = datetime.now(tz)
     variables["today_date"] = now.strftime("%B %d, %Y")
     variables["day_of_week"] = now.strftime("%A")
     hour = now.hour
@@ -179,6 +199,8 @@ def parse_weather_data(raw_data: Dict, units: str = "imperial") -> Dict:
         stations = tides.get("stations", [])
         if stations:
             first_station = stations[0]
+            # Always capture station name
+            variables["tide_station_name"] = first_station.get("name", "")
             if "tide_stage" not in variables or variables["tide_stage"] == "--":
                 variables["tide_stage"] = first_station.get("tide_type", "--")
                 variables["next_tide_time"] = first_station.get("tide_time", "--")
@@ -270,6 +292,7 @@ AVAILABLE_VARIABLES = {
     "next_tide": "Next tide event (High tide, Low tide)",
     "next_tide_time": "Time of next tide",
     "tide_height": "Tide height",
+    "tide_station_name": "Name of tide station (e.g., 'ATLANTIC HIGHLANDS, SANDY HOOK')",
     
     # Astronomy
     "moon_phase": "Moon phase name (e.g., 'Waxing Gibbous')",
