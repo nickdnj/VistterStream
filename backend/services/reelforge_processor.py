@@ -369,22 +369,22 @@ class ReelForgeProcessor:
                 # 3. Colons (FFmpeg uses : as delimiter)
                 text_escaped = wrapped_text.replace("\\", "\\\\").replace("'", "").replace(":", "\\:")
                 
-                # Build filter string with centered text and background box
+                # Build filter string: white text, bold outline, no background
                 filter_str = (
                     f"drawtext=text='{text_escaped}'"
+                    f":fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
                     f":fontsize={font_size}"
                     f":fontcolor=white"
                     f":x=(w-text_w)/2"
                     f":y=(h-text_h)/2"
-                    f":box=1"
-                    f":boxcolor=black@0.6"
-                    f":boxborderw=15"
+                    f":borderw=4"
+                    f":bordercolor=black"
                     f":enable='between(t,{headline_start:.1f},{headline_end:.1f})'"
                 )
                 
-                # Add shadow for extra readability
+                # Add shadow for depth
                 if text_shadow:
-                    filter_str += ":shadowcolor=black:shadowx=3:shadowy=3"
+                    filter_str += ":shadowcolor=black@0.8:shadowx=4:shadowy=4"
                 
                 drawtext_filters.append(filter_str)
             
