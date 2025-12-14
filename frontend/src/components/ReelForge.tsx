@@ -18,6 +18,7 @@ import {
   EyeIcon,
   ArrowDownTrayIcon,
   ClipboardDocumentIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 // Types
@@ -115,6 +116,7 @@ const ReelForge: React.FC = () => {
   const [settings, setSettings] = useState<ReelForgeSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [previewPostId, setPreviewPostId] = useState<number | null>(null);
   
   // Settings form state
   const [settingsApiKey, setSettingsApiKey] = useState('');
@@ -768,6 +770,13 @@ const ReelForge: React.FC = () => {
                     <div className="flex items-center gap-2">
                       {post.status === 'ready' && (
                         <>
+                          <button
+                            onClick={() => setPreviewPostId(post.id)}
+                            className="p-2 text-blue-400 hover:bg-blue-400/10 rounded-lg transition-colors"
+                            title="Preview Video"
+                          >
+                            <PlayIcon className="w-5 h-5" />
+                          </button>
                           <button
                             onClick={() => handleDownload(post.id)}
                             className="p-2 text-green-400 hover:bg-green-400/10 rounded-lg transition-colors"
@@ -1490,6 +1499,29 @@ const ReelForge: React.FC = () => {
                 {editingTemplate ? 'Update Template' : 'Create Template'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Preview Modal */}
+      {previewPostId && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-dark-800 rounded-xl p-4 max-w-4xl w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-white">Video Preview</h2>
+              <button 
+                onClick={() => setPreviewPostId(null)} 
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            <video
+              controls
+              autoPlay
+              className="w-full rounded-lg"
+              src={`/api/reelforge/posts/${previewPostId}/download`}
+            />
           </div>
         </div>
       )}
