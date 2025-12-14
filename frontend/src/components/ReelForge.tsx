@@ -1503,25 +1503,62 @@ const ReelForge: React.FC = () => {
         </div>
       )}
 
-      {/* Video Preview Modal */}
+      {/* Video Preview Modal - Instagram Style */}
       {previewPostId && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-dark-800 rounded-xl p-4 max-w-4xl w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-white">Video Preview</h2>
-              <button 
-                onClick={() => setPreviewPostId(null)} 
-                className="text-gray-400 hover:text-white transition-colors"
+        <div 
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50"
+          onClick={() => setPreviewPostId(null)}
+        >
+          <div 
+            className="relative flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button 
+              onClick={() => setPreviewPostId(null)} 
+              className="absolute -top-10 right-0 text-white/70 hover:text-white transition-colors"
+            >
+              <XMarkIcon className="w-8 h-8" />
+            </button>
+            
+            {/* Phone-style frame */}
+            <div className="bg-black rounded-[2.5rem] p-3 shadow-2xl">
+              {/* Screen */}
+              <div className="bg-black rounded-[2rem] overflow-hidden" style={{ width: '320px', height: '570px' }}>
+                {/* Instagram-style header */}
+                <div className="bg-gradient-to-b from-black/50 to-transparent absolute top-0 left-0 right-0 z-10 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center">
+                      <span className="text-white text-xs font-bold">VS</span>
+                    </div>
+                    <span className="text-white text-sm font-semibold">vistterstream</span>
+                  </div>
+                </div>
+                
+                {/* Video */}
+                <video
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  className="w-full h-full object-cover"
+                  src={`/api/reelforge/posts/${previewPostId}/download`}
+                />
+              </div>
+            </div>
+            
+            {/* Action buttons below */}
+            <div className="flex items-center gap-4 mt-6">
+              <button
+                onClick={() => {
+                  window.open(`/api/reelforge/posts/${previewPostId}/download`, '_blank');
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
               >
-                <XMarkIcon className="w-6 h-6" />
+                <ArrowDownTrayIcon className="w-5 h-5" />
+                Download
               </button>
             </div>
-            <video
-              controls
-              autoPlay
-              className="w-full rounded-lg"
-              src={`/api/reelforge/posts/${previewPostId}/download`}
-            />
           </div>
         </div>
       )}
