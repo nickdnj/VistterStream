@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 from models.reelforge import ReelTemplate, ReelPost, ReelPublishTarget, ReelExport, ReelCaptureQueue
 from models.schemas import (
     ReelTemplateCreate, ReelTemplateUpdate, ReelTemplate as ReelTemplateSchema,
-    ReelPostCreate, ReelPostQueue, ReelPost as ReelPostSchema, ReelPostWithDetails,
+    ReelPostCreate, ReelPostQueue, ReelPostUpdate, ReelPost as ReelPostSchema, ReelPostWithDetails,
     ReelPublishTargetCreate, ReelPublishTargetUpdate, ReelPublishTarget as ReelPublishTargetSchema,
     ReelExportCreate, ReelExportUpdate, ReelExport as ReelExportSchema,
     CameraWithPresets, Preset as PresetSchema,
@@ -536,6 +536,57 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
         "camera_name": post.camera.name if post.camera else None,
         "preset_name": post.preset.name if post.preset else None,
         "template_name": post.template.name if post.template else None,
+    }
+
+
+@router.put("/posts/{post_id}")
+def update_post(
+    post_id: int,
+    update: ReelPostUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a post (scheduling, publishing settings)"""
+    post = db.query(ReelPost).filter(ReelPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    # Update fields if provided
+    if update.scheduled_capture_at is not None:
+        post.scheduled_capture_at = update.scheduled_capture_at
+    if update.recurring_schedule is not None:
+        post.recurring_schedule = update.recurring_schedule
+    if update.auto_publish is not None:
+        post.auto_publish = update.auto_publish
+    if update.publish_platform is not None:
+        post.publish_platform = update.publish_platform
+    if update.publish_title is not None:
+        post.publish_title = update.publish_title
+    if update.publish_description is not None:
+        post.publish_description = update.publish_description
+    if update.publish_tags is not None:
+        post.publish_tags = update.publish_tags
+    
+    db.commit()
+    db.refresh(post)
+    
+    return {
+        "id": post.id,
+        "template_id": post.template_id,
+        "status": post.status,
+        "error_message": post.error_message,
+        "camera_id": post.camera_id,
+        "preset_id": post.preset_id,
+        "scheduled_capture_at": post.scheduled_capture_at,
+        "recurring_schedule": post.recurring_schedule,
+        "auto_publish": post.auto_publish,
+        "publish_platform": post.publish_platform,
+        "publish_title": post.publish_title,
+        "publish_description": post.publish_description,
+        "publish_tags": post.publish_tags,
+        "published_at": post.published_at,
+        "published_url": post.published_url,
+        "created_at": post.created_at,
+        "updated_at": post.updated_at,
     }
 
 
@@ -1296,3 +1347,190 @@ def update_export(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to update export: {str(e)}")
+
+
+# ============================================================================
+# YouTube OAuth Endpoints
+# ============================================================================
+
+@router.get("/youtube/auth-url")
+def get_youtube_auth_url(db: Session = Depends(get_db)):
+    """Get YouTube OAuth authorization URL"""
+    settings = db.query(ReelForgeSettings).first()
+    if not settings:
+        raise HTTPException(status_code=404, detail="ReelForge settings not found")
+    
+    if not settings.youtube_client_id or not settings.youtube_client_secret_enc:
+        raise HTTPException(status_code=400, detail="YouTube OAuth credentials not configured")
+    
+    try:
+        from services.youtube_shorts_service import get_youtube_service
+        
+        service = get_youtube_service()
+        client_secret = _decrypt_api_key(settings.youtube_client_secret_enc)
+        
+        # Use the app's base URL for the callback
+        redirect_uri = "http://localhost:8000/api/reelforge/youtube/callback"
+        
+        auth_url = service.get_oauth_url(
+            client_id=settings.youtube_client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri
+        )
+        
+        return {"auth_url": auth_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate auth URL: {str(e)}")
+
+
+@router.get("/youtube/callback")
+def youtube_oauth_callback(code: str, db: Session = Depends(get_db)):
+    """Handle YouTube OAuth callback"""
+    settings = db.query(ReelForgeSettings).first()
+    if not settings:
+        raise HTTPException(status_code=404, detail="ReelForge settings not found")
+    
+    try:
+        from services.youtube_shorts_service import get_youtube_service
+        
+        service = get_youtube_service()
+        client_secret = _decrypt_api_key(settings.youtube_client_secret_enc)
+        redirect_uri = "http://localhost:8000/api/reelforge/youtube/callback"
+        
+        result = service.exchange_code_for_tokens(
+            code=code,
+            client_id=settings.youtube_client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri
+        )
+        
+        # Store the refresh token
+        settings.youtube_refresh_token_enc = _encrypt_api_key(result["refresh_token"])
+        settings.youtube_connected = True
+        settings.youtube_channel_name = result["channel_name"]
+        db.commit()
+        
+        # Return HTML that closes the popup
+        return """
+        <html>
+        <body>
+            <h1>YouTube Connected!</h1>
+            <p>You can close this window.</p>
+            <script>
+                window.opener.postMessage('youtube-connected', '*');
+                setTimeout(() => window.close(), 2000);
+            </script>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        logger.error(f"YouTube OAuth callback failed: {e}")
+        return f"""
+        <html>
+        <body>
+            <h1>Connection Failed</h1>
+            <p>{str(e)}</p>
+        </body>
+        </html>
+        """
+
+
+@router.post("/youtube/disconnect")
+def disconnect_youtube(db: Session = Depends(get_db)):
+    """Disconnect YouTube account"""
+    settings = db.query(ReelForgeSettings).first()
+    if not settings:
+        raise HTTPException(status_code=404, detail="ReelForge settings not found")
+    
+    settings.youtube_refresh_token_enc = None
+    settings.youtube_connected = False
+    settings.youtube_channel_name = None
+    db.commit()
+    
+    return {"message": "YouTube disconnected"}
+
+
+@router.get("/youtube/status")
+def get_youtube_status(db: Session = Depends(get_db)):
+    """Get YouTube connection status"""
+    settings = db.query(ReelForgeSettings).first()
+    if not settings:
+        return {"connected": False}
+    
+    return {
+        "connected": settings.youtube_connected or False,
+        "channel_name": settings.youtube_channel_name
+    }
+
+
+@router.post("/posts/{post_id}/publish")
+async def publish_post(post_id: int, db: Session = Depends(get_db)):
+    """Manually trigger publishing a ready post to its configured platform"""
+    post = db.query(ReelPost).filter(ReelPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    if post.status != "ready":
+        raise HTTPException(status_code=400, detail=f"Post is not ready for publishing (status: {post.status})")
+    
+    if not post.output_path:
+        raise HTTPException(status_code=400, detail="Post has no output video")
+    
+    if not post.publish_platform:
+        raise HTTPException(status_code=400, detail="No publish platform configured")
+    
+    settings = db.query(ReelForgeSettings).first()
+    if not settings:
+        raise HTTPException(status_code=404, detail="ReelForge settings not found")
+    
+    if post.publish_platform == "youtube_shorts":
+        if not settings.youtube_connected or not settings.youtube_refresh_token_enc:
+            raise HTTPException(status_code=400, detail="YouTube not connected")
+        
+        try:
+            from services.youtube_shorts_service import get_youtube_service
+            
+            service = get_youtube_service()
+            
+            # Parse tags
+            tags = []
+            if post.publish_tags:
+                tags = [t.strip().lstrip('#') for t in post.publish_tags.split(',')]
+            
+            # Get first headline for default title
+            title = post.publish_title
+            if not title and post.generated_headlines:
+                title = post.generated_headlines[0].get('text', 'Video')
+            title = title or 'Video'
+            
+            description = post.publish_description or ''
+            
+            result = await service.upload_short(
+                video_path=post.output_path,
+                title=title,
+                description=description,
+                tags=tags,
+                client_id=settings.youtube_client_id,
+                client_secret=_decrypt_api_key(settings.youtube_client_secret_enc),
+                refresh_token=_decrypt_api_key(settings.youtube_refresh_token_enc)
+            )
+            
+            if result.get("success"):
+                post.published_at = datetime.utcnow()
+                post.published_url = result.get("url")
+                post.status = "published"
+                db.commit()
+                
+                return {
+                    "success": True,
+                    "video_id": result.get("video_id"),
+                    "url": result.get("url")
+                }
+            else:
+                raise HTTPException(status_code=500, detail=result.get("error", "Upload failed"))
+                
+        except Exception as e:
+            logger.error(f"Failed to publish post {post_id}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    else:
+        raise HTTPException(status_code=400, detail=f"Publishing to {post.publish_platform} is not yet supported")

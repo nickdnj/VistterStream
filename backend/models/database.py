@@ -80,6 +80,13 @@ Guidelines:
     tempest_api_url = Column(String, default="http://host.docker.internal:8085")  # TempestWeather service URL
     weather_enabled = Column(Boolean, default=True)  # Enable weather data in AI prompts
     
+    # YouTube OAuth Configuration (for auto-publishing to YouTube Shorts)
+    youtube_client_id = Column(String)
+    youtube_client_secret_enc = Column(String)  # Encrypted
+    youtube_refresh_token_enc = Column(String)  # Encrypted OAuth refresh token
+    youtube_connected = Column(Boolean, default=False)  # Whether YouTube is connected
+    youtube_channel_name = Column(String)  # Connected channel name for display
+    
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

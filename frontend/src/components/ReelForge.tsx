@@ -59,6 +59,17 @@ interface ReelPost {
   thumbnail_path: string | null;
   generated_headlines: { text: string; start_time: number; duration: number }[];
   download_count: number;
+  // Scheduling fields
+  scheduled_capture_at: string | null;
+  recurring_schedule: { enabled: boolean; times: string[]; days: number[] } | null;
+  auto_publish: boolean;
+  publish_platform: string | null;
+  publish_title: string | null;
+  publish_description: string | null;
+  publish_tags: string | null;
+  published_at: string | null;
+  published_url: string | null;
+  // Timestamps
   created_at: string;
   camera_name: string | null;
   preset_name: string | null;
@@ -132,6 +143,12 @@ const ReelForge: React.FC = () => {
   const [weatherTestResult, setWeatherTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
   const [showVariablesHelp, setShowVariablesHelp] = useState(false);
+  
+  // YouTube OAuth State
+  const [youtubeStatus, setYoutubeStatus] = useState<{ connected: boolean; channel_name?: string } | null>(null);
+  const [youtubeClientId, setYoutubeClientId] = useState('');
+  const [youtubeClientSecret, setYoutubeClientSecret] = useState('');
+  const [connectingYouTube, setConnectingYouTube] = useState(false);
 
   // New Post Modal State
   const [showNewPostModal, setShowNewPostModal] = useState(false);
@@ -141,6 +158,20 @@ const ReelForge: React.FC = () => {
   const [triggerMode, setTriggerMode] = useState<'next_view' | 'scheduled'>('next_view');
   const [scheduledAt, setScheduledAt] = useState<string>('');
   const [queueingPost, setQueueingPost] = useState(false);
+
+  // Edit Post Modal State
+  const [showEditPostModal, setShowEditPostModal] = useState(false);
+  const [editingPost, setEditingPost] = useState<ReelPost | null>(null);
+  const [editScheduledAt, setEditScheduledAt] = useState<string>('');
+  const [editRecurringEnabled, setEditRecurringEnabled] = useState(false);
+  const [editRecurringTimes, setEditRecurringTimes] = useState<string[]>(['08:00']);
+  const [editRecurringDays, setEditRecurringDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [editAutoPublish, setEditAutoPublish] = useState(false);
+  const [editPublishPlatform, setEditPublishPlatform] = useState<string>('youtube_shorts');
+  const [editPublishTitle, setEditPublishTitle] = useState('');
+  const [editPublishDescription, setEditPublishDescription] = useState('');
+  const [editPublishTags, setEditPublishTags] = useState('');
+  const [savingPost, setSavingPost] = useState(false);
 
   // Template Modal State
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -205,7 +236,7 @@ const ReelForge: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [camerasRes, templatesRes, postsRes, targetsRes, queueRes, settingsRes, variablesRes] = await Promise.all([
+      const [camerasRes, templatesRes, postsRes, targetsRes, queueRes, settingsRes, variablesRes, youtubeRes] = await Promise.all([
         api.get('/reelforge/cameras'),
         api.get('/reelforge/templates'),
         api.get('/reelforge/posts'),
@@ -213,6 +244,7 @@ const ReelForge: React.FC = () => {
         api.get('/reelforge/queue'),
         api.get('/reelforge/settings'),
         api.get('/reelforge/settings/variables').catch(() => ({ data: { variables: {} } })),
+        api.get('/reelforge/youtube/status').catch(() => ({ data: { connected: false } })),
       ]);
 
       setCameras(camerasRes.data || []);
@@ -230,6 +262,7 @@ const ReelForge: React.FC = () => {
       setSettingsWeatherEnabled(loadedSettings?.weather_enabled ?? true);
       
       setTemplateVariables(variablesRes.data?.variables || {});
+      setYoutubeStatus(youtubeRes.data || { connected: false });
     } catch (err) {
       console.error('Failed to load ReelForge data:', err);
       setError('Failed to load data. Please try again.');
@@ -287,6 +320,70 @@ const ReelForge: React.FC = () => {
     } catch (err) {
       console.error('Failed to delete post:', err);
     }
+  };
+
+  const openEditPostModal = (post: ReelPost) => {
+    setEditingPost(post);
+    setEditScheduledAt(post.scheduled_capture_at || '');
+    setEditRecurringEnabled(post.recurring_schedule?.enabled || false);
+    setEditRecurringTimes(post.recurring_schedule?.times || ['08:00']);
+    setEditRecurringDays(post.recurring_schedule?.days || [0, 1, 2, 3, 4, 5, 6]);
+    setEditAutoPublish(post.auto_publish || false);
+    setEditPublishPlatform(post.publish_platform || 'youtube_shorts');
+    setEditPublishTitle(post.publish_title || '');
+    setEditPublishDescription(post.publish_description || '');
+    setEditPublishTags(post.publish_tags || '');
+    setShowEditPostModal(true);
+  };
+
+  const handleSavePost = async () => {
+    if (!editingPost) return;
+    setSavingPost(true);
+    try {
+      await api.put(`/reelforge/posts/${editingPost.id}`, {
+        scheduled_capture_at: editScheduledAt || null,
+        recurring_schedule: editRecurringEnabled ? {
+          enabled: true,
+          times: editRecurringTimes,
+          days: editRecurringDays
+        } : null,
+        auto_publish: editAutoPublish,
+        publish_platform: editAutoPublish ? editPublishPlatform : null,
+        publish_title: editPublishTitle || null,
+        publish_description: editPublishDescription || null,
+        publish_tags: editPublishTags || null,
+      });
+      setShowEditPostModal(false);
+      setEditingPost(null);
+      loadData();
+    } catch (err) {
+      console.error('Failed to save post:', err);
+      setError('Failed to save post settings');
+    } finally {
+      setSavingPost(false);
+    }
+  };
+
+  const toggleRecurringDay = (day: number) => {
+    if (editRecurringDays.includes(day)) {
+      setEditRecurringDays(editRecurringDays.filter(d => d !== day));
+    } else {
+      setEditRecurringDays([...editRecurringDays, day].sort());
+    }
+  };
+
+  const addRecurringTime = () => {
+    setEditRecurringTimes([...editRecurringTimes, '12:00']);
+  };
+
+  const removeRecurringTime = (index: number) => {
+    setEditRecurringTimes(editRecurringTimes.filter((_, i) => i !== index));
+  };
+
+  const updateRecurringTime = (index: number, value: string) => {
+    const newTimes = [...editRecurringTimes];
+    newTimes[index] = value;
+    setEditRecurringTimes(newTimes);
   };
 
   const handleCancelQueue = async (queueId: number) => {
@@ -421,6 +518,69 @@ const ReelForge: React.FC = () => {
       setConnectionTestResult({ success: false, message: 'Failed to test connection' });
     } finally {
       setTestingConnection(false);
+    }
+  };
+
+  const loadYouTubeStatus = async () => {
+    try {
+      const response = await api.get('/reelforge/youtube/status');
+      setYoutubeStatus(response.data);
+    } catch (err) {
+      console.error('Failed to load YouTube status:', err);
+    }
+  };
+
+  const handleConnectYouTube = async () => {
+    if (!youtubeClientId || !youtubeClientSecret) return;
+    
+    setConnectingYouTube(true);
+    try {
+      // First save the credentials
+      await api.put('/reelforge/settings', {
+        youtube_client_id: youtubeClientId,
+        youtube_client_secret: youtubeClientSecret
+      });
+      
+      // Then get the auth URL
+      const response = await api.get('/reelforge/youtube/auth-url');
+      const authUrl = response.data.auth_url;
+      
+      // Open popup for OAuth
+      const popup = window.open(authUrl, 'youtube-oauth', 'width=600,height=700');
+      
+      // Listen for completion
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data === 'youtube-connected') {
+          loadYouTubeStatus();
+          setConnectingYouTube(false);
+          window.removeEventListener('message', handleMessage);
+        }
+      };
+      window.addEventListener('message', handleMessage);
+      
+      // Also check periodically in case postMessage fails
+      const checkInterval = setInterval(async () => {
+        if (popup?.closed) {
+          clearInterval(checkInterval);
+          setConnectingYouTube(false);
+          loadYouTubeStatus();
+        }
+      }, 1000);
+      
+    } catch (err) {
+      console.error('Failed to connect YouTube:', err);
+      setError('Failed to connect YouTube');
+      setConnectingYouTube(false);
+    }
+  };
+
+  const handleDisconnectYouTube = async () => {
+    if (!window.confirm('Disconnect YouTube account?')) return;
+    try {
+      await api.post('/reelforge/youtube/disconnect');
+      setYoutubeStatus({ connected: false });
+    } catch (err) {
+      console.error('Failed to disconnect YouTube:', err);
     }
   };
 
@@ -794,6 +954,13 @@ const ReelForge: React.FC = () => {
                         </>
                       )}
                       <button
+                        onClick={() => openEditPostModal(post)}
+                        className="p-2 text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-colors"
+                        title="Edit Schedule & Publishing"
+                      >
+                        <PencilIcon className="w-5 h-5" />
+                      </button>
+                      <button
                         onClick={() => handleDeletePost(post.id)}
                         className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
                         title="Delete"
@@ -1096,6 +1263,80 @@ const ReelForge: React.FC = () => {
                     </div>
                   )}
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* YouTube Shorts Publishing */}
+          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+            <h3 className="text-lg font-medium text-white mb-4">YouTube Shorts Publishing</h3>
+            <p className="text-gray-400 text-sm mb-4">
+              Connect your YouTube account to enable auto-publishing of ReelForge posts to YouTube Shorts.
+            </p>
+            
+            <div className="space-y-4">
+              {/* Connection Status */}
+              <div className="flex items-center gap-3 p-3 bg-dark-700 rounded-lg">
+                {youtubeStatus?.connected ? (
+                  <>
+                    <CheckCircleIcon className="w-6 h-6 text-green-400" />
+                    <div>
+                      <div className="text-white font-medium">Connected</div>
+                      <div className="text-gray-400 text-sm">{youtubeStatus.channel_name}</div>
+                    </div>
+                    <button
+                      onClick={handleDisconnectYouTube}
+                      className="ml-auto px-3 py-1 text-sm text-red-400 hover:bg-red-400/10 rounded"
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <ExclamationCircleIcon className="w-6 h-6 text-yellow-400" />
+                    <div className="text-gray-300">Not connected</div>
+                  </>
+                )}
+              </div>
+              
+              {/* OAuth Credentials */}
+              {!youtubeStatus?.connected && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Google Client ID</label>
+                    <input
+                      type="text"
+                      value={youtubeClientId}
+                      onChange={e => setYoutubeClientId(e.target.value)}
+                      placeholder="xxxxx.apps.googleusercontent.com"
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Google Client Secret</label>
+                    <input
+                      type="password"
+                      value={youtubeClientSecret}
+                      onChange={e => setYoutubeClientSecret(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Create OAuth 2.0 credentials at{' '}
+                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline">
+                      Google Cloud Console
+                    </a>
+                    . Enable the YouTube Data API v3.
+                  </p>
+                  <button
+                    onClick={handleConnectYouTube}
+                    disabled={connectingYouTube || !youtubeClientId || !youtubeClientSecret}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {connectingYouTube ? 'Connecting...' : 'Connect YouTube'}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -1498,6 +1739,202 @@ const ReelForge: React.FC = () => {
                 )}
                 {editingTemplate ? 'Update Template' : 'Create Template'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Post Modal - Scheduling & Publishing */}
+      {showEditPostModal && editingPost && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-white">Edit Post Settings</h2>
+                <button
+                  onClick={() => setShowEditPostModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Post Info */}
+              <div className="mb-6 p-4 bg-dark-700 rounded-lg">
+                <div className="text-sm text-gray-400">Post #{editingPost.id}</div>
+                <div className="text-white font-medium">
+                  {editingPost.camera_name} {editingPost.preset_name && `> ${editingPost.preset_name}`}
+                </div>
+                <div className="text-sm text-gray-400">
+                  Template: {editingPost.template_name || 'None'}
+                </div>
+              </div>
+
+              {/* One-time Schedule */}
+              <div className="mb-6">
+                <h3 className="text-white font-medium mb-3">One-time Capture Schedule</h3>
+                <input
+                  type="datetime-local"
+                  value={editScheduledAt}
+                  onChange={(e) => setEditScheduledAt(e.target.value)}
+                  className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white"
+                />
+                <p className="text-xs text-gray-400 mt-1">Leave empty for immediate/next-view capture</p>
+              </div>
+
+              {/* Recurring Schedule */}
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="checkbox"
+                    id="recurring-enabled"
+                    checked={editRecurringEnabled}
+                    onChange={(e) => setEditRecurringEnabled(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <label htmlFor="recurring-enabled" className="text-white font-medium">
+                    Recurring Schedule
+                  </label>
+                </div>
+                
+                {editRecurringEnabled && (
+                  <div className="pl-7 space-y-4">
+                    {/* Days of week */}
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-2">Days</label>
+                      <div className="flex gap-2">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => (
+                          <button
+                            key={day}
+                            onClick={() => toggleRecurringDay(i)}
+                            className={`px-3 py-1 rounded text-sm ${
+                              editRecurringDays.includes(i)
+                                ? 'bg-primary-600 text-white'
+                                : 'bg-dark-700 text-gray-400'
+                            }`}
+                          >
+                            {day}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Times */}
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-2">Times</label>
+                      <div className="space-y-2">
+                        {editRecurringTimes.map((time, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <input
+                              type="time"
+                              value={time}
+                              onChange={(e) => updateRecurringTime(index, e.target.value)}
+                              className="px-3 py-2 bg-dark-700 border border-dark-600 rounded text-white"
+                            />
+                            {editRecurringTimes.length > 1 && (
+                              <button
+                                onClick={() => removeRecurringTime(index)}
+                                className="p-1 text-red-400 hover:bg-red-400/10 rounded"
+                              >
+                                <TrashIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button
+                          onClick={addRecurringTime}
+                          className="text-sm text-primary-400 hover:text-primary-300"
+                        >
+                          + Add time
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Auto-publish */}
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="checkbox"
+                    id="auto-publish"
+                    checked={editAutoPublish}
+                    onChange={(e) => setEditAutoPublish(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <label htmlFor="auto-publish" className="text-white font-medium">
+                    Auto-publish when ready
+                  </label>
+                </div>
+                
+                {editAutoPublish && (
+                  <div className="pl-7 space-y-4">
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-2">Platform</label>
+                      <select
+                        value={editPublishPlatform}
+                        onChange={(e) => setEditPublishPlatform(e.target.value)}
+                        className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white"
+                      >
+                        <option value="youtube_shorts">YouTube Shorts</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="instagram_reels">Instagram Reels</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-2">Title</label>
+                      <input
+                        type="text"
+                        value={editPublishTitle}
+                        onChange={(e) => setEditPublishTitle(e.target.value)}
+                        placeholder="Video title..."
+                        className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-2">Description</label>
+                      <textarea
+                        value={editPublishDescription}
+                        onChange={(e) => setEditPublishDescription(e.target.value)}
+                        placeholder="Video description..."
+                        rows={3}
+                        className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm text-gray-400 block mb-2">Tags (comma-separated)</label>
+                      <input
+                        type="text"
+                        value={editPublishTags}
+                        onChange={(e) => setEditPublishTags(e.target.value)}
+                        placeholder="#shorts, #live, #weather"
+                        className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowEditPostModal(false)}
+                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSavePost}
+                  disabled={savingPost}
+                  className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {savingPost ? 'Saving...' : 'Save Settings'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

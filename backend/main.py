@@ -165,6 +165,15 @@ async def startup_event():
         print("✅ ReelForge capture scheduler started")
     except Exception as e:
         print(f"⚠️ Failed to start ReelForge capture scheduler: {e}")
+    # Start ReelForge background scheduler (for scheduled captures and auto-publish)
+    try:
+        print("🗓️ Starting ReelForge scheduler...")
+        from services.reelforge_scheduler import get_reelforge_scheduler
+        reelforge_scheduler = get_reelforge_scheduler()
+        asyncio.create_task(reelforge_scheduler.start())
+        print("✅ ReelForge scheduler started")
+    except Exception as e:
+        print(f"⚠️ Failed to start ReelForge scheduler: {e}")
     print("✅ All services started")
 
 @app.on_event("shutdown")

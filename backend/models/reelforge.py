@@ -100,6 +100,19 @@ class ReelPost(Base):
     #     ...
     # ]
     
+    # Scheduling Configuration
+    scheduled_capture_at = Column(DateTime)  # One-time: capture at this specific time
+    recurring_schedule = Column(JSON)  # {"enabled": true, "times": ["08:00", "14:00"], "days": [0,1,2,3,4,5,6]}
+    
+    # Auto-publish Configuration
+    auto_publish = Column(Boolean, default=False)  # Auto-publish when ready
+    publish_platform = Column(String)  # 'youtube_shorts', 'tiktok', 'instagram_reels'
+    publish_title = Column(String)  # Custom title for publishing
+    publish_description = Column(Text)  # Custom description
+    publish_tags = Column(String)  # Comma-separated tags
+    published_at = Column(DateTime)  # When it was published
+    published_url = Column(String)  # URL of the published video
+    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

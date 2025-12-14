@@ -419,6 +419,17 @@ class ReelPostQueue(BaseModel):
     scheduled_at: Optional[datetime] = Field(None, description="When to capture (for scheduled mode)")
 
 
+class ReelPostUpdate(BaseModel):
+    """Update an existing post (scheduling, publishing settings)"""
+    scheduled_capture_at: Optional[datetime] = None
+    recurring_schedule: Optional[dict] = None  # {"enabled": true, "times": ["08:00"], "days": [0,1,2,3,4,5,6]}
+    auto_publish: Optional[bool] = None
+    publish_platform: Optional[str] = None  # 'youtube_shorts', 'tiktok', 'instagram_reels'
+    publish_title: Optional[str] = None
+    publish_description: Optional[str] = None
+    publish_tags: Optional[str] = None
+
+
 class ReelPost(BaseModel):
     id: int
     template_id: Optional[int] = None
@@ -432,6 +443,17 @@ class ReelPost(BaseModel):
     thumbnail_path: Optional[str] = None
     generated_headlines: List[ReelHeadline] = Field(default_factory=list)
     download_count: int = 0
+    # Scheduling fields
+    scheduled_capture_at: Optional[datetime] = None
+    recurring_schedule: Optional[dict] = None
+    auto_publish: bool = False
+    publish_platform: Optional[str] = None
+    publish_title: Optional[str] = None
+    publish_description: Optional[str] = None
+    publish_tags: Optional[str] = None
+    published_at: Optional[datetime] = None
+    published_url: Optional[str] = None
+    # Timestamps
     created_at: datetime
     updated_at: Optional[datetime] = None
     capture_started_at: Optional[datetime] = None
