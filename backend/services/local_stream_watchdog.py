@@ -261,7 +261,7 @@ class LocalStreamWatchdog:
     
     async def _check_youtube_live(self) -> bool:
         """
-        Check if YouTube shows the stream as live by requesting the channel /live URL
+        Check if YouTube shows the stream as live by requesting the watch URL
         
         Returns:
             True if stream appears to be live, False otherwise
@@ -270,33 +270,58 @@ class LocalStreamWatchdog:
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     self.youtube_channel_live_url,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    allow_redirects=True
+                    timeout=aiohttp.ClientTimeout(total=15),
+                    allow_redirects=True,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
                 ) as response:
-                    # If we get redirected to the home page or channel page (not /live), stream is offline
                     final_url = str(response.url)
+                    text = await response.text()
                     
-                    # Check if we're still on a /live URL (indicates stream is live)
+                    # Offline indicators - these mean stream is NOT live
+                    offline_indicators = [
+                        '"isLive":false',
+                        'This video is unavailable',
+                        'This live stream recording is not available',
+                        'Video unavailable',
+                        '"playabilityStatus":{"status":"LIVE_STREAM_OFFLINE"',
+                        '"playabilityStatus":{"status":"ERROR"',
+                        'This video has been removed',
+                        'This video is private',
+                        'Scheduled for',
+                        '"status":"LIVE_STREAM_OFFLINE"',
+                        '"status":"ERROR"',
+                        'is offline',
+                        'stream has ended',
+                        'Stream offline',
+                    ]
+                    
+                    # Check for offline indicators first (higher priority)
+                    is_offline = any(indicator.lower() in text.lower() for indicator in offline_indicators)
+                    if is_offline:
+                        self.logger.warning(f"YouTube shows stream as OFFLINE (found offline indicator)")
+                        return False
+                    
+                    # Check if we're on a valid video page
                     if '/live' in final_url or '/watch?v=' in final_url:
-                        # Check page content for live indicators
-                        text = await response.text()
-                        
                         # Look for common indicators that stream is live
                         live_indicators = [
                             '"isLive":true',
                             '"isLiveContent":true',
                             'watching now',
-                            'Started streaming'
+                            'Started streaming',
+                            '"isLiveNow":true',
                         ]
                         
                         is_live = any(indicator in text for indicator in live_indicators)
                         
                         if is_live:
                             self.logger.debug(f"YouTube live check: Stream is LIVE")
+                            return True
                         else:
-                            self.logger.warning(f"YouTube live check: Stream appears OFFLINE")
-                        
-                        return is_live
+                            self.logger.warning(f"YouTube live check: No live indicators found - stream may be OFFLINE")
+                            return False
                     else:
                         self.logger.warning(
                             f"YouTube live check: Redirected to {final_url} (stream offline)"
