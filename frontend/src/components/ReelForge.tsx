@@ -1747,8 +1747,8 @@ const ReelForge: React.FC = () => {
       {/* Edit Post Modal - Scheduling & Publishing */}
       {showEditPostModal && editingPost && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
+          <div className="bg-dark-800 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="p-6 overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-bold text-white">Edit Post Settings</h2>
                 <button
