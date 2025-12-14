@@ -38,13 +38,12 @@ class WatchdogManager:
         logger.info("Starting Watchdog Manager")
         self.running = True
         
-        # Load all destinations with watchdog enabled
+        # Load all active destinations (watchdog runs on all destinations automatically)
         destinations = db_session.query(StreamingDestination).filter(
-            StreamingDestination.enable_watchdog == True,
             StreamingDestination.is_active == True
         ).all()
         
-        logger.info(f"Found {len(destinations)} destination(s) with watchdog enabled")
+        logger.info(f"Found {len(destinations)} active destination(s) for watchdog monitoring")
         
         # Try to start watchdogs for each destination
         # Note: Watchdogs will only start if a stream is actually running to that destination
@@ -178,9 +177,8 @@ class WatchdogManager:
         """
         logger.info("Reloading watchdog configuration from database")
         
-        # Get all destinations with watchdog enabled
+        # Get all active destinations (watchdog runs on all destinations automatically)
         enabled_destinations = db_session.query(StreamingDestination).filter(
-            StreamingDestination.enable_watchdog == True,
             StreamingDestination.is_active == True
         ).all()
         
@@ -264,10 +262,12 @@ class WatchdogManager:
                 logger.warning(f"Destination {dest_id} not found")
                 continue
             
-            # Start watchdog if enabled
-            if destination.enable_watchdog:
+            # Start watchdog automatically for all destinations with youtube_watch_url
+            if destination.youtube_watch_url:
                 logger.info(f"Starting watchdog for destination {dest_id} ({destination.name})")
                 await self.start_watchdog(destination, stream_id)
+            else:
+                logger.debug(f"Skipping watchdog for {dest_id} ({destination.name}) - no youtube_watch_url configured")
     
     async def notify_stream_stopped(self, stream_id: int):
         """
