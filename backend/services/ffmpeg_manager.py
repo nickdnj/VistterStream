@@ -127,7 +127,10 @@ class FFmpegProcessManager:
         input_url: str,
         output_urls: List[str],
         profile: Optional[EncodingProfile] = None,
-        overlay_images: Optional[List[Dict]] = None
+        overlay_images: Optional[List[Dict]] = None,
+        timed_overlays: Optional[List[Dict]] = None,
+        timeline_duration: float = 0,
+        timeline_loop: bool = False
     ) -> StreamProcess:
         """
         Start a new FFmpeg stream process.
@@ -137,7 +140,10 @@ class FFmpegProcessManager:
             input_url: RTSP/RTMP input URL (camera feed)
             output_urls: List of RTMP output destinations
             profile: Encoding profile (uses reliability profile if None)
-            overlay_images: Optional list of overlay dicts with {path, x, y, opacity}
+            overlay_images: Optional list of overlay dicts with {path, x, y, opacity} (static overlays)
+            timed_overlays: Optional list of time-based overlays with {path, x, y, opacity, start_time, end_time}
+            timeline_duration: Total timeline duration in seconds (for looping mod() calculation)
+            timeline_loop: Whether timeline loops (affects enable expression)
         
         Returns:
             StreamProcess representing the running stream
@@ -162,10 +168,17 @@ class FFmpegProcessManager:
         
         logger.info(f"Starting stream {stream_id} with {len(output_urls)} destinations")
         if overlay_images:
-            logger.info(f"  🎨 With {len(overlay_images)} overlay(s)")
+            logger.info(f"  🎨 With {len(overlay_images)} static overlay(s)")
+        if timed_overlays:
+            logger.info(f"  🎨 With {len(timed_overlays)} timed overlay(s) (dynamic switching enabled)")
         
         # Build FFmpeg command
-        command = self._build_ffmpeg_command(input_url, output_urls, profile, overlay_images)
+        command = self._build_ffmpeg_command(
+            input_url, output_urls, profile, overlay_images,
+            timed_overlays=timed_overlays,
+            timeline_duration=timeline_duration,
+            timeline_loop=timeline_loop
+        )
         
         # Create stream process entry
         stream_process = StreamProcess(
@@ -351,7 +364,10 @@ class FFmpegProcessManager:
         input_url: str,
         output_urls: List[str],
         profile: EncodingProfile,
-        overlay_images: Optional[List[Dict]] = None
+        overlay_images: Optional[List[Dict]] = None,
+        timed_overlays: Optional[List[Dict]] = None,
+        timeline_duration: float = 0,
+        timeline_loop: bool = False
     ) -> List[str]:
         """
         Build FFmpeg command with hardware acceleration and optional overlays.
@@ -360,7 +376,10 @@ class FFmpegProcessManager:
             input_url: RTSP URL of camera feed
             output_urls: List of RTMP destinations
             profile: Encoding profile
-            overlay_images: List of overlay dicts with {path, x, y, opacity}
+            overlay_images: List of overlay dicts with {path, x, y, opacity} (static, always visible)
+            timed_overlays: List of time-based overlays with {path, x, y, opacity, start_time, end_time}
+            timeline_duration: Total timeline duration for mod() in looping timelines
+            timeline_loop: Whether timeline loops (affects enable expression)
         
         References:
             See StreamingPipeline-TechnicalSpec.md §"FFmpeg Strategy"
@@ -377,11 +396,14 @@ class FFmpegProcessManager:
             '-i', input_url
         ])
         
+        # Determine which overlays to use (timed takes precedence over static)
+        use_timed = timed_overlays and len(timed_overlays) > 0
+        overlays_to_add = timed_overlays if use_timed else (overlay_images or [])
+        
         # Add overlay image inputs
-        if overlay_images:
-            for overlay in overlay_images:
-                # Loop still images so the filter graph never ends early
-                cmd.extend(['-loop', '1', '-i', overlay['path']])
+        for overlay in overlays_to_add:
+            # Loop still images so the filter graph never ends early
+            cmd.extend(['-loop', '1', '-i', overlay['path']])
 
         # Add a persistent silent audio source to guarantee audio presence for RTMP destinations
         # Index calculation: [0] camera, [1..N] overlays (if any), next is silent audio input
@@ -392,14 +414,15 @@ class FFmpegProcessManager:
         
         # Build filter complex for overlays
         filter_parts = []
-        if overlay_images:
+        
+        if overlays_to_add:
             # Start with base video scaled to output resolution
             filter_parts.append(f"[0:v]scale={resolution_str}[base]")
             
             # Layer each overlay on top
             current_label = "base"
-            for idx, overlay in enumerate(overlay_images):
-                next_label = f"tmp{idx}" if idx < len(overlay_images) - 1 else "out"
+            for idx, overlay in enumerate(overlays_to_add):
+                next_label = f"tmp{idx}" if idx < len(overlays_to_add) - 1 else "out"
                 x = int(overlay.get('x', 0))
                 y = int(overlay.get('y', 0))
                 opacity = overlay.get('opacity', 1.0)
@@ -418,8 +441,25 @@ class FFmpegProcessManager:
                 
                 # Overlay filter with positioning
                 overlay_filter = f"[{current_label}]{overlay_input}overlay=x={x}:y={y}"
+                
                 if opacity < 1.0:
                     overlay_filter += f":alpha={opacity}"
+                
+                # Add time-based enable expression for timed overlays
+                if use_timed:
+                    start_time = overlay.get('start_time', 0)
+                    end_time = overlay.get('end_time', 999999)
+                    
+                    # For looping timelines, use mod() to wrap time
+                    if timeline_loop and timeline_duration > 0:
+                        # FFmpeg filter expressions need escaped commas
+                        enable_expr = f"between(mod(t\\,{timeline_duration})\\,{start_time}\\,{end_time})"
+                    else:
+                        enable_expr = f"between(t\\,{start_time}\\,{end_time})"
+                    
+                    overlay_filter += f":enable='{enable_expr}'"
+                    logger.debug(f"Overlay {idx}: enable='{enable_expr}' ({overlay.get('asset_name', 'unknown')})")
+                
                 overlay_filter += f"[{next_label}]"
                 
                 filter_parts.append(overlay_filter)
@@ -434,7 +474,7 @@ class FFmpegProcessManager:
         
         # Map audio from the silent source to ensure audio is always present
         # Silent audio input index depends on number of overlay inputs added above
-        audio_input_index = 1 + (len(overlay_images) if overlay_images else 0)
+        audio_input_index = 1 + len(overlays_to_add)
         cmd.extend(['-map', f'{audio_input_index}:a'])
         
         if profile.codec == 'h264_v4l2m2m':

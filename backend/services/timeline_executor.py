@@ -214,11 +214,14 @@ class TimelineExecutor:
             await ffmpeg_manager.initialize()
             self.ffmpeg_managers[timeline_id] = ffmpeg_manager
             
-            # Main execution loop (segment-based: overlays can change mid-cue)
+            # PRE-FETCH ALL OVERLAYS for time-based switching (no FFmpeg restarts!)
+            logger.info(f"🎨 Pre-fetching overlays for dynamic switching...")
+            timed_overlays, overlay_temp_files = await self._prefetch_all_overlays(timeline, db)
+            
+            # Main execution loop (segment-based: overlays handled by time-based enables in FFmpeg)
             loop_count = 0
             last_camera_id: Optional[int] = None
             last_preset_id: Optional[int] = None
-            last_overlay_ids: Optional[List[int]] = None
             while not self._shutdown_event.is_set():
                 loop_count += 1
                 logger.info(f"Timeline {timeline.name} - Loop {loop_count}")
@@ -286,10 +289,7 @@ class TimelineExecutor:
                     )
                     self._position_update_tasks[timeline_id] = update_task
 
-                    # Get current overlay IDs for this segment
-                    current_overlay_ids = self._get_overlay_ids_at_time(timeline, seg_start)
-
-                    # Execute this segment with current video and overlays
+                    # Execute this segment (overlays handled by time-based enables in FFmpeg)
                     try:
                         await self._execute_segment(
                             timeline_id=timeline_id,
@@ -301,7 +301,9 @@ class TimelineExecutor:
                             encoding_profile=encoding_profile,
                             db=db,
                             last_camera_preset=(last_camera_id, last_preset_id),
-                            last_overlay_ids=last_overlay_ids
+                            timed_overlays=timed_overlays,
+                            timeline_duration=timeline.duration,
+                            timeline_loop=timeline.loop
                         )
                     except asyncio.CancelledError:
                         raise  # Re-raise cancellation
@@ -323,10 +325,9 @@ class TimelineExecutor:
                         except asyncio.CancelledError:
                             pass
 
-                    # Track last camera/preset/overlays for next segment
+                    # Track last camera/preset for next segment
                     last_camera_id = video_cue.action_params.get("camera_id")
                     last_preset_id = video_cue.action_params.get("preset_id")
-                    last_overlay_ids = current_overlay_ids
 
                 if not timeline.loop:
                     logger.info(f"Timeline {timeline.name} completed (loop=False)")
@@ -365,6 +366,15 @@ class TimelineExecutor:
                 logger.warning(f"Could not update execution status: {db_error}")
                 db.rollback()
         finally:
+            # Clean up overlay temp files
+            if overlay_temp_files:
+                for temp_file in overlay_temp_files:
+                    try:
+                        if temp_file.startswith('/tmp/') or temp_file.startswith(tempfile.gettempdir()):
+                            os.unlink(temp_file)
+                            logger.debug(f"🗑️  Cleaned up temp overlay file: {temp_file}")
+                    except Exception:
+                        pass
             db.close()
             
     def _get_active_cues_at_time(self, timeline: Timeline, current_time: float) -> Dict[str, List[TimelineCue]]:
@@ -467,6 +477,84 @@ class TimelineExecutor:
         
         return None
     
+    async def _prefetch_all_overlays(self, timeline: Timeline, db: Session) -> List[Dict]:
+        """
+        Download ALL overlay images before starting FFmpeg.
+        
+        Returns list of timed overlays with:
+        - path: downloaded image path
+        - x, y: pixel positions
+        - opacity: 0-1
+        - width, height: optional dimensions
+        - start_time, end_time: when overlay should be visible
+        - asset_id: for tracking
+        
+        These will be passed to FFmpeg with time-based enable expressions,
+        so overlays can change without restarting FFmpeg.
+        """
+        timed_overlays = []
+        temp_files = []
+        
+        logger.info(f"🎨 Pre-fetching all overlay images for timeline...")
+        
+        for track in timeline.tracks:
+            if track.track_type != 'overlay' or not track.is_enabled:
+                continue
+            
+            for cue in track.cues:
+                asset_id = cue.action_params.get('asset_id')
+                if not asset_id:
+                    continue
+                
+                # Get asset from database
+                asset = db.query(Asset).filter(Asset.id == asset_id).first()
+                if not asset or not asset.is_active:
+                    logger.warning(f"Asset {asset_id} not found or inactive, skipping")
+                    continue
+                
+                # Download/get image path
+                image_path = await self._download_asset_image(asset)
+                if not image_path:
+                    logger.warning(f"Failed to get image for asset '{asset.name}', skipping")
+                    continue
+                
+                # Track temp files for cleanup later
+                if image_path.startswith('/tmp/') or image_path.startswith(tempfile.gettempdir()):
+                    temp_files.append(image_path)
+                
+                # Calculate pixel positions from normalized coordinates (0-1 range)
+                x_pixels = int(asset.position_x * 1920)
+                y_pixels = int(asset.position_y * 1080)
+                
+                timed_overlay = {
+                    'path': image_path,
+                    'x': x_pixels,
+                    'y': y_pixels,
+                    'opacity': asset.opacity,
+                    'start_time': float(cue.start_time),
+                    'end_time': float(cue.start_time + cue.duration),
+                    'asset_id': asset_id,
+                    'asset_name': asset.name
+                }
+                
+                # Add dimensions if specified
+                if asset.width:
+                    timed_overlay['width'] = asset.width
+                if asset.height:
+                    timed_overlay['height'] = asset.height
+                
+                timed_overlays.append(timed_overlay)
+                
+                logger.info(
+                    f"  🖼️  {asset.name}: t={cue.start_time:.1f}s-{cue.start_time + cue.duration:.1f}s "
+                    f"at ({x_pixels}, {y_pixels})"
+                )
+        
+        logger.info(f"🎨 Pre-fetched {len(timed_overlays)} overlay(s) for timeline")
+        
+        # Store temp files for cleanup (will be cleaned up when timeline stops)
+        return timed_overlays, temp_files
+    
     async def _execute_segment(
         self,
         timeline_id: int,
@@ -478,11 +566,14 @@ class TimelineExecutor:
         encoding_profile: Optional[EncodingProfile],
         db: Session,
         last_camera_preset: Tuple[Optional[int], Optional[int]],
-        last_overlay_ids: Optional[List[int]] = None
+        timed_overlays: Optional[List[Dict]] = None,
+        timeline_duration: float = 0,
+        timeline_loop: bool = False
     ):
-        """Execute a single time segment with current video and overlays.
+        """Execute a single time segment with current video.
 
-        Overlays are sampled at segment start and applied for the whole segment.
+        Overlays are handled by time-based enable expressions in FFmpeg - 
+        they were pre-fetched at timeline start and don't trigger restarts.
         
         For PTZ cameras: When only the preset changes (same camera), we keep
         the stream running and just move the camera. This shows smooth PTZ
@@ -512,76 +603,11 @@ class TimelineExecutor:
                 if preset_id:
                     preset = db.query(Preset).filter(Preset.id == preset_id).first()
                 
-                # Get the timeline to find overlay cues at this time
-                timeline = db.query(Timeline).filter(Timeline.id == timeline_id).first()
-                active_cues = self._get_active_cues_at_time(timeline, seg_start)
-                
-                # Process overlay cues
-                overlay_images = []
-                temp_files = []
-                current_overlay_ids = []
-                
-                if active_cues['overlay']:
-                    logger.info(f"🎨 Found {len(active_cues['overlay'])} overlay cue(s) at time {seg_start}")
-                    
-                    for overlay_cue in active_cues['overlay']:
-                        asset_id = overlay_cue.action_params.get('asset_id')
-                        if not asset_id:
-                            continue
-                        
-                        current_overlay_ids.append(asset_id)
-                        
-                        # Get asset from database
-                        asset = db.query(Asset).filter(Asset.id == asset_id).first()
-                        if not asset or not asset.is_active:
-                            logger.warning(f"Asset {asset_id} not found or inactive")
-                            continue
-                        
-                        # Download/get asset image
-                        image_path = await self._download_asset_image(asset)
-                        if not image_path:
-                            logger.warning(f"Failed to get image for asset {asset.name}")
-                            continue
-                        
-                        # Track temp files for cleanup
-                        if image_path.startswith('/tmp/') or image_path.startswith(tempfile.gettempdir()):
-                            temp_files.append(image_path)
-                        
-                        # Calculate pixel positions from normalized coordinates (0-1 range)
-                        # Asset stores position as 0-1, FFmpeg needs pixels
-                        # Assuming 1920x1080 output
-                        x_pixels = int(asset.position_x * 1920)
-                        y_pixels = int(asset.position_y * 1080)
-                        
-                        overlay_data = {
-                            'path': image_path,
-                            'x': x_pixels,
-                            'y': y_pixels,
-                            'opacity': asset.opacity
-                        }
-                        
-                        # Add dimensions if specified
-                        if asset.width:
-                            overlay_data['width'] = asset.width
-                        if asset.height:
-                            overlay_data['height'] = asset.height
-                        
-                        overlay_images.append(overlay_data)
-                        
-                        size_info = ""
-                        if asset.width or asset.height:
-                            w = f"{asset.width}px" if asset.width else "auto"
-                            h = f"{asset.height}px" if asset.height else "auto"
-                            size_info = f" size={w}x{h}"
-                        logger.info(f"  🖼️  {asset.name} at ({x_pixels}, {y_pixels}) opacity={asset.opacity}{size_info}")
-                
-                # Check if overlays changed
-                overlays_changed = (last_overlay_ids is None) or (sorted(current_overlay_ids) != sorted(last_overlay_ids or []))
-                
                 # Determine if we need to restart FFmpeg
-                # Only restart if: camera changed OR overlays changed OR stream not running
+                # Only restart if: camera changed OR stream not running
+                # NOTE: Overlays use time-based enables in FFmpeg - no restart needed!
                 stream_running = timeline_id in ffmpeg_manager.processes
-                needs_restart = (not same_camera) or overlays_changed or (not stream_running)
+                needs_restart = (not same_camera) or (not stream_running)
                 
                 # If preset specified and changed, move camera
                 # Do this BEFORE restarting stream if camera changed, or DURING stream if same camera
@@ -595,7 +621,7 @@ class TimelineExecutor:
                             logger.error(f"Failed to decode camera password: {e}")
                     
                     if password:
-                        if same_camera and stream_running and not overlays_changed:
+                        if same_camera and stream_running:
                             # Same camera, stream running - move PTZ while streaming (shows movement!)
                             logger.info(f"🎬 Moving camera {camera.name} to preset '{preset.name}' (viewers will see movement)")
                         else:
@@ -645,12 +671,12 @@ class TimelineExecutor:
                 if needs_restart:
                     # SEAMLESS HANDOFF: Start new stream BEFORE stopping old
                     # This eliminates viewer buffering during camera switches
-                    overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
+                    overlay_info = f" with {len(timed_overlays)} timed overlay(s)" if timed_overlays else ""
                     
                     if stream_running:
                         # Use a temporary stream ID for the new stream
                         temp_stream_id = timeline_id + 1000000
-                        reason = "camera changed" if not same_camera else "overlays changed"
+                        reason = "camera changed"
                         logger.info(f"🔄 Seamless handoff: {reason} - starting new stream before stopping old")
                         
                         try:
@@ -664,7 +690,9 @@ class TimelineExecutor:
                                     profile=encoding_profile or EncodingProfile.reliability_profile(
                                         ffmpeg_manager.hw_capabilities
                                     ),
-                                    overlay_images=overlay_images if overlay_images else None
+                                    timed_overlays=timed_overlays,
+                                    timeline_duration=timeline_duration,
+                                    timeline_loop=timeline_loop
                                 ),
                                 timeout=30.0  # Reduced timeout for faster handoff
                             )
@@ -725,7 +753,8 @@ class TimelineExecutor:
                             # Fall back to standard stop-then-start
                             await self._standard_ffmpeg_restart(
                                 timeline_id, ffmpeg_manager, rtsp_url, output_urls,
-                                encoding_profile, overlay_images, camera.name, overlay_info
+                                encoding_profile, timed_overlays, timeline_duration, timeline_loop,
+                                camera.name, overlay_info
                             )
                         except Exception as e:
                             logger.error(f"❌ Seamless handoff failed: {e} - falling back to standard restart")
@@ -738,7 +767,8 @@ class TimelineExecutor:
                             # Fall back to standard stop-then-start
                             await self._standard_ffmpeg_restart(
                                 timeline_id, ffmpeg_manager, rtsp_url, output_urls,
-                                encoding_profile, overlay_images, camera.name, overlay_info
+                                encoding_profile, timed_overlays, timeline_duration, timeline_loop,
+                                camera.name, overlay_info
                             )
                     else:
                         # No existing stream - just start normally
@@ -752,7 +782,9 @@ class TimelineExecutor:
                                     profile=encoding_profile or EncodingProfile.reliability_profile(
                                         ffmpeg_manager.hw_capabilities
                                     ),
-                                    overlay_images=overlay_images if overlay_images else None
+                                    timed_overlays=timed_overlays,
+                                    timeline_duration=timeline_duration,
+                                    timeline_loop=timeline_loop
                                 ),
                                 timeout=60.0
                             )
@@ -765,20 +797,10 @@ class TimelineExecutor:
                             )
                         except asyncio.TimeoutError:
                             logger.error(f"❌ Timeout starting FFmpeg stream {timeline_id}")
-                            for temp_file in temp_files:
-                                try:
-                                    os.unlink(temp_file)
-                                except:
-                                    pass
                             raise RuntimeError(f"Timeout starting FFmpeg stream {timeline_id}")
                         except Exception as e:
                             logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
                             traceback.print_exc()
-                            for temp_file in temp_files:
-                                try:
-                                    os.unlink(temp_file)
-                                except:
-                                    pass
                             raise
                     
                     # Notify watchdog manager about the stream (whether seamless or standard)
@@ -844,7 +866,9 @@ class TimelineExecutor:
         rtsp_url: str,
         output_urls: list[str],
         encoding_profile: Optional[EncodingProfile],
-        overlay_images: Optional[list],
+        timed_overlays: Optional[List[Dict]],
+        timeline_duration: float,
+        timeline_loop: bool,
         camera_name: str,
         overlay_info: str
     ):
@@ -885,7 +909,9 @@ class TimelineExecutor:
                 profile=encoding_profile or EncodingProfile.reliability_profile(
                     ffmpeg_manager.hw_capabilities
                 ),
-                overlay_images=overlay_images if overlay_images else None
+                timed_overlays=timed_overlays,
+                timeline_duration=timeline_duration,
+                timeline_loop=timeline_loop
             ),
             timeout=60.0
         )
