@@ -16,9 +16,8 @@ from sqlalchemy.orm import Session
 from models.database import SessionLocal, Asset
 from models.timeline import Timeline, TimelineCue, TimelineExecution, TimelineTrack
 from models.database import Camera, Preset
-from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile
+from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile, StreamStatus
 from services.ptz_service import get_ptz_service
-from models.schemas import StreamStatus
 from utils.google_drive import parse_google_drawing_url
 import base64
 
@@ -614,7 +613,10 @@ class TimelineExecutor:
                 # Determine if we need to restart FFmpeg
                 # Only restart if: camera changed OR stream not running
                 # NOTE: Overlays use time-based enables in FFmpeg - no restart needed!
-                stream_running = timeline_id in ffmpeg_manager.processes
+                # Check BOTH presence AND status - stream may exist but be STOPPED (e.g., by watchdog)
+                stream_proc = ffmpeg_manager.processes.get(timeline_id)
+                stream_running = (stream_proc is not None and 
+                                  stream_proc.status == StreamStatus.RUNNING)
                 needs_restart = (not same_camera) or (not stream_running)
                 
                 # If preset specified and changed, move camera
