@@ -289,6 +289,11 @@ class TimelineExecutor:
                     )
                     self._position_update_tasks[timeline_id] = update_task
 
+                    # Get camera/preset for this segment BEFORE executing
+                    # (so we can update tracking even if segment throws an error)
+                    segment_camera_id = video_cue.action_params.get("camera_id")
+                    segment_preset_id = video_cue.action_params.get("preset_id")
+
                     # Execute this segment (overlays handled by time-based enables in FFmpeg)
                     try:
                         await self._execute_segment(
@@ -314,6 +319,9 @@ class TimelineExecutor:
                         )
                         # Update heartbeat even on error so watchdog knows we're making progress
                         self._last_segment_time[timeline_id] = datetime.utcnow()
+                        # Update camera tracking even on error to prevent false "camera changed" detection
+                        last_camera_id = segment_camera_id
+                        last_preset_id = segment_preset_id
                         # Continue to next segment instead of crashing the whole timeline
                         continue
 
@@ -326,8 +334,8 @@ class TimelineExecutor:
                             pass
 
                     # Track last camera/preset for next segment
-                    last_camera_id = video_cue.action_params.get("camera_id")
-                    last_preset_id = video_cue.action_params.get("preset_id")
+                    last_camera_id = segment_camera_id
+                    last_preset_id = segment_preset_id
 
                 if not timeline.loop:
                     logger.info(f"Timeline {timeline.name} completed (loop=False)")
@@ -842,14 +850,6 @@ class TimelineExecutor:
                 
                 # Update heartbeat for stall detection
                 self._last_segment_time[timeline_id] = datetime.utcnow()
-                
-                # Clean up temp files after cue completes
-                for temp_file in temp_files:
-                    try:
-                        os.unlink(temp_file)
-                        logger.debug(f"🗑️  Cleaned up temp file: {temp_file}")
-                    except Exception as e:
-                        logger.warning(f"Failed to clean up temp file {temp_file}: {e}")
                 
             else:
                 logger.warning("Unsupported action type for video cue")
