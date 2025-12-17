@@ -256,8 +256,18 @@ class TimelineExecutor:
                         if seg_start >= c.start_time and seg_start < (c.start_time + c.duration)
                     ]
                     if not active_video_cues:
-                        logger.debug(f"No active video cue at t={seg_start:.2f}s, skipping segment")
-                        continue
+                        # No video cue at this time - check if FFmpeg is already running
+                        stream_running = timeline_id in ffmpeg_manager.processes
+                        if stream_running:
+                            # FFmpeg is running from previous cue - continue streaming that content
+                            logger.info(f"📋 Gap segment at t={seg_start:.2f}s for {duration:.2f}s - continuing last camera (FFmpeg running)")
+                            await asyncio.sleep(duration)
+                            self._last_segment_time[timeline_id] = datetime.utcnow()
+                            continue
+                        else:
+                            # No FFmpeg running and no cue - this is a gap at timeline start
+                            logger.warning(f"⚠️  No video cue at t={seg_start:.2f}s and no stream running - skipping gap")
+                            continue
 
                     video_cue = active_video_cues[0]  # single video track expected
                     logger.info(f"📋 Segment {seg_index+1}/{len(segments)} at t={seg_start:.2f}s for {duration:.2f}s (video cue ID: {video_cue.id})")
@@ -633,106 +643,172 @@ class TimelineExecutor:
                 
                 # Only restart FFmpeg if needed
                 if needs_restart:
-                    # Stop existing stream if running
+                    # SEAMLESS HANDOFF: Start new stream BEFORE stopping old
+                    # This eliminates viewer buffering during camera switches
+                    overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
+                    
                     if stream_running:
+                        # Use a temporary stream ID for the new stream
+                        temp_stream_id = timeline_id + 1000000
+                        reason = "camera changed" if not same_camera else "overlays changed"
+                        logger.info(f"🔄 Seamless handoff: {reason} - starting new stream before stopping old")
+                        
                         try:
-                            reason = "camera changed" if not same_camera else "overlays changed"
-                            logger.debug(f"Stopping existing stream {timeline_id} ({reason})...")
+                            # Step 1: Start NEW stream with temporary ID
+                            logger.info(f"▶️  Starting NEW FFmpeg stream (temp ID {temp_stream_id}) with camera {camera.name}{overlay_info}")
                             await asyncio.wait_for(
-                                ffmpeg_manager.stop_stream(timeline_id),
-                                timeout=30.0
+                                ffmpeg_manager.start_stream(
+                                    stream_id=temp_stream_id,
+                                    input_url=rtsp_url,
+                                    output_urls=output_urls,
+                                    profile=encoding_profile or EncodingProfile.reliability_profile(
+                                        ffmpeg_manager.hw_capabilities
+                                    ),
+                                    overlay_images=overlay_images if overlay_images else None
+                                ),
+                                timeout=30.0  # Reduced timeout for faster handoff
+                            )
+                            logger.info(f"✅ New FFmpeg stream {temp_stream_id} started, now stopping old stream")
+                            
+                            # Step 2: Stop OLD stream (while new one is already running)
+                            try:
+                                logger.debug(f"Stopping old stream {timeline_id}...")
+                                ffmpeg_manager.unregister_stream_died_callback(timeline_id)
+                                await asyncio.wait_for(
+                                    ffmpeg_manager.stop_stream(timeline_id),
+                                    timeout=10.0  # Quick stop since new stream is already running
+                                )
+                                logger.info(f"✅ Old stream {timeline_id} stopped")
+                            except asyncio.TimeoutError:
+                                logger.warning(f"Timeout stopping old FFmpeg - forcing kill")
+                                try:
+                                    if timeline_id in ffmpeg_manager.processes:
+                                        proc = ffmpeg_manager.processes[timeline_id].process
+                                        if proc:
+                                            proc.kill()
+                                except Exception:
+                                    pass
+                            except KeyError:
+                                pass  # Already stopped
+                            except Exception as e:
+                                logger.warning(f"Error stopping old stream: {e}")
+                            
+                            # Step 3: Re-map the new stream to use the timeline_id
+                            # Move the process entry from temp_stream_id to timeline_id
+                            if temp_stream_id in ffmpeg_manager.processes:
+                                stream_proc = ffmpeg_manager.processes.pop(temp_stream_id)
+                                stream_proc.stream_id = timeline_id  # Update the stream_id field
+                                ffmpeg_manager.processes[timeline_id] = stream_proc
+                                
+                                # Also re-map the monitoring task
+                                if temp_stream_id in ffmpeg_manager._monitoring_tasks:
+                                    ffmpeg_manager._monitoring_tasks[timeline_id] = ffmpeg_manager._monitoring_tasks.pop(temp_stream_id)
+                                
+                                logger.debug(f"Re-mapped stream {temp_stream_id} → {timeline_id}")
+                            
+                            # Register callback for the (now remapped) stream
+                            ffmpeg_manager.register_stream_died_callback(
+                                timeline_id,
+                                self._on_ffmpeg_died
+                            )
+                            
+                            logger.info(f"✅ Seamless handoff complete - now streaming from {camera.name}")
+                            
+                        except asyncio.TimeoutError:
+                            logger.error(f"❌ Timeout starting new FFmpeg stream - falling back to standard restart")
+                            # Clean up temp stream if it partially started
+                            try:
+                                if temp_stream_id in ffmpeg_manager.processes:
+                                    await ffmpeg_manager.stop_stream(temp_stream_id)
+                            except:
+                                pass
+                            # Fall back to standard stop-then-start
+                            await self._standard_ffmpeg_restart(
+                                timeline_id, ffmpeg_manager, rtsp_url, output_urls,
+                                encoding_profile, overlay_images, camera.name, overlay_info
+                            )
+                        except Exception as e:
+                            logger.error(f"❌ Seamless handoff failed: {e} - falling back to standard restart")
+                            # Clean up temp stream if it partially started
+                            try:
+                                if temp_stream_id in ffmpeg_manager.processes:
+                                    await ffmpeg_manager.stop_stream(temp_stream_id)
+                            except:
+                                pass
+                            # Fall back to standard stop-then-start
+                            await self._standard_ffmpeg_restart(
+                                timeline_id, ffmpeg_manager, rtsp_url, output_urls,
+                                encoding_profile, overlay_images, camera.name, overlay_info
+                            )
+                    else:
+                        # No existing stream - just start normally
+                        logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
+                        try:
+                            await asyncio.wait_for(
+                                ffmpeg_manager.start_stream(
+                                    stream_id=timeline_id,
+                                    input_url=rtsp_url,
+                                    output_urls=output_urls,
+                                    profile=encoding_profile or EncodingProfile.reliability_profile(
+                                        ffmpeg_manager.hw_capabilities
+                                    ),
+                                    overlay_images=overlay_images if overlay_images else None
+                                ),
+                                timeout=60.0
+                            )
+                            logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
+                            
+                            # Register callback to detect when FFmpeg dies
+                            ffmpeg_manager.register_stream_died_callback(
+                                timeline_id,
+                                self._on_ffmpeg_died
                             )
                         except asyncio.TimeoutError:
-                            logger.error(f"Timeout stopping FFmpeg for timeline {timeline_id} - forcing kill")
-                            # Try to force kill if timeout
-                            try:
-                                if timeline_id in ffmpeg_manager.processes:
-                                    proc = ffmpeg_manager.processes[timeline_id].process
-                                    if proc:
-                                        proc.kill()
-                            except Exception:
-                                pass
-                        except KeyError:
-                            logger.debug(f"No existing stream to stop")
-                            pass  # Not running yet
+                            logger.error(f"❌ Timeout starting FFmpeg stream {timeline_id}")
+                            for temp_file in temp_files:
+                                try:
+                                    os.unlink(temp_file)
+                                except:
+                                    pass
+                            raise RuntimeError(f"Timeout starting FFmpeg stream {timeline_id}")
                         except Exception as e:
-                            logger.error(f"Error stopping stream: {e}")
+                            logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
                             traceback.print_exc()
+                            for temp_file in temp_files:
+                                try:
+                                    os.unlink(temp_file)
+                                except:
+                                    pass
+                            raise
                     
-                    # Start new stream with this camera and overlays
-                    overlay_info = f" with {len(overlay_images)} overlay(s)" if overlay_images else ""
-                    logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera.name}{overlay_info}")
+                    # Notify watchdog manager about the stream (whether seamless or standard)
                     try:
-                        await asyncio.wait_for(
-                            ffmpeg_manager.start_stream(
-                                stream_id=timeline_id,
-                                input_url=rtsp_url,
-                                output_urls=output_urls,
-                                profile=encoding_profile or EncodingProfile.reliability_profile(
-                                    ffmpeg_manager.hw_capabilities
-                                ),
-                                overlay_images=overlay_images if overlay_images else None
-                            ),
-                            timeout=60.0  # Allow up to 60s for stream to start
-                        )
-                        logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
+                        from services.watchdog_manager import get_watchdog_manager
+                        from models.destination import StreamingDestination
                         
-                        # Register callback to detect when FFmpeg dies
-                        ffmpeg_manager.register_stream_died_callback(
-                            timeline_id,
-                            self._on_ffmpeg_died
-                        )
+                        watchdog_manager = get_watchdog_manager()
                         
-                        # Notify watchdog manager about the stream start
+                        dest_ids = []
+                        dest_db = SessionLocal()
                         try:
-                            from services.watchdog_manager import get_watchdog_manager
-                            from models.destination import StreamingDestination
+                            for output_url in output_urls:
+                                destinations = dest_db.query(StreamingDestination).all()
+                                for dest in destinations:
+                                    if dest.get_full_rtmp_url() == output_url:
+                                        dest_ids.append(dest.id)
+                                        break
                             
-                            watchdog_manager = get_watchdog_manager()
-                            
-                            # Find destination IDs that match the output URLs
-                            dest_ids = []
-                            dest_db = SessionLocal()
-                            try:
-                                for output_url in output_urls:
-                                    # Match destinations by their full RTMP URL
-                                    destinations = dest_db.query(StreamingDestination).all()
-                                    for dest in destinations:
-                                        if dest.get_full_rtmp_url() == output_url:
-                                            dest_ids.append(dest.id)
-                                            break
-                                
-                                # Notify watchdog manager
-                                if dest_ids:
-                                    await watchdog_manager.notify_stream_started(
-                                        destination_ids=dest_ids,
-                                        stream_id=timeline_id,
-                                        db_session=dest_db
-                                    )
-                                    logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} → destinations {dest_ids}")
-                            finally:
-                                dest_db.close()
-                        except Exception as e:
-                            logger.warning(f"Failed to notify watchdog manager: {e}")
-                    except asyncio.TimeoutError:
-                        logger.error(f"❌ Timeout starting FFmpeg stream {timeline_id}")
-                        # Clean up temp files
-                        for temp_file in temp_files:
-                            try:
-                                os.unlink(temp_file)
-                            except:
-                                pass
-                        raise RuntimeError(f"Timeout starting FFmpeg stream {timeline_id}")
+                            if dest_ids:
+                                await watchdog_manager.notify_stream_started(
+                                    destination_ids=dest_ids,
+                                    stream_id=timeline_id,
+                                    db_session=dest_db
+                                )
+                                logger.info(f"🐕 Notified watchdog manager: stream {timeline_id} → destinations {dest_ids}")
+                        finally:
+                            dest_db.close()
                     except Exception as e:
-                        logger.error(f"❌ Failed to start FFmpeg stream {timeline_id}: {e}")
-                        traceback.print_exc()
-                        # Clean up temp files
-                        for temp_file in temp_files:
-                            try:
-                                os.unlink(temp_file)
-                            except:
-                                pass
-                        raise
+                        logger.warning(f"Failed to notify watchdog manager: {e}")
                 else:
                     # Same camera, same overlays - just log that we're continuing
                     logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
@@ -760,6 +836,66 @@ class TimelineExecutor:
             logger.error(f"❌ Error executing segment at t={seg_start:.2f}s: {e}")
             traceback.print_exc()
             raise  # Re-raise the exception to stop timeline execution
+    
+    async def _standard_ffmpeg_restart(
+        self,
+        timeline_id: int,
+        ffmpeg_manager: FFmpegProcessManager,
+        rtsp_url: str,
+        output_urls: list[str],
+        encoding_profile: Optional[EncodingProfile],
+        overlay_images: Optional[list],
+        camera_name: str,
+        overlay_info: str
+    ):
+        """
+        Standard stop-then-start FFmpeg restart (fallback when seamless handoff fails).
+        This is the original behavior - stops old stream, then starts new one.
+        """
+        logger.info(f"🔄 Standard FFmpeg restart for timeline {timeline_id}")
+        
+        # Stop existing stream
+        try:
+            ffmpeg_manager.unregister_stream_died_callback(timeline_id)
+            await asyncio.wait_for(
+                ffmpeg_manager.stop_stream(timeline_id),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout stopping FFmpeg for timeline {timeline_id} - forcing kill")
+            try:
+                if timeline_id in ffmpeg_manager.processes:
+                    proc = ffmpeg_manager.processes[timeline_id].process
+                    if proc:
+                        proc.kill()
+            except Exception:
+                pass
+        except KeyError:
+            pass  # Not running
+        except Exception as e:
+            logger.error(f"Error stopping stream: {e}")
+        
+        # Start new stream
+        logger.info(f"▶️  Starting FFmpeg stream {timeline_id} with camera {camera_name}{overlay_info}")
+        await asyncio.wait_for(
+            ffmpeg_manager.start_stream(
+                stream_id=timeline_id,
+                input_url=rtsp_url,
+                output_urls=output_urls,
+                profile=encoding_profile or EncodingProfile.reliability_profile(
+                    ffmpeg_manager.hw_capabilities
+                ),
+                overlay_images=overlay_images if overlay_images else None
+            ),
+            timeout=60.0
+        )
+        logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
+        
+        # Register callback
+        ffmpeg_manager.register_stream_died_callback(
+            timeline_id,
+            self._on_ffmpeg_died
+        )
             
     async def _update_position_during_cue(
         self,
