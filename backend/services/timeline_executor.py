@@ -9,6 +9,7 @@ import traceback
 import tempfile
 import os
 import httpx
+import json
 from datetime import datetime
 from typing import Optional, Dict, List, Tuple
 from sqlalchemy.orm import Session
@@ -23,6 +24,16 @@ import base64
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Enable debug logging
+
+# #region agent log
+def _dbg(loc: str, msg: str, data: dict = None, hyp: str = ""):
+    """Debug log helper - writes NDJSON to debug.log"""
+    try:
+        entry = {"ts": datetime.utcnow().isoformat(), "loc": loc, "msg": msg, "hyp": hyp}
+        if data: entry["data"] = data
+        with open("/data/debug.log", "a") as f: f.write(json.dumps(entry) + "\n")
+    except: pass
+# #endregion
 
 
 class TimelineExecutor:
@@ -559,6 +570,10 @@ class TimelineExecutor:
         
         logger.info(f"🎨 Pre-fetched {len(timed_overlays)} overlay(s) for timeline")
         
+        # #region agent log
+        _dbg("prefetch:574", "Overlays prefetched", {"count": len(timed_overlays), "temp_files": temp_files, "overlays": [{"name": o.get("asset_name"), "path": o.get("path"), "start": o.get("start_time"), "end": o.get("end_time"), "exists": os.path.exists(o.get("path", ""))} for o in timed_overlays]}, "B,E")
+        # #endregion
+        
         # Store temp files for cleanup (will be cleaned up when timeline stops)
         return timed_overlays, temp_files
     
@@ -618,6 +633,9 @@ class TimelineExecutor:
                 stream_running = (stream_proc is not None and 
                                   stream_proc.status == StreamStatus.RUNNING)
                 needs_restart = (not same_camera) or (not stream_running)
+                # #region agent log
+                _dbg("exec_seg:631", "FFmpeg restart decision", {"seg_start": seg_start, "same_camera": same_camera, "stream_running": stream_running, "stream_proc_exists": stream_proc is not None, "stream_status": str(stream_proc.status) if stream_proc else None, "needs_restart": needs_restart, "last_cam": last_camera_preset[0], "cur_cam": camera_id}, "A,D")
+                # #endregion
                 
                 # If preset specified and changed, move camera
                 # Do this BEFORE restarting stream if camera changed, or DURING stream if same camera

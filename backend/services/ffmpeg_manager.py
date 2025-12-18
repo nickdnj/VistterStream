@@ -10,6 +10,8 @@ import asyncio
 import re
 import signal
 import time
+import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Dict, Callable
@@ -19,6 +21,15 @@ import logging
 from .hardware_detector import get_hardware_capabilities, HardwareCapabilities
 
 logger = logging.getLogger(__name__)
+
+# #region agent log
+def _dbg_ffmpeg(loc: str, msg: str, data: dict = None, hyp: str = ""):
+    try:
+        entry = {"ts": datetime.utcnow().isoformat(), "loc": loc, "msg": msg, "hyp": hyp}
+        if data: entry["data"] = data
+        with open("/data/debug.log", "a") as f: f.write(json.dumps(entry) + "\n")
+    except: pass
+# #endregion
 
 
 class StreamStatus(str, Enum):
@@ -171,6 +182,9 @@ class FFmpegProcessManager:
             logger.info(f"  🎨 With {len(overlay_images)} static overlay(s)")
         if timed_overlays:
             logger.info(f"  🎨 With {len(timed_overlays)} timed overlay(s) (dynamic switching enabled)")
+        # #region agent log
+        _dbg_ffmpeg("start_stream:190", "FFmpeg start_stream called", {"stream_id": stream_id, "timed_overlays_count": len(timed_overlays) if timed_overlays else 0, "timeline_duration": timeline_duration, "timeline_loop": timeline_loop, "overlay_paths_exist": [os.path.exists(o.get("path", "")) for o in (timed_overlays or [])]}, "B,E")
+        # #endregion
         
         # Build FFmpeg command
         command = self._build_ffmpeg_command(
@@ -466,6 +480,9 @@ class FFmpegProcessManager:
                 current_label = next_label
             
             filter_complex = ";".join(filter_parts)
+            # #region agent log
+            _dbg_ffmpeg("build_cmd:478", "FFmpeg filter_complex built", {"filter_complex": filter_complex[:500], "num_overlays": len(overlays_to_add), "timeline_loop": timeline_loop, "timeline_duration": timeline_duration}, "C")
+            # #endregion
             cmd.extend(['-filter_complex', filter_complex, '-map', '[out]'])
         else:
             # No overlays, just scale video
