@@ -61,18 +61,38 @@ class EncodingProfile:
         Create reliability-focused profile per spec.
         
         See: StreamingPipeline-TechnicalSpec.md §"Encoding Profiles"
+        
+        Pi 5 Note: Kernel 6.12 does NOT expose H.264 hardware encoder.
+        Software encoding must use ultrafast preset and 720p for real-time
+        with overlay compositing.
         """
-        return cls(
-            codec=hw_capabilities.encoder,
-            resolution=(1920, 1080),
-            framerate=30,
-            bitrate="4500k",
-            keyframe_interval=2,
-            buffer_size="9000k",
-            preset="fast",
-            profile="main",
-            level="4.1"
-        )
+        if hw_capabilities.supports_hardware:
+            # Hardware encoding (Mac, future Pi with HW support)
+            return cls(
+                codec=hw_capabilities.encoder,
+                resolution=(1920, 1080),
+                framerate=30,
+                bitrate="4500k",
+                keyframe_interval=2,
+                buffer_size="9000k",
+                preset="fast",
+                profile="main",
+                level="4.1"
+            )
+        else:
+            # Software encoding - optimized for Pi 5 with overlay compositing
+            # 720p + ultrafast preset ensures real-time encoding on 4 cores
+            return cls(
+                codec=hw_capabilities.encoder,
+                resolution=(1280, 720),  # 720p for real-time software encoding
+                framerate=30,
+                bitrate="3000k",  # Lower bitrate for 720p
+                keyframe_interval=2,
+                buffer_size="6000k",
+                preset="ultrafast",  # Critical for real-time
+                profile="main",
+                level="3.1"  # 720p level
+            )
 
 
 @dataclass
@@ -509,11 +529,12 @@ class FFmpegProcessManager:
                 '-realtime', '1',
             ])
         else:
-            # Software encoding (libx264)
+            # Software encoding (libx264) - Pi 5 optimized for real-time
             cmd.extend([
                 '-c:v', 'libx264',
                 '-preset', profile.preset,
                 '-tune', 'zerolatency',
+                '-threads', '4',  # Use all 4 Pi 5 cores
             ])
         
         # Common encoding parameters

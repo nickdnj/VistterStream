@@ -18,11 +18,8 @@ x-backend-base: &backend-base
     - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
   volumes:
     - vistter_data:/data
-  # Pi 5 hardware encoder support
-  devices:
-    - "/dev/video11:/dev/video11"
-  group_add:
-    - "44"  # video group
+  # Note: Pi 5 kernel 6.12 does NOT expose H.264 hardware encoder via V4L2
+  # Using optimized software encoding (libx264 ultrafast)
   depends_on:
     - rtmp-relay
   restart: unless-stopped
