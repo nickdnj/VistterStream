@@ -18,8 +18,11 @@ x-backend-base: &backend-base
     - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
   volumes:
     - vistter_data:/data
-  # Note: Pi 5 does NOT have hardware H.264 encoder (unlike Pi 4)
-  # Software encoding (libx264) is used - optimize settings in ffmpeg_manager.py
+  # Pi 5 hardware encoder support
+  devices:
+    - "/dev/video11:/dev/video11"
+  group_add:
+    - "44"  # video group
   depends_on:
     - rtmp-relay
   restart: unless-stopped
