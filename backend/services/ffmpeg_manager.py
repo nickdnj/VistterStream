@@ -61,7 +61,13 @@ class EncodingProfile:
         Create reliability-focused profile per spec.
         
         See: StreamingPipeline-TechnicalSpec.md §"Encoding Profiles"
+        
+        Note: Pi 5 has NO hardware H.264 encoder, so software encoding (libx264)
+        must use "ultrafast" preset to handle overlay compositing in real-time.
         """
+        # Pi 5 software encoding needs ultrafast preset for real-time with overlays
+        preset = "ultrafast" if not hw_capabilities.supports_hardware else "fast"
+        
         return cls(
             codec=hw_capabilities.encoder,
             resolution=(1920, 1080),
@@ -69,7 +75,7 @@ class EncodingProfile:
             bitrate="4500k",
             keyframe_interval=2,
             buffer_size="9000k",
-            preset="fast",
+            preset=preset,
             profile="main",
             level="4.1"
         )
@@ -509,11 +515,13 @@ class FFmpegProcessManager:
                 '-realtime', '1',
             ])
         else:
-            # Software encoding (libx264)
+            # Software encoding (libx264) - optimized for Pi 5 with 4 cores
             cmd.extend([
                 '-c:v', 'libx264',
                 '-preset', profile.preset,
                 '-tune', 'zerolatency',
+                '-threads', '4',  # Use all 4 Pi cores
+                '-x264-params', 'threads=4:sliced-threads=1',  # Parallel slice encoding
             ])
         
         # Common encoding parameters
