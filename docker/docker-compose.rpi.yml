@@ -18,11 +18,11 @@ x-backend-base: &backend-base
     - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
   volumes:
     - vistter_data:/data
-  # Uncomment below if you have Pi 5 with hardware encoder
-  # devices:
-  #   - "/dev/video11:/dev/video11"
-  # group_add:
-  #   - "44"  # video group
+  # Pi 5 hardware encoder support
+  devices:
+    - "/dev/video11:/dev/video11"
+  group_add:
+    - "44"  # video group
   depends_on:
     - rtmp-relay
   restart: unless-stopped
