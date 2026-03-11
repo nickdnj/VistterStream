@@ -8,7 +8,7 @@ import logging
 import tempfile
 import os
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,7 @@ from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile
 from services.ptz_service import get_ptz_service
 from services.rtmp_relay_service import get_rtmp_relay_service
 from utils.google_drive import parse_google_drawing_url
-import base64
+from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -173,7 +173,7 @@ class SeamlessTimelineExecutor:
             # Create execution record
             execution = TimelineExecution(
                 timeline_id=timeline_id,
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
                 status="running"
             )
             db.add(execution)
@@ -254,7 +254,7 @@ class SeamlessTimelineExecutor:
                 monitor_task.cancel()
                 capture_task.cancel()
                 
-                execution.completed_at = datetime.utcnow()
+                execution.completed_at = datetime.now(timezone.utc)
                 execution.status = "completed"
                 db.commit()
                 
@@ -313,14 +313,14 @@ class SeamlessTimelineExecutor:
             
             logger.info(f"📹 ReelForge: Monitoring {len(camera_switches)} camera segments for captures")
             
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             triggered_captures = set()  # Track which captures we've already triggered
             
             while True:
                 await asyncio.sleep(1)  # Check every second
                 
                 # Calculate elapsed time in timeline (accounting for loops)
-                elapsed = (datetime.utcnow() - start_time).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
                 if timeline.loop and timeline.duration > 0:
                     elapsed = elapsed % timeline.duration
                 
@@ -387,7 +387,7 @@ class SeamlessTimelineExecutor:
             logger.info(f"   🎯 Moving {camera.name} to '{preset.name}'")
             
             try:
-                password = base64.b64decode(camera.password_enc).decode() if camera.password_enc else None
+                password = decrypt(camera.password_enc) if camera.password_enc else None
                 if password:
                     ptz_service = get_ptz_service()
                     pan = preset.pan if preset.pan is not None else 0.0
@@ -673,7 +673,7 @@ class SeamlessTimelineExecutor:
         password = None
         if camera.password_enc:
             try:
-                password = base64.b64decode(camera.password_enc).decode()
+                password = decrypt(camera.password_enc)
             except:
                 pass
         

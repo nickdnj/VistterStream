@@ -10,10 +10,11 @@ Weather and environmental data integration via TempestWeather service.
 
 import json
 import logging
-import base64
 import re
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+
+from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,7 @@ def get_reelforge_settings() -> Tuple[Optional[str], str, str, float, int]:
         api_key = None
         if settings.openai_api_key_enc:
             try:
-                api_key = base64.b64decode(settings.openai_api_key_enc.encode()).decode()
+                api_key = decrypt(settings.openai_api_key_enc)
             except:
                 pass
         

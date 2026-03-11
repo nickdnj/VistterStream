@@ -4,7 +4,7 @@ Pydantic schemas for API request/response models
 
 from pydantic import BaseModel, Field
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 class CameraType(str, Enum):
@@ -240,7 +240,7 @@ class StreamMetricsSchema(BaseModel):
     buffer_fullness: float = Field(100.0, description="Buffer fullness percentage")
     uptime_seconds: int = Field(0, description="Stream uptime in seconds")
     total_bytes_sent: int = Field(0, description="Total bytes sent")
-    last_update: datetime = Field(default_factory=datetime.utcnow, description="Last metrics update time")
+    last_update: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Last metrics update time")
     
     class Config:
         from_attributes = True

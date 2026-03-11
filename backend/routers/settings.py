@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.database import get_db, Settings, Asset
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/settings", tags=["settings"])
+router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(get_current_user)])
 
 
 # Pydantic schemas
@@ -80,7 +81,7 @@ def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_d
     if settings_update.longitude is not None:
         settings.longitude = settings_update.longitude
     
-    settings.updated_at = datetime.utcnow()
+    settings.updated_at = datetime.now(timezone.utc)
     
     db.commit()
     db.refresh(settings)
@@ -102,7 +103,7 @@ def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_d
                 asset.latitude = settings.latitude
             if settings_update.longitude is not None:
                 asset.longitude = settings.longitude
-            asset.last_updated = datetime.utcnow()
+            asset.last_updated = datetime.now(timezone.utc)
         
         if assets:
             db.commit()

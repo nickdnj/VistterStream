@@ -7,7 +7,7 @@ Runs as a background task checking for due items.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -75,7 +75,7 @@ class ReelForgeScheduler:
         """Check for posts with scheduled_capture_at that are due"""
         db = SessionLocal()
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             
             # Find posts that are scheduled and due
             due_posts = db.query(ReelPost).filter(
@@ -154,13 +154,13 @@ class ReelForgeScheduler:
                 return
             
             from services.youtube_shorts_service import get_youtube_service
-            import base64
-            
+            from utils.crypto import decrypt
+
             service = get_youtube_service()
-            
+
             # Decrypt credentials
-            client_secret = base64.b64decode(settings.youtube_client_secret_enc.encode()).decode()
-            refresh_token = base64.b64decode(settings.youtube_refresh_token_enc.encode()).decode()
+            client_secret = decrypt(settings.youtube_client_secret_enc)
+            refresh_token = decrypt(settings.youtube_refresh_token_enc)
             
             # Parse tags
             tags = []
@@ -184,7 +184,7 @@ class ReelForgeScheduler:
             )
             
             if result.get("success"):
-                post.published_at = datetime.utcnow()
+                post.published_at = datetime.now(timezone.utc)
                 post.published_url = result.get("url")
                 post.status = "published"
                 db.commit()
@@ -228,7 +228,7 @@ class ReelForgeScheduler:
                         logger.info(f"🗓️ Recurring schedule triggered for post {post.id}")
                         
                         # Check if already queued in last 5 minutes
-                        five_mins_ago = datetime.utcnow() - timedelta(minutes=5)
+                        five_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
                         recent_queue = db.query(ReelCaptureQueue).filter(
                             ReelCaptureQueue.post_id == post.id,
                             ReelCaptureQueue.created_at >= five_mins_ago

@@ -3,7 +3,7 @@ Streaming destination models
 """
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from datetime import datetime
+from datetime import datetime, timezone
 from .database import Base
 
 
@@ -36,8 +36,8 @@ class StreamingDestination(Base):
     watchdog_daily_reset_hour = Column(Integer, default=3)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_used = Column(DateTime)
     
     def get_full_rtmp_url(self) -> str:

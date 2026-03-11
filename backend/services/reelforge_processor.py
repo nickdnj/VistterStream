@@ -7,7 +7,7 @@ import asyncio
 import logging
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 from pathlib import Path
 
@@ -71,7 +71,7 @@ class ReelForgeProcessor:
             
             # Update status
             post.status = "processing"
-            post.processing_started_at = datetime.utcnow()
+            post.processing_started_at = datetime.now(timezone.utc)
             db.commit()
             
             logger.info(f"🎬 ReelForge: Starting processing for post {post_id}")
@@ -140,7 +140,7 @@ class ReelForgeProcessor:
             
             # Mark as ready
             post.status = "ready"
-            post.processing_completed_at = datetime.utcnow()
+            post.processing_completed_at = datetime.now(timezone.utc)
             db.commit()
             
             logger.info(f"🎬 ReelForge: Processing complete for post {post_id}")

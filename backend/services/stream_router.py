@@ -14,7 +14,7 @@ import asyncio
 import logging
 from enum import Enum
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.database import SessionLocal
 from models.destination import StreamingDestination
@@ -178,7 +178,7 @@ class StreamRouter:
                 
                 # Update last_used timestamp
                 for dest in destinations:
-                    dest.last_used = datetime.utcnow()
+                    dest.last_used = datetime.now(timezone.utc)
                 db.commit()
                 
                 logger.info(f"📡 Live destinations: {', '.join(destination_names)}")

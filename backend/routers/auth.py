@@ -5,12 +5,13 @@ Authentication API endpoints
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import jwt
 from jose.exceptions import JWTError
 import bcrypt
 import logging
+import os
 
 from models.database import get_db, User
 from models.schemas import UserCreate, User as UserSchema, Token, PasswordChangeRequest
@@ -22,7 +23,12 @@ logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 # JWT settings
-SECRET_KEY = "your-secret-key-here"  # Should be in environment variables
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY environment variable must be set. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -38,9 +44,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create a JWT access token"""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -131,35 +137,6 @@ async def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Sessi
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
-
-@router.get("/diagnose")
-async def diagnose_auth(db: Session = Depends(get_db)):
-    """Diagnostic endpoint to check admin user status (for debugging)"""
-    admin_user = get_user_by_username(db, "admin")
-    
-    if not admin_user:
-        return {
-            "admin_exists": False,
-            "message": "Admin user does not exist"
-        }
-    
-    # Test password verification (without exposing the hash)
-    test_result = None
-    try:
-        test_result = verify_password("admin", admin_user.password_hash)
-    except Exception as e:
-        test_result = f"ERROR: {str(e)}"
-    
-    return {
-        "admin_exists": True,
-        "user_id": admin_user.id,
-        "username": admin_user.username,
-        "is_active": admin_user.is_active,
-        "has_password_hash": bool(admin_user.password_hash),
-        "password_hash_length": len(admin_user.password_hash) if admin_user.password_hash else 0,
-        "test_password_verification": test_result,
-        "message": "Admin user found"
-    }
 
 @router.post("/change-password")
 async def change_password(

@@ -14,8 +14,10 @@ x-backend-base: &backend-base
     # CORS: Use vistter.local for mDNS hostname resolution (set hostname on Pi)
     # Override via CORS_ALLOW_ORIGINS in .env if needed
     - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://vistter.local:3000,http://localhost:3000}
+    - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
+    - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set in .env}
     - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
-    - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
+    - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-}
   volumes:
     - vistter_data:/data
   # Note: Pi 5 kernel 6.12 does NOT expose H.264 hardware encoder via V4L2
@@ -45,8 +47,10 @@ services:
       - RTMP_RELAY_HOST=${PI_RTMP_HOST:-127.0.0.1}
       - RTMP_RELAY_PORT=${RTMP_RELAY_PORT:-1935}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set in .env}
       - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
-      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-}
 
   rtmp-relay:
     build: ./nginx-rtmp

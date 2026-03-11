@@ -14,7 +14,7 @@ import asyncio
 import logging
 import psutil
 import aiohttp
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class StreamHealthState:
     def mark_healthy(self):
         """Mark stream as healthy"""
         self.consecutive_unhealthy = 0
-        self.last_healthy_time = datetime.utcnow()
+        self.last_healthy_time = datetime.now(timezone.utc)
     
     def mark_unhealthy(self) -> bool:
         """
@@ -53,7 +53,7 @@ class StreamHealthState:
     
     def mark_recovery(self):
         """Mark that recovery was attempted"""
-        self.last_recovery_time = datetime.utcnow()
+        self.last_recovery_time = datetime.now(timezone.utc)
         self.recovery_count += 1
         self.consecutive_unhealthy = 0
     
@@ -70,7 +70,7 @@ class StreamHealthState:
         if not self.last_recovery_time:
             return True
         
-        elapsed = (datetime.utcnow() - self.last_recovery_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.last_recovery_time).total_seconds()
         return elapsed >= cooldown_seconds
 
 
@@ -221,7 +221,7 @@ class LocalStreamWatchdog:
                 stall_threshold = 300  # 5 minutes without segment progress
                 if self.stream_id in executor._last_segment_time:
                     last_progress = executor._last_segment_time[self.stream_id]
-                    stall_duration = (datetime.utcnow() - last_progress).total_seconds()
+                    stall_duration = (datetime.now(timezone.utc) - last_progress).total_seconds()
                     if stall_duration > stall_threshold:
                         self.logger.warning(
                             f"Timeline {self.stream_id} appears stalled - no segment progress for {stall_duration:.0f}s "

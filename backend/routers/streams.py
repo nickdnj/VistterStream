@@ -11,8 +11,9 @@ from models.database import get_db, Stream, Camera
 from models.destination import StreamingDestination
 from models.schemas import StreamCreate, StreamUpdate, Stream as StreamSchema, StreamStatus
 from services.stream_service import StreamService
+from routers.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 def enrich_stream(stream_db: Stream, db: Session) -> dict:
     """Enrich stream with destination and camera details"""

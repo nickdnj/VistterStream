@@ -4,17 +4,19 @@ System status API endpoints
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+import asyncio
 import psutil
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from models.database import get_db, Camera, Stream
+from models.database import get_db, Camera, Stream, User
 from models.timeline import Timeline
 from models.destination import StreamingDestination
 from models.schemas import SystemStatus, CameraStatus
 from services.timeline_executor import get_timeline_executor
+from routers.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +30,12 @@ initial_net_io = psutil.net_io_counters()
 last_net_check = time.time()
 
 @router.get("/system", response_model=SystemStatus)
-async def get_system_status(db: Session = Depends(get_db)):
+async def get_system_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get system status and metrics"""
     global last_net_check
     
     # Get system metrics
-    cpu_usage = psutil.cpu_percent(interval=1)
+    cpu_usage = await asyncio.to_thread(psutil.cpu_percent, 1)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
     
@@ -99,7 +101,7 @@ async def get_system_status(db: Session = Depends(get_db)):
     )
 
 @router.get("/cameras", response_model=list[CameraStatus])
-async def get_cameras_status(db: Session = Depends(get_db)):
+async def get_cameras_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get status of all cameras"""
     cameras = db.query(Camera).filter(Camera.is_active == True).all()
     camera_statuses = []
@@ -123,6 +125,6 @@ async def health_check():
     """Simple health check endpoint"""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "service": "VistterStream API"
     }

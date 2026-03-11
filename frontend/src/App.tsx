@@ -18,7 +18,7 @@ function App() {
         <div className="App">
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/" element={
+            <Route path="/*" element={
               <ProtectedRoute>
                 <Layout>
                   <Routes>
@@ -36,51 +36,6 @@ function App() {
                 </Layout>
               </ProtectedRoute>
             } />
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Dashboard />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/cameras" element={<Navigate to="/settings" replace />} />
-            <Route path="/streams" element={<Navigate to="/timelines" replace />} />
-            <Route path="/presets" element={
-              <ProtectedRoute>
-                <Layout>
-                  <PresetManagement />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/timelines" element={
-              <ProtectedRoute>
-                <Layout>
-                  <TimelineEditor />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/reelforge" element={
-              <ProtectedRoute>
-                <Layout>
-                  <ReelForge />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/destinations" element={
-              <ProtectedRoute>
-                <Layout>
-                  <StreamingDestinations />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Settings />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/scheduler" element={<Navigate to="/settings" replace />} />
           </Routes>
         </div>
       </Router>

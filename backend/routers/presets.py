@@ -2,7 +2,6 @@
 PTZ Preset API endpoints
 """
 
-import base64
 import logging
 from typing import List, Optional
 
@@ -13,8 +12,10 @@ from models.database import Camera, Preset, get_db
 from models.schemas import Preset as PresetSchema
 from models.schemas import PresetCreate, PresetUpdate
 from services.ptz_service import get_ptz_service
+from utils.crypto import decrypt
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/presets", tags=["presets"])
+router = APIRouter(prefix="/api/presets", tags=["presets"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +88,7 @@ async def update_preset(preset_id: int, preset_update: PresetUpdate, db: Session
 
         password = None
         if camera.password_enc:
-            password = base64.b64decode(camera.password_enc).decode()
+            password = decrypt(camera.password_enc)
 
         if not password:
             raise HTTPException(status_code=400, detail="Camera credentials not configured")
@@ -185,7 +186,7 @@ async def move_to_preset(preset_id: int, db: Session = Depends(get_db)):
     # Get camera password
     password = None
     if camera.password_enc:
-        password = base64.b64decode(camera.password_enc).decode()
+        password = decrypt(camera.password_enc)
     
     if not password:
         raise HTTPException(status_code=400, detail="Camera credentials not configured")
@@ -241,7 +242,7 @@ async def get_camera_status(camera_id: int, db: Session = Depends(get_db)):
 
     password = None
     if camera.password_enc:
-        password = base64.b64decode(camera.password_enc).decode()
+        password = decrypt(camera.password_enc)
 
     if not password:
         raise HTTPException(status_code=400, detail="Camera credentials not configured")
@@ -301,7 +302,7 @@ async def capture_current_position(camera_id: int, preset_name: str, db: Session
     # Get camera password
     password = None
     if camera.password_enc:
-        password = base64.b64decode(camera.password_enc).decode()
+        password = decrypt(camera.password_enc)
     
     if not password:
         raise HTTPException(status_code=400, detail="Camera credentials not configured")

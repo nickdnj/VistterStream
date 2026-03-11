@@ -5,13 +5,14 @@ Streaming Destinations API - Configure YouTube, Facebook, Twitch, etc.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from models.database import get_db
 from models.destination import StreamingDestination
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/destinations", tags=["destinations"])
+router = APIRouter(prefix="/api/destinations", tags=["destinations"], dependencies=[Depends(get_current_user)])
 
 
 class YouTubeWatchdogConfig(BaseModel):
@@ -138,7 +139,7 @@ def update_destination(destination_id: int, data: DestinationUpdate, db: Session
         raise HTTPException(status_code=404, detail="Destination not found")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(dest, field, value)
-    dest.updated_at = datetime.utcnow()
+    dest.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(dest)
     return dest
@@ -159,7 +160,7 @@ def mark_destination_used(destination_id: int, db: Session = Depends(get_db)):
     dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
     if not dest:
         raise HTTPException(status_code=404, detail="Destination not found")
-    dest.last_used = datetime.utcnow()
+    dest.last_used = datetime.now(timezone.utc)
     db.commit()
     return {"message": "Marked as used"}
 
@@ -193,6 +194,6 @@ def update_watchdog_config(destination_id: int, config: YouTubeWatchdogConfig, d
     dest.watchdog_enable_frame_probe = config.watchdog_enable_frame_probe
     dest.watchdog_enable_daily_reset = config.watchdog_enable_daily_reset
     dest.watchdog_daily_reset_hour = config.watchdog_daily_reset_hour
-    dest.updated_at = datetime.utcnow()
+    dest.updated_at = datetime.now(timezone.utc)
     db.commit()
     return config

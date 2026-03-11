@@ -2,25 +2,19 @@
 Camera management API endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-import httpx
-import asyncio
-from datetime import datetime
-import subprocess
-import tempfile
-import os
 
-from models.database import get_db, Camera, Preset
+from models.database import get_db, Preset
 from models.schemas import (
     CameraCreate, CameraUpdate, Camera as CameraSchema, 
     CameraWithStatus, CameraTestResponse, PresetCreate, Preset
 )
 from services.camera_service import CameraService
+from routers.auth import get_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("", response_model=List[CameraWithStatus])
 async def get_cameras(db: Session = Depends(get_db)):
@@ -105,71 +99,3 @@ async def execute_preset(camera_id: int, preset_id: int, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Camera or preset not found")
     return {"message": "Preset executed successfully"}
 
-@router.get("/{camera_id}/snapshot")
-async def get_camera_snapshot(camera_id: int, db: Session = Depends(get_db)):
-    """Get a snapshot (single frame) from the camera's RTSP stream"""
-    camera = db.query(Camera).filter(Camera.id == camera_id).first()
-    if not camera:
-        raise HTTPException(status_code=404, detail="Camera not found")
-    
-    # Try direct HTTP snapshot first (if camera supports it)
-    snapshot_url = f"http://{camera.username}:{camera.password}@{camera.ip_address}/webcapture.jpg?command=snap&channel=0&user={camera.username}&password={camera.password}"
-    
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(snapshot_url)
-            if response.status_code == 200 and 'image' in response.headers.get('content-type', ''):
-                # Return the image directly
-                return Response(content=response.content, media_type="image/jpeg")
-    except:
-        # If HTTP snapshot fails, fall back to FFmpeg
-        pass
-    
-    # Fall back to RTSP with FFmpeg
-    rtsp_url = f"rtsp://{camera.username}:{camera.password}@{camera.ip_address}:{camera.port}{camera.stream_path}"
-    
-    # Create temporary file for the snapshot
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
-        temp_path = temp_file.name
-    
-    try:
-        # Use FFmpeg to grab a single frame
-        cmd = [
-            'ffmpeg',
-            '-rtsp_transport', 'tcp',
-            '-i', rtsp_url,
-            '-frames:v', '1',
-            '-q:v', '2',
-            '-y',
-            temp_path
-        ]
-        
-        # Run FFmpeg with timeout
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=10
-        )
-        
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to capture snapshot: {result.stderr.decode()}"
-            )
-        
-        # Read the image file
-        with open(temp_path, 'rb') as f:
-            image_data = f.read()
-        
-        # Return the image
-        return Response(content=image_data, media_type="image/jpeg")
-        
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Camera snapshot timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error capturing snapshot: {str(e)}")
-    finally:
-        # Clean up temporary file
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)

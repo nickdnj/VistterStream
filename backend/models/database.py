@@ -5,7 +5,7 @@ Database models and configuration
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 # Database URL
@@ -27,7 +27,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
 
 class Settings(Base):
@@ -45,8 +45,8 @@ class Settings(Base):
     longitude = Column(Float)  # Geographic longitude
     
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class ReelForgeSettings(Base):
@@ -88,8 +88,8 @@ Guidelines:
     youtube_channel_name = Column(String)  # Connected channel name for display
     
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class Camera(Base):
@@ -107,7 +107,7 @@ class Camera(Base):
     stream_path = Column(String, default="/stream1")
     snapshot_url = Column(String)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_seen = Column(DateTime)
     
     # Relationships
@@ -124,7 +124,7 @@ class Preset(Base):
     tilt = Column(Float, default=0.0)
     zoom = Column(Float, default=1.0)
     camera_preset_token = Column(String)  # Token returned by camera for ONVIF control
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     camera = relationship("Camera", back_populates="presets")
@@ -159,7 +159,7 @@ class Asset(Base):
     # Metadata
     description = Column(String)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_updated = Column(DateTime)
 
 class Stream(Base):
@@ -181,7 +181,7 @@ class Stream(Base):
     is_active = Column(Boolean, default=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     started_at = Column(DateTime)
     stopped_at = Column(DateTime)
     last_error = Column(String)

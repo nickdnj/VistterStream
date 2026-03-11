@@ -10,8 +10,9 @@ from typing import Dict
 from models.database import get_db
 from models.destination import StreamingDestination
 from services.watchdog_manager import get_watchdog_manager
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/watchdog", tags=["watchdog"])
+router = APIRouter(prefix="/api/watchdog", tags=["watchdog"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/status")

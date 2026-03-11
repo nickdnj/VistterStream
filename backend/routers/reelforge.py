@@ -10,15 +10,16 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-import base64
 import asyncio
 import logging
 
 from models.database import get_db, SessionLocal, Camera, Preset, ReelForgeSettings
+from utils.crypto import encrypt, decrypt
 
 logger = logging.getLogger(__name__)
+from routers.auth import get_current_user
 from models.reelforge import ReelTemplate, ReelPost, ReelPublishTarget, ReelExport, ReelCaptureQueue
 from models.schemas import (
     ReelTemplateCreate, ReelTemplateUpdate, ReelTemplate as ReelTemplateSchema,
@@ -31,7 +32,7 @@ from models.schemas import (
     ReelForgeSettingsTestResult
 )
 
-router = APIRouter(prefix="/api/reelforge", tags=["reelforge"])
+router = APIRouter(prefix="/api/reelforge", tags=["reelforge"], dependencies=[Depends(get_current_user)])
 
 
 # ============================================================================
@@ -39,13 +40,13 @@ router = APIRouter(prefix="/api/reelforge", tags=["reelforge"])
 # ============================================================================
 
 def _encrypt_api_key(api_key: str) -> str:
-    """Simple base64 encoding for API key storage (in production, use proper encryption)"""
-    return base64.b64encode(api_key.encode()).decode()
+    """Encrypt an API key using Fernet encryption."""
+    return encrypt(api_key)
 
 
 def _decrypt_api_key(encrypted: str) -> str:
-    """Decode base64 encoded API key"""
-    return base64.b64decode(encrypted.encode()).decode()
+    """Decrypt an API key (falls back to legacy base64)."""
+    return decrypt(encrypted)
 
 
 @router.get("/settings", response_model=ReelForgeSettingsSchema)
@@ -117,7 +118,7 @@ def update_settings(
     if settings_update.weather_enabled is not None:
         settings.weather_enabled = settings_update.weather_enabled
     
-    settings.updated_at = datetime.utcnow()
+    settings.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(settings)
     
@@ -424,7 +425,7 @@ def update_template(
         for key, value in update_dict.items():
             setattr(template, key, value)
         
-        template.updated_at = datetime.utcnow()
+        template.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(template)
         return template
@@ -851,7 +852,7 @@ def update_target(
         for key, value in update_dict.items():
             setattr(target, key, value)
         
-        target.updated_at = datetime.utcnow()
+        target.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(target)
         return target
@@ -1084,9 +1085,9 @@ async def execute_capture_now(
     # Update status to show we're starting
     queue_item.status = "capturing"
     queue_item.error_message = None
-    queue_item.started_at = datetime.utcnow()
+    queue_item.started_at = datetime.now(timezone.utc)
     queue_item.attempt_count = (queue_item.attempt_count or 0) + 1
-    queue_item.last_attempt_at = datetime.utcnow()
+    queue_item.last_attempt_at = datetime.now(timezone.utc)
     
     # Update associated post
     post = db.query(ReelPost).filter(ReelPost.id == queue_item.post_id).first()
@@ -1166,7 +1167,7 @@ async def _execute_capture_active(
             password = None
             if camera.password_enc:
                 try:
-                    password = base64.b64decode(camera.password_enc).decode()
+                    password = decrypt(camera.password_enc)
                 except:
                     pass
             
@@ -1205,7 +1206,7 @@ async def _execute_capture_active(
                 clip_duration = template.clip_duration
         
         # Build RTSP URL
-        rtsp_password = base64.b64decode(camera.password_enc).decode() if camera.password_enc else None
+        rtsp_password = decrypt(camera.password_enc) if camera.password_enc else None
         if camera.username and rtsp_password:
             rtsp_url = f"rtsp://{camera.username}:{rtsp_password}@{camera.address}:{camera.port}{camera.stream_path}"
         else:
@@ -1247,11 +1248,11 @@ async def _execute_capture_active(
             # Update database
             if post:
                 post.source_clip_path = str(output_path)
-                post.capture_completed_at = datetime.utcnow()
+                post.capture_completed_at = datetime.now(timezone.utc)
                 post.status = "processing"
             if queue_item:
                 queue_item.status = "completed"
-                queue_item.completed_at = datetime.utcnow()
+                queue_item.completed_at = datetime.now(timezone.utc)
             db.commit()
             
             # Trigger processing pipeline
@@ -1281,7 +1282,7 @@ async def _execute_capture_active(
             if queue_item:
                 queue_item.status = "failed"
                 queue_item.error_message = str(e)[:500]
-                queue_item.completed_at = datetime.utcnow()
+                queue_item.completed_at = datetime.now(timezone.utc)
             
             if post:
                 post.status = "failed"
@@ -1336,7 +1337,7 @@ def update_export(
         if export_data.status:
             export.status = export_data.status.value if hasattr(export_data.status, 'value') else export_data.status
             if export_data.status == "posted":
-                export.posted_at = datetime.utcnow()
+                export.posted_at = datetime.now(timezone.utc)
         
         if export_data.platform_url:
             export.platform_url = export_data.platform_url
@@ -1516,7 +1517,7 @@ async def publish_post(post_id: int, db: Session = Depends(get_db)):
             )
             
             if result.get("success"):
-                post.published_at = datetime.utcnow()
+                post.published_at = datetime.now(timezone.utc)
                 post.published_url = result.get("url")
                 post.status = "published"
                 db.commit()

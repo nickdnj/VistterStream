@@ -6,8 +6,7 @@ Manages the capture queue and integrates with timeline executor for clip capture
 import asyncio
 import logging
 import os
-import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 from pathlib import Path
 
@@ -15,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from models.database import SessionLocal, Camera, Preset
 from models.reelforge import ReelCaptureQueue, ReelPost, ReelTemplate
+from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -122,12 +122,12 @@ class ReelForgeCaptureService:
         
         # Update statuses and tracking
         queue_item.status = "capturing"
-        queue_item.started_at = datetime.utcnow()
+        queue_item.started_at = datetime.now(timezone.utc)
         queue_item.attempt_count = (queue_item.attempt_count or 0) + 1
-        queue_item.last_attempt_at = datetime.utcnow()
+        queue_item.last_attempt_at = datetime.now(timezone.utc)
         queue_item.error_message = None  # Clear any previous error
         post.status = "capturing"
-        post.capture_started_at = datetime.utcnow()
+        post.capture_started_at = datetime.now(timezone.utc)
         db.commit()
         
         # Start capture in background
@@ -199,12 +199,12 @@ class ReelForgeCaptureService:
                 
                 if post:
                     post.source_clip_path = str(output_path)
-                    post.capture_completed_at = datetime.utcnow()
+                    post.capture_completed_at = datetime.now(timezone.utc)
                     post.status = "processing"  # Ready for processing pipeline
                 
                 if queue_item:
                     queue_item.status = "completed"
-                    queue_item.completed_at = datetime.utcnow()
+                    queue_item.completed_at = datetime.now(timezone.utc)
                 
                 db.commit()
                 
@@ -233,7 +233,7 @@ class ReelForgeCaptureService:
                 if queue_item:
                     queue_item.status = "failed"
                     queue_item.error_message = f"FFmpeg error: {error_display}"
-                    queue_item.completed_at = datetime.utcnow()
+                    queue_item.completed_at = datetime.now(timezone.utc)
                 
                 db.commit()
                 
@@ -258,7 +258,7 @@ class ReelForgeCaptureService:
                 if queue_item:
                     queue_item.status = "failed"
                     queue_item.error_message = f"Exception: {error_str}"
-                    queue_item.completed_at = datetime.utcnow()
+                    queue_item.completed_at = datetime.now(timezone.utc)
                 
                 db.commit()
                 
@@ -293,7 +293,7 @@ class ReelForgeCaptureService:
         password = None
         if camera.password_enc:
             try:
-                password = base64.b64decode(camera.password_enc).decode()
+                password = decrypt(camera.password_enc)
             except:
                 pass
         
@@ -331,7 +331,7 @@ class ReelForgeCaptureService:
                 db = SessionLocal()
                 try:
                     # Find scheduled captures that are due
-                    now = datetime.utcnow()
+                    now = datetime.now(timezone.utc)
                     
                     due_captures = db.query(ReelCaptureQueue).filter(
                         ReelCaptureQueue.status == "waiting",

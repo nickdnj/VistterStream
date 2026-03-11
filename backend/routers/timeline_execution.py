@@ -13,10 +13,11 @@ from models.destination import StreamingDestination
 from services.timeline_executor import get_timeline_executor
 from services.seamless_timeline_executor import get_seamless_timeline_executor
 from services.ffmpeg_manager import EncodingProfile
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/timeline-execution", tags=["timeline-execution"])
+router = APIRouter(prefix="/api/timeline-execution", tags=["timeline-execution"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
 
 
@@ -56,7 +57,7 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     
     # Mark destinations as used
     for dest in destinations:
-        dest.last_used = datetime.utcnow()
+        dest.last_used = datetime.now(timezone.utc)
     db.commit()
     
     # TEMP: Back to old executor - seamless needs more debugging

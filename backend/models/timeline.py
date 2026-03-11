@@ -5,7 +5,7 @@ Based on docs/StreamingPipeline-TechnicalSpec.md Multi-Track Timeline System
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, JSON, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from .database import Base
 
 
@@ -21,8 +21,8 @@ class Timeline(Base):
     resolution = Column(String, default="1920x1080")
     loop = Column(Boolean, default=True)  # Loop forever or play once
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     tracks = relationship("TimelineTrack", back_populates="timeline", cascade="all, delete-orphan")
@@ -68,7 +68,7 @@ class TimelineExecution(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     timeline_id = Column(Integer, ForeignKey("timelines.id"), nullable=False)
-    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime)
     status = Column(String, default="running")  # 'running', 'completed', 'stopped', 'error'
     error_message = Column(String)

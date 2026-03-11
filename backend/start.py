@@ -4,6 +4,7 @@ Startup script for VistterStream backend
 
 import sys
 import os
+import secrets
 import shutil
 from pathlib import Path
 
@@ -73,31 +74,39 @@ def ensure_streaming_destination_oauth_columns() -> None:
 
 
 def ensure_default_admin():
-    """Create or reset a default admin user."""
-    username = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
-    password = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin")
+    """Create or reset the default admin user.
 
-    if not username or not password:
-        print("⚠️ DEFAULT_ADMIN_USERNAME or DEFAULT_ADMIN_PASSWORD not set; skipping admin bootstrap")
-        return
+    If DEFAULT_ADMIN_PASSWORD is set, use it (for automated deployments).
+    If not set and no admin exists yet, generate a random password and print it.
+    If not set and admin already exists, do nothing (don't reset).
+    """
+    username = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
+    password = os.getenv("DEFAULT_ADMIN_PASSWORD")
 
     db = SessionLocal()
     try:
         existing_user = get_user_by_username(db, username)
-        password_hash = get_password_hash(password)
-        
+
         if existing_user:
-            # Reset password for existing admin user
-            existing_user.password_hash = password_hash
-            existing_user.is_active = True
-            db.commit()
-            print(f"✅ Reset password for admin user '{username}'")
+            if password:
+                # Env var is set — reset password for automated deployments
+                existing_user.password_hash = get_password_hash(password)
+                existing_user.is_active = True
+                db.commit()
+                print(f"✅ Reset password for admin user '{username}'")
+            # If no env var and user exists, leave it alone
         else:
-            # Create new admin user
-            admin_user = User(username=username, password_hash=password_hash)
+            # No admin exists — create one
+            if not password:
+                password = secrets.token_urlsafe(16)
+                print("=" * 60)
+                print(f"*** INITIAL ADMIN PASSWORD: {password} ***")
+                print("Change this immediately via Settings > Change Password")
+                print("=" * 60)
+            admin_user = User(username=username, password_hash=get_password_hash(password))
             db.add(admin_user)
             db.commit()
-            print(f"✅ Created default admin user '{username}'")
+            print(f"✅ Created admin user '{username}'")
     except Exception as exc:
         db.rollback()
         print(f"❌ Failed to create/reset default admin user: {exc}")

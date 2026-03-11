@@ -2,22 +2,26 @@
 Stream service for managing streaming operations
 """
 
+import logging
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
-import base64
 
 from models.database import Stream, Camera
+from utils.crypto import decrypt
+from utils.log_utils import redact_url
 from models.destination import StreamingDestination
 from models.schemas import StreamCreate, StreamUpdate, Stream as StreamSchema, StreamStatus
 from services.ffmpeg_manager import FFmpegProcessManager
+
+logger = logging.getLogger(__name__)
 
 class StreamService:
     def __init__(self, db: Session):
         self.db = db
         self._ffmpeg_manager = None
-    
+
     async def get_ffmpeg_manager(self):
         """Lazy-load and initialize FFmpeg manager"""
         if self._ffmpeg_manager is None:
@@ -48,11 +52,11 @@ class StreamService:
             framerate=stream_data.framerate,
             status=StreamStatus.STOPPED.value  # Convert enum to string
         )
-        
+
         self.db.add(stream)
         self.db.commit()
         self.db.refresh(stream)
-        
+
         return StreamSchema.from_orm(stream)
 
     async def update_stream(self, stream_id: int, stream_update: StreamUpdate) -> Optional[StreamSchema]:
@@ -60,14 +64,14 @@ class StreamService:
         stream = self.db.query(Stream).filter(Stream.id == stream_id).first()
         if not stream:
             return None
-        
+
         update_data = stream_update.dict(exclude_unset=True)
         for field, value in update_data.items():
             setattr(stream, field, value)
-        
+
         self.db.commit()
         self.db.refresh(stream)
-        
+
         return StreamSchema.from_orm(stream)
 
     async def delete_stream(self, stream_id: int) -> bool:
@@ -75,7 +79,7 @@ class StreamService:
         stream = self.db.query(Stream).filter(Stream.id == stream_id).first()
         if not stream:
             return False
-        
+
         self.db.delete(stream)
         self.db.commit()
         return True
@@ -84,7 +88,7 @@ class StreamService:
         """Build RTSP URL from camera configuration"""
         password = None
         if camera.password_enc:
-            password = base64.b64decode(camera.password_enc).decode()
+            password = decrypt(camera.password_enc)
 
         # URL-encode credentials to handle special characters like !, @, #
         if camera.username and password:
@@ -99,7 +103,7 @@ class StreamService:
         stream = self.db.query(Stream).filter(Stream.id == stream_id).first()
         if not stream:
             return False
-        
+
         # Get the camera
         camera = self.db.query(Camera).filter(Camera.id == stream.camera_id).first()
         if not camera:
@@ -107,7 +111,7 @@ class StreamService:
             stream.status = StreamStatus.ERROR.value
             self.db.commit()
             return False
-        
+
         # Get the destination
         destination = self.db.query(StreamingDestination).filter(
             StreamingDestination.id == stream.destination_id
@@ -117,29 +121,29 @@ class StreamService:
             stream.status = StreamStatus.ERROR.value
             self.db.commit()
             return False
-        
+
         # If stream has a preset, move camera to preset BEFORE streaming
         if stream.preset_id:
             from models.database import Preset
             from services.ptz_service import get_ptz_service
             import asyncio
-            
+
             preset = self.db.query(Preset).filter(Preset.id == stream.preset_id).first()
             if preset:
-                print(f"🎯 Moving camera {camera.name} to preset '{preset.name}' before streaming")
-                
+                logger.info("Moving camera %s to preset '%s' before streaming", camera.name, preset.name)
+
                 # Get camera password
                 password = None
                 if camera.password_enc:
-                    password = base64.b64decode(camera.password_enc).decode()
-                
+                    password = decrypt(camera.password_enc)
+
                 if password:
                     # Use configured ONVIF port for PTZ control
                     ptz_service = get_ptz_service()
                     pan = preset.pan if preset.pan is not None else 0.0
                     tilt = preset.tilt if preset.tilt is not None else 0.0
                     zoom = preset.zoom if preset.zoom is not None else 1.0
-                    
+
                     try:
                         success = await ptz_service.move_to_preset(
                             address=camera.address,
@@ -151,46 +155,47 @@ class StreamService:
                             tilt=tilt,
                             zoom=zoom,
                         )
-                        
+
                         if success:
-                            print(
-                                f"✅ Camera moved to preset '{preset.name}' "
-                                f"(pan={pan}, tilt={tilt}, zoom={zoom}), waiting 3 seconds for camera to settle..."
+                            logger.info(
+                                "Camera moved to preset '%s' (pan=%s, tilt=%s, zoom=%s), "
+                                "waiting 3 seconds for camera to settle...",
+                                preset.name, pan, tilt, zoom
                             )
                             await asyncio.sleep(3)  # Wait for camera to settle
                         else:
-                            print(f"⚠️  Failed to move camera to preset, streaming anyway")
+                            logger.warning("Failed to move camera to preset, streaming anyway")
                     except Exception as e:
-                        print(f"❌ Error moving camera to preset: {e}")
+                        logger.error("Error moving camera to preset: %s", e)
                         # Continue anyway - don't fail the stream
                 else:
-                    print(f"⚠️  No camera credentials available for PTZ control")
+                    logger.warning("No camera credentials available for PTZ control")
             else:
-                print(f"⚠️  Preset {stream.preset_id} not found")
-        
+                logger.warning("Preset %d not found", stream.preset_id)
+
         # Update stream status
         stream.status = StreamStatus.STARTING.value
-        stream.started_at = datetime.utcnow()
+        stream.started_at = datetime.now(timezone.utc)
         stream.last_error = None
         self.db.commit()
-        
+
         try:
             # Build RTSP input URL
             rtsp_url = self._build_rtsp_url(camera)
-            
+
             # Build RTMP output URL from destination
             rtmp_output = destination.get_full_rtmp_url()
-            
+
             # Mark destination as used
-            destination.last_used = datetime.utcnow()
+            destination.last_used = datetime.now(timezone.utc)
             self.db.commit()
-            
+
             # Parse resolution
             width, height = stream.resolution.split('x')
-            
+
             # Get FFmpeg manager
             ffmpeg_manager = await self.get_ffmpeg_manager()
-            
+
             # Build encoding profile
             encoding_profile = {
                 'codec': ffmpeg_manager.hw_capabilities.encoder,
@@ -203,9 +208,10 @@ class StreamService:
                 'profile': 'main',
                 'level': '4.1'
             }
-            
+
             # Start the stream
-            print(f"DEBUG: Starting stream {stream.id} from {rtsp_url} to {rtmp_output}")
+            logger.info("Starting stream %d from %s to %s",
+                        stream.id, redact_url(rtsp_url), redact_url(rtmp_output))
             from services.ffmpeg_manager import EncodingProfile
             profile = EncodingProfile(**encoding_profile)
             await ffmpeg_manager.start_stream(
@@ -214,16 +220,16 @@ class StreamService:
                 output_urls=[rtmp_output],  # List of output URLs
                 profile=profile
             )
-            
+
             # Update stream status
             stream.status = StreamStatus.RUNNING.value
             self.db.commit()
-            
-            print(f"DEBUG: Stream {stream.id} started successfully")
+
+            logger.info("Stream %d started successfully", stream.id)
             return True
-            
+
         except Exception as e:
-            print(f"DEBUG: Failed to start stream {stream.id}: {e}")
+            logger.error("Failed to start stream %d: %s", stream.id, e)
             stream.status = StreamStatus.ERROR.value
             stream.last_error = str(e)
             self.db.commit()
@@ -233,23 +239,23 @@ class StreamService:
         """Stop a stream"""
         import subprocess
         import signal
-        
+
         stream = self.db.query(Stream).filter(Stream.id == stream_id).first()
         if not stream:
             return False
-        
+
         try:
             # Get FFmpeg manager and stop process
             ffmpeg_manager = await self.get_ffmpeg_manager()
-            
+
             try:
                 await ffmpeg_manager.stop_stream(stream_id)
-                print(f"DEBUG: Stopped stream {stream_id} via FFmpeg manager")
+                logger.info("Stopped stream %d via FFmpeg manager", stream_id)
             except KeyError:
                 # Stream not tracked by FFmpeg manager (likely server was restarted)
                 # Kill orphaned FFmpeg processes manually
-                print(f"DEBUG: Stream {stream_id} not in FFmpeg manager, searching for orphaned processes...")
-                
+                logger.info("Stream %d not in FFmpeg manager, searching for orphaned processes...", stream_id)
+
                 # Get the destination to build the output URL
                 destination = self.db.query(StreamingDestination).filter(
                     StreamingDestination.id == stream.destination_id
@@ -257,9 +263,9 @@ class StreamService:
                 if destination:
                     rtmp_output = destination.get_full_rtmp_url()
                 else:
-                    print(f"DEBUG: Destination not found for stream {stream_id}, cannot search for orphaned processes")
+                    logger.warning("Destination not found for stream %d, cannot search for orphaned processes", stream_id)
                     rtmp_output = None
-                
+
                 if rtmp_output:
                     # Find FFmpeg processes with this output URL
                     try:
@@ -268,39 +274,38 @@ class StreamService:
                             capture_output=True,
                             text=True
                         )
-                        
+
                         if result.returncode == 0 and result.stdout.strip():
                             pids = result.stdout.strip().split('\n')
-                            print(f"DEBUG: Found {len(pids)} orphaned FFmpeg process(es) for stream {stream_id}: {pids}")
-                            
+                            logger.info("Found %d orphaned FFmpeg process(es) for stream %d: %s",
+                                        len(pids), stream_id, pids)
+
                             # Kill each process
                             for pid in pids:
                                 try:
                                     import os
                                     os.kill(int(pid), signal.SIGTERM)
-                                    print(f"DEBUG: Killed orphaned FFmpeg process {pid}")
+                                    logger.info("Killed orphaned FFmpeg process %s", pid)
                                 except ProcessLookupError:
-                                    print(f"DEBUG: Process {pid} already terminated")
+                                    logger.debug("Process %s already terminated", pid)
                                 except Exception as e:
-                                    print(f"DEBUG: Failed to kill process {pid}: {e}")
+                                    logger.error("Failed to kill process %s: %s", pid, e)
                         else:
-                            print(f"DEBUG: No orphaned FFmpeg processes found for stream {stream_id}")
-                            
+                            logger.debug("No orphaned FFmpeg processes found for stream %d", stream_id)
+
                     except Exception as e:
-                        print(f"DEBUG: Failed to search for orphaned processes: {e}")
-            
+                        logger.error("Failed to search for orphaned processes: %s", e)
+
             # Update stream status
             stream.status = StreamStatus.STOPPED.value
-            stream.stopped_at = datetime.utcnow()
+            stream.stopped_at = datetime.now(timezone.utc)
             self.db.commit()
-            
-            print(f"DEBUG: Stream {stream_id} stopped successfully")
+
+            logger.info("Stream %d stopped successfully", stream_id)
             return True
-            
+
         except Exception as e:
-            print(f"DEBUG: Failed to stop stream {stream_id}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error("Failed to stop stream %d: %s", stream_id, e, exc_info=True)
             stream.last_error = str(e)
             self.db.commit()
             return False
@@ -311,7 +316,7 @@ class StreamService:
         if not stream:
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if stream.started_at:
             end_time = stream.stopped_at or now
             uptime_seconds = max(int((end_time - stream.started_at).total_seconds()), 0)
@@ -322,7 +327,7 @@ class StreamService:
         destination = self.db.query(StreamingDestination).filter(
             StreamingDestination.id == stream.destination_id
         ).first()
-        
+
         return {
             "id": stream.id,
             "name": stream.name,

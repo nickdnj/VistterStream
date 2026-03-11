@@ -2,15 +2,16 @@
 Emergency controls API - Kill all streams, stop all processes
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import subprocess
 import signal
 import os
 import logging
 
 from services.timeline_executor import get_timeline_executor
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/emergency", tags=["emergency"])
+router = APIRouter(prefix="/api/emergency", tags=["emergency"], dependencies=[Depends(get_current_user)])
 
 logger = logging.getLogger(__name__)
 

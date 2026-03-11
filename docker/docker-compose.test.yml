@@ -12,6 +12,8 @@ services:
       - RTMP_RELAY_HOST=${RTMP_RELAY_HOST:-rtmp-relay}
       - RTMP_RELAY_PORT=${RTMP_RELAY_PORT:-1935}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-test-secret-key-for-testing-only}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-l1NJJMOjft3kubRSQ-lLHFdP73c9BxAx1E8qRzOhfAk=}
     volumes:
       - vistter_data:/data
       # Mount existing DB for testing

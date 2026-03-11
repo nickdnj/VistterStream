@@ -3,10 +3,12 @@ VistterStream Backend API
 Main FastAPI application for camera management and streaming control
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+import asyncio
 import uvicorn
 import os
 from pathlib import Path
@@ -30,6 +32,87 @@ from services.rtmp_relay_service import get_rtmp_relay_service
 from services.watchdog_manager import get_watchdog_manager
 from models.database import get_db
 
+# Lifespan context manager (replaces deprecated @app.on_event)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize background services on startup and clean up on shutdown"""
+    # --- Startup ---
+    print("🚀 Starting VistterStream Backend...")
+    print("📷 Starting camera health monitor...")
+    await start_health_monitor()
+    print("📡 Starting RTMP relay service (THE SECRET SAUCE!)...")
+    relay_service = get_rtmp_relay_service()
+    await relay_service.start_all_cameras()
+    # Start scheduler loop
+    if get_scheduler_service:
+        try:
+            await get_scheduler_service().start()
+            print("🗓️ Scheduler started")
+        except Exception as e:
+            print(f"⚠️ Failed to start scheduler: {e}")
+    # Start YouTube watchdog manager
+    try:
+        print("🐕 Starting YouTube watchdog manager...")
+        watchdog_manager = get_watchdog_manager()
+        db = next(get_db())
+        await watchdog_manager.start(db)
+        print("✅ Watchdog manager started")
+    except Exception as e:
+        print(f"⚠️ Failed to start watchdog manager: {e}")
+    # Start ReelForge capture scheduler
+    try:
+        print("📹 Starting ReelForge capture scheduler...")
+        from services.reelforge_capture_service import init_reelforge_capture_service
+        db = next(get_db())
+        await init_reelforge_capture_service(db)
+        print("✅ ReelForge capture scheduler started")
+    except Exception as e:
+        print(f"⚠️ Failed to start ReelForge capture scheduler: {e}")
+    # Start ReelForge background scheduler (for scheduled captures and auto-publish)
+    try:
+        print("🗓️ Starting ReelForge scheduler...")
+        from services.reelforge_scheduler import get_reelforge_scheduler
+        reelforge_scheduler = get_reelforge_scheduler()
+        asyncio.create_task(reelforge_scheduler.start())
+        print("✅ ReelForge scheduler started")
+    except Exception as e:
+        print(f"⚠️ Failed to start ReelForge scheduler: {e}")
+    print("✅ All services started")
+
+    yield
+
+    # --- Shutdown ---
+    print("🛑 Shutting down VistterStream Backend...")
+    print("📷 Stopping camera health monitor...")
+    await stop_health_monitor()
+    print("📡 Stopping RTMP relay service...")
+    relay_service = get_rtmp_relay_service()
+    await relay_service.stop_all_relays()
+    # Stop scheduler loop
+    if get_scheduler_service:
+        try:
+            await get_scheduler_service().stop()
+        except Exception:
+            pass
+    # Stop watchdog manager
+    try:
+        print("🐕 Stopping watchdog manager...")
+        watchdog_manager = get_watchdog_manager()
+        await watchdog_manager.stop_all()
+        print("✅ Watchdog manager stopped")
+    except Exception:
+        pass
+    # Stop ReelForge capture scheduler
+    try:
+        print("📹 Stopping ReelForge capture scheduler...")
+        from services.reelforge_capture_service import stop_reelforge_capture_service
+        await stop_reelforge_capture_service()
+        print("✅ ReelForge capture scheduler stopped")
+    except Exception:
+        pass
+    print("✅ All services stopped")
+
+
 # Create FastAPI app
 app = FastAPI(
     title="VistterStream API",
@@ -37,7 +120,8 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
-    redirect_slashes=False  # Prevent 307 redirects that break with nginx proxy
+    redirect_slashes=False,  # Prevent 307 redirects that break with nginx proxy
+    lifespan=lifespan,
 )
 
 # CORS middleware for frontend communication
@@ -129,85 +213,6 @@ async def health_check():
         "service": "VistterStream API",
         "version": "1.0.0"
     }
-
-# Startup and shutdown events
-@app.on_event("startup")
-async def startup_event():
-    """Initialize background services on startup"""
-    print("🚀 Starting VistterStream Backend...")
-    print("📷 Starting camera health monitor...")
-    await start_health_monitor()
-    print("📡 Starting RTMP relay service (THE SECRET SAUCE!)...")
-    relay_service = get_rtmp_relay_service()
-    await relay_service.start_all_cameras()
-    # Start scheduler loop
-    if get_scheduler_service:
-        try:
-            await get_scheduler_service().start()
-            print("🗓️ Scheduler started")
-        except Exception as e:
-            print(f"⚠️ Failed to start scheduler: {e}")
-    # Start YouTube watchdog manager
-    try:
-        print("🐕 Starting YouTube watchdog manager...")
-        watchdog_manager = get_watchdog_manager()
-        db = next(get_db())
-        await watchdog_manager.start(db)
-        print("✅ Watchdog manager started")
-    except Exception as e:
-        print(f"⚠️ Failed to start watchdog manager: {e}")
-    # Start ReelForge capture scheduler
-    try:
-        print("📹 Starting ReelForge capture scheduler...")
-        from services.reelforge_capture_service import init_reelforge_capture_service
-        db = next(get_db())
-        await init_reelforge_capture_service(db)
-        print("✅ ReelForge capture scheduler started")
-    except Exception as e:
-        print(f"⚠️ Failed to start ReelForge capture scheduler: {e}")
-    # Start ReelForge background scheduler (for scheduled captures and auto-publish)
-    try:
-        print("🗓️ Starting ReelForge scheduler...")
-        from services.reelforge_scheduler import get_reelforge_scheduler
-        reelforge_scheduler = get_reelforge_scheduler()
-        asyncio.create_task(reelforge_scheduler.start())
-        print("✅ ReelForge scheduler started")
-    except Exception as e:
-        print(f"⚠️ Failed to start ReelForge scheduler: {e}")
-    print("✅ All services started")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up background services on shutdown"""
-    print("🛑 Shutting down VistterStream Backend...")
-    print("📷 Stopping camera health monitor...")
-    await stop_health_monitor()
-    print("📡 Stopping RTMP relay service...")
-    relay_service = get_rtmp_relay_service()
-    await relay_service.stop_all_relays()
-    # Stop scheduler loop
-    if get_scheduler_service:
-        try:
-            await get_scheduler_service().stop()
-        except Exception:
-            pass
-    # Stop watchdog manager
-    try:
-        print("🐕 Stopping watchdog manager...")
-        watchdog_manager = get_watchdog_manager()
-        await watchdog_manager.stop_all()
-        print("✅ Watchdog manager stopped")
-    except Exception:
-        pass
-    # Stop ReelForge capture scheduler
-    try:
-        print("📹 Stopping ReelForge capture scheduler...")
-        from services.reelforge_capture_service import stop_reelforge_capture_service
-        await stop_reelforge_capture_service()
-        print("✅ ReelForge capture scheduler stopped")
-    except Exception:
-        pass
-    print("✅ All services stopped")
 
 if __name__ == "__main__":
     uvicorn.run(

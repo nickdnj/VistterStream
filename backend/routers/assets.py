@@ -2,22 +2,28 @@
 Assets API Router - Manage overlay assets (images, graphics, dynamic API content)
 """
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import uuid
 import shutil
+import httpx
 from pathlib import Path
 
 from models.database import get_db, Asset
 from models.schemas import AssetCreate, AssetUpdate, Asset as AssetSchema
+from routers.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/assets",
-    tags=["assets"]
+    tags=["assets"],
+    dependencies=[Depends(get_current_user)]
 )
 
 # Create uploads directory if it doesn't exist
@@ -45,7 +51,7 @@ def get_asset(asset_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=AssetSchema)
 def create_asset(asset_data: AssetCreate, db: Session = Depends(get_db)):
     """Create a new asset"""
-    
+
     # Validate that either file_path or api_url is provided
     if asset_data.type == "api_image":
         if not asset_data.api_url:
@@ -53,7 +59,7 @@ def create_asset(asset_data: AssetCreate, db: Session = Depends(get_db)):
     elif asset_data.type in ["static_image", "video", "graphic", "google_drawing"]:
         if not asset_data.file_path:
             raise HTTPException(status_code=400, detail="file_path is required for this asset type")
-    
+
     asset = Asset(
         name=asset_data.name,
         type=asset_data.type,
@@ -66,13 +72,13 @@ def create_asset(asset_data: AssetCreate, db: Session = Depends(get_db)):
         position_y=asset_data.position_y,
         opacity=asset_data.opacity,
         description=asset_data.description,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
-    
+
     db.add(asset)
     db.commit()
     db.refresh(asset)
-    
+
     return asset
 
 @router.put("/{asset_id}", response_model=AssetSchema)
@@ -81,17 +87,17 @@ def update_asset(asset_id: int, asset_data: AssetUpdate, db: Session = Depends(g
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.is_active == True).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    
+
     # Update fields
     update_data = asset_data.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(asset, field, value)
-    
-    asset.last_updated = datetime.utcnow()
-    
+
+    asset.last_updated = datetime.now(timezone.utc)
+
     db.commit()
     db.refresh(asset)
-    
+
     return asset
 
 @router.delete("/{asset_id}")
@@ -100,12 +106,12 @@ def delete_asset(asset_id: int, db: Session = Depends(get_db)):
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.is_active == True).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    
+
     asset.is_active = False
-    asset.last_updated = datetime.utcnow()
-    
+    asset.last_updated = datetime.now(timezone.utc)
+
     db.commit()
-    
+
     return {"message": "Asset deleted successfully", "id": asset_id}
 
 @router.post("/upload")
@@ -114,11 +120,11 @@ async def upload_asset_file(
     asset_type: str = Form(...)
 ):
     """Upload an asset file (image or video)"""
-    
+
     # Validate file type
     allowed_image_types = {"image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"}
     allowed_video_types = {"video/mp4", "video/mpeg", "video/quicktime", "video/webm"}
-    
+
     if asset_type == "static_image":
         if file.content_type not in allowed_image_types:
             raise HTTPException(
@@ -133,16 +139,16 @@ async def upload_asset_file(
             )
     else:
         raise HTTPException(status_code=400, detail=f"Invalid asset type: {asset_type}")
-    
+
     # Validate file size (50MB max)
     MAX_SIZE = 50 * 1024 * 1024  # 50MB
     file_size = 0
-    
+
     # Generate unique filename
     file_extension = Path(file.filename or "file").suffix
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = UPLOAD_DIR / unique_filename
-    
+
     try:
         # Save file with size check
         with open(file_path, "wb") as buffer:
@@ -160,10 +166,10 @@ async def upload_asset_file(
                         detail=f"File too large. Maximum size is 50MB"
                     )
                 buffer.write(chunk)
-        
+
         # Return relative path that can be served
         relative_path = f"/uploads/assets/{unique_filename}"
-        
+
         return {
             "file_path": relative_path,
             "filename": unique_filename,
@@ -171,7 +177,7 @@ async def upload_asset_file(
             "size": file_size,
             "content_type": file.content_type
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -181,37 +187,35 @@ async def upload_asset_file(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @router.post("/{asset_id}/test")
-def test_asset(asset_id: int, db: Session = Depends(get_db)):
+async def test_asset(asset_id: int, db: Session = Depends(get_db)):
     """Test an asset (e.g., check if API URL is accessible)"""
-    import requests
-    
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.is_active == True).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    
+
     if asset.type == "api_image":
         if not asset.api_url:
             raise HTTPException(status_code=400, detail="No API URL configured")
-        
+
         try:
-            response = requests.get(asset.api_url, timeout=10)
-            response.raise_for_status()
-            
-            content_type = response.headers.get('content-type', '')
-            
-            return {
-                "success": True,
-                "status_code": response.status_code,
-                "content_type": content_type,
-                "content_length": len(response.content),
-                "message": "Asset API is accessible"
-            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(asset.api_url)
+                response.raise_for_status()
+
+                content_type = response.headers.get('content-type', '')
+
+                return {
+                    "success": True,
+                    "status_code": response.status_code,
+                    "content_type": content_type,
+                    "content_length": len(response.content),
+                    "message": "Asset API is accessible"
+                }
         except Exception as e:
             return {
                 "success": False,
                 "error": str(e),
                 "message": "Failed to access asset API"
             }
-    
-    return {"message": "Test not implemented for this asset type"}
 
+    return {"message": "Test not implemented for this asset type"}

@@ -8,12 +8,12 @@ The main FFmpeg switcher pulls from local RTMP (instant switching!)
 
 import asyncio
 import logging
-import base64
 import os
 from typing import Dict, Optional
 from sqlalchemy.orm import Session
 
 from models.database import Camera, SessionLocal
+from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +218,7 @@ class RTMPRelayService:
         password = None
         if camera.password_enc:
             try:
-                password = base64.b64decode(camera.password_enc).decode()
+                password = decrypt(camera.password_enc)
             except:
                 pass
         

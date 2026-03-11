@@ -6,7 +6,6 @@ Handles OAuth authentication and video uploads to YouTube Shorts.
 
 import os
 import logging
-import base64
 import json
 from typing import Optional, Dict
 from datetime import datetime
@@ -18,6 +17,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
+from utils.crypto import encrypt, decrypt
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +35,15 @@ class YouTubeShortsService:
         self._credentials: Optional[Credentials] = None
         self._youtube = None
     
-    def _encrypt(self, value: str) -> str:
-        """Simple base64 encoding (use proper encryption in production)"""
-        return base64.b64encode(value.encode()).decode()
-    
-    def _decrypt(self, encrypted: str) -> str:
-        """Decode base64"""
-        return base64.b64decode(encrypted.encode()).decode()
+    @staticmethod
+    def _encrypt(value: str) -> str:
+        """Encrypt a secret value using Fernet encryption."""
+        return encrypt(value)
+
+    @staticmethod
+    def _decrypt(encrypted: str) -> str:
+        """Decrypt a Fernet-encrypted value (falls back to legacy base64)."""
+        return decrypt(encrypted)
     
     def get_oauth_url(self, client_id: str, client_secret: str, redirect_uri: str) -> str:
         """

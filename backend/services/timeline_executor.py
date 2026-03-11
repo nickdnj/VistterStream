@@ -10,7 +10,7 @@ import tempfile
 import os
 import httpx
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,7 @@ from models.database import Camera, Preset
 from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile, StreamStatus
 from services.ptz_service import get_ptz_service
 from utils.google_drive import parse_google_drawing_url
-import base64
+from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Enable debug logging
@@ -29,7 +29,7 @@ logger.setLevel(logging.DEBUG)  # Enable debug logging
 def _dbg(loc: str, msg: str, data: dict = None, hyp: str = ""):
     """Debug log helper - writes NDJSON to debug.log"""
     try:
-        entry = {"ts": datetime.utcnow().isoformat(), "loc": loc, "msg": msg, "hyp": hyp}
+        entry = {"ts": datetime.now(timezone.utc).isoformat(), "loc": loc, "msg": msg, "hyp": hyp}
         if data: entry["data"] = data
         with open("/data/debug.log", "a") as f: f.write(json.dumps(entry) + "\n")
     except: pass
@@ -97,7 +97,7 @@ class TimelineExecutor:
             self.timeline_destination_ids[timeline_id] = destination_ids
             
         # Initialize heartbeat for stall detection
-        self._last_segment_time[timeline_id] = datetime.utcnow()
+        self._last_segment_time[timeline_id] = datetime.now(timezone.utc)
         
         # Create execution task
         task = asyncio.create_task(
@@ -200,7 +200,7 @@ class TimelineExecutor:
             # Create execution record
             execution = TimelineExecution(
                 timeline_id=timeline_id,
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
                 status="running"
             )
             db.add(execution)
@@ -275,7 +275,7 @@ class TimelineExecutor:
                             # FFmpeg is running from previous cue - continue streaming that content
                             logger.info(f"📋 Gap segment at t={seg_start:.2f}s for {duration:.2f}s - continuing last camera (FFmpeg running)")
                             await asyncio.sleep(duration)
-                            self._last_segment_time[timeline_id] = datetime.utcnow()
+                            self._last_segment_time[timeline_id] = datetime.now(timezone.utc)
                             continue
                         else:
                             # No FFmpeg running and no cue - this is a gap at timeline start
@@ -328,7 +328,7 @@ class TimelineExecutor:
                             exc_info=True
                         )
                         # Update heartbeat even on error so watchdog knows we're making progress
-                        self._last_segment_time[timeline_id] = datetime.utcnow()
+                        self._last_segment_time[timeline_id] = datetime.now(timezone.utc)
                         # Update camera tracking even on error to prevent false "camera changed" detection
                         last_camera_id = segment_camera_id
                         last_preset_id = segment_preset_id
@@ -352,7 +352,7 @@ class TimelineExecutor:
                     break
                     
             # Mark execution as completed
-            execution.completed_at = datetime.utcnow()
+            execution.completed_at = datetime.now(timezone.utc)
             execution.status = "completed"
             db.commit()
             
@@ -644,9 +644,9 @@ class TimelineExecutor:
                     password = None
                     if camera.password_enc:
                         try:
-                            password = base64.b64decode(camera.password_enc).decode()
+                            password = decrypt(camera.password_enc)
                         except Exception as e:
-                            logger.error(f"Failed to decode camera password: {e}")
+                            logger.error(f"Failed to decrypt camera password: {e}")
                     
                     if password:
                         if same_camera and stream_running:
@@ -869,7 +869,7 @@ class TimelineExecutor:
                 logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
                 
                 # Update heartbeat for stall detection
-                self._last_segment_time[timeline_id] = datetime.utcnow()
+                self._last_segment_time[timeline_id] = datetime.now(timezone.utc)
                 
             else:
                 logger.warning("Unsupported action type for video cue")
@@ -953,11 +953,11 @@ class TimelineExecutor:
         duration: float
     ):
         """Continuously update playback position during cue execution"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         
         try:
             while True:
-                elapsed = (datetime.utcnow() - start_time).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
                 current_time = cue.start_time + min(elapsed, duration)
                 
                 self.playback_positions[timeline_id] = {
@@ -966,7 +966,7 @@ class TimelineExecutor:
                     "current_cue_index": cue_index,
                     "loop_count": loop_count,
                     "total_cues": total_cues,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 }
                 
                 await asyncio.sleep(0.5)  # Update every 500ms
@@ -988,10 +988,10 @@ class TimelineExecutor:
 
         Mirrors the cue-based updater but uses an explicit start_time/duration.
         """
-        seg_start = datetime.utcnow()
+        seg_start = datetime.now(timezone.utc)
         try:
             while True:
-                elapsed = (datetime.utcnow() - seg_start).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - seg_start).total_seconds()
                 current_time = start_time + min(elapsed, duration)
                 self.playback_positions[timeline_id] = {
                     "current_time": current_time,
@@ -999,7 +999,7 @@ class TimelineExecutor:
                     "current_cue_index": current_cue_index,
                     "loop_count": loop_count,
                     "total_cues": total_cues,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 }
                 await asyncio.sleep(0.5)
         except asyncio.CancelledError:
@@ -1007,12 +1007,10 @@ class TimelineExecutor:
     
     def _build_rtsp_url(self, camera: Camera) -> str:
         """Build RTSP URL for a camera"""
-        import base64
-        
         password = None
         if camera.password_enc:
             try:
-                password = base64.b64decode(camera.password_enc).decode()
+                password = decrypt(camera.password_enc)
             except Exception:
                 pass
                 

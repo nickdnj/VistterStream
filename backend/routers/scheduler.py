@@ -12,8 +12,9 @@ from models.schedule import Schedule, ScheduleTimeline
 from models.timeline import Timeline
 from models.destination import StreamingDestination
 from services.scheduler_service import get_scheduler_service
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
+router = APIRouter(prefix="/api/scheduler", tags=["scheduler"], dependencies=[Depends(get_current_user)])
 
 
 class ScheduleTimelineItem(BaseModel):

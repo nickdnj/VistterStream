@@ -13,7 +13,7 @@ import time
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Callable
 from enum import Enum
 import logging
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # #region agent log
 def _dbg_ffmpeg(loc: str, msg: str, data: dict = None, hyp: str = ""):
     try:
-        entry = {"ts": datetime.utcnow().isoformat(), "loc": loc, "msg": msg, "hyp": hyp}
+        entry = {"ts": datetime.now(timezone.utc).isoformat(), "loc": loc, "msg": msg, "hyp": hyp}
         if data: entry["data"] = data
         with open("/data/debug.log", "a") as f: f.write(json.dumps(entry) + "\n")
     except: pass
@@ -107,7 +107,7 @@ class StreamMetrics:
     buffer_fullness: float = 100.0  # percentage
     uptime_seconds: int = 0
     total_bytes_sent: int = 0
-    last_update: datetime = field(default_factory=datetime.utcnow)
+    last_update: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -218,7 +218,7 @@ class FFmpegProcessManager:
         stream_process = StreamProcess(
             stream_id=stream_id,
             status=StreamStatus.STARTING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             command=command,
             output_urls=output_urls  # Store destination URLs
         )
@@ -337,7 +337,7 @@ class FFmpegProcessManager:
             
             stream_process.process = process
             stream_process.status = StreamStatus.RUNNING
-            stream_process.started_at = datetime.utcnow()
+            stream_process.started_at = datetime.now(timezone.utc)
             
             # Restart monitoring
             monitor_task = asyncio.create_task(self._monitor_process(stream_id))
@@ -747,9 +747,9 @@ class FFmpegProcessManager:
             
             # Calculate uptime
             if stream_process.started_at:
-                metrics.uptime_seconds = int((datetime.utcnow() - stream_process.started_at).total_seconds())
+                metrics.uptime_seconds = int((datetime.now(timezone.utc) - stream_process.started_at).total_seconds())
             
-            metrics.last_update = datetime.utcnow()
+            metrics.last_update = datetime.now(timezone.utc)
             
         except Exception as e:
             logger.debug(f"Error parsing FFmpeg output: {e}")

@@ -2,6 +2,7 @@
 Camera service for managing cameras and testing connections
 """
 
+import logging
 from sqlalchemy.orm import Session
 from typing import List, Optional, Tuple
 import httpx
@@ -9,16 +10,18 @@ from httpx import BasicAuth, DigestAuth
 import asyncio
 import base64
 import subprocess
-import requests
-from requests.auth import HTTPDigestAuth
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse, quote, urlunparse, unquote
 
 from models.database import Camera, Preset
+from utils.crypto import encrypt, decrypt
+from utils.log_utils import redact_url
 from models.schemas import (
-    CameraCreate, CameraUpdate, Camera as CameraSchema, 
+    CameraCreate, CameraUpdate, Camera as CameraSchema,
     CameraWithStatus, CameraTestResponse, PresetCreate, Preset
 )
+
+logger = logging.getLogger(__name__)
 
 class CameraService:
     def __init__(self, db: Session):
@@ -42,7 +45,8 @@ class CameraService:
                 parsed.query,
                 parsed.fragment
             ))
-            print(f"WARNING: Stripped embedded credentials from snapshot URL: {snapshot_url[:50]}... -> {normalized[:50]}...")
+            logger.warning("Stripped embedded credentials from snapshot URL: %s -> %s",
+                           redact_url(snapshot_url), redact_url(normalized))
             return normalized
         return snapshot_url
 
@@ -50,7 +54,7 @@ class CameraService:
         """Get all cameras with their current status"""
         cameras = self.db.query(Camera).filter(Camera.is_active == True).all()
         cameras_with_status = []
-        
+
         for camera in cameras:
             status = await self._check_camera_status(camera)
             camera_with_status = CameraWithStatus(
@@ -70,7 +74,7 @@ class CameraService:
                 last_error=status.get("error")
             )
             cameras_with_status.append(camera_with_status)
-        
+
         return cameras_with_status
 
     async def get_camera_with_status(self, camera_id: int) -> Optional[CameraWithStatus]:
@@ -78,7 +82,7 @@ class CameraService:
         camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
         if not camera:
             return None
-        
+
         status = await self._check_camera_status(camera)
         return CameraWithStatus(
             id=camera.id,
@@ -102,12 +106,11 @@ class CameraService:
         # Encrypt password if provided
         password_enc = None
         if camera_data.password:
-            # Simple base64 encoding for now - should use proper encryption in production
-            password_enc = base64.b64encode(camera_data.password.encode()).decode()
-        
+            password_enc = encrypt(camera_data.password)
+
         # Normalize snapshot URL (strip embedded credentials if present)
         normalized_snapshot_url = self.normalize_snapshot_url(camera_data.snapshot_url)
-        
+
         camera = Camera(
             name=camera_data.name,
             type=camera_data.type,
@@ -119,11 +122,11 @@ class CameraService:
             stream_path=camera_data.stream_path,
             snapshot_url=normalized_snapshot_url
         )
-        
+
         self.db.add(camera)
         self.db.commit()
         self.db.refresh(camera)
-        
+
         return CameraSchema.from_orm(camera)
 
     async def update_camera(self, camera_id: int, camera_update: CameraUpdate) -> Optional[CameraSchema]:
@@ -131,24 +134,24 @@ class CameraService:
         camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
         if not camera:
             return None
-        
+
         update_data = camera_update.dict(exclude_unset=True)
-        
+
         # Handle password encryption
         if "password" in update_data and update_data["password"]:
-            update_data["password_enc"] = base64.b64encode(update_data["password"].encode()).decode()
+            update_data["password_enc"] = encrypt(update_data["password"])
             del update_data["password"]
-        
+
         # Normalize snapshot URL if being updated (strip embedded credentials if present)
         if "snapshot_url" in update_data:
             update_data["snapshot_url"] = self.normalize_snapshot_url(update_data["snapshot_url"])
-        
+
         for field, value in update_data.items():
             setattr(camera, field, value)
-        
+
         self.db.commit()
         self.db.refresh(camera)
-        
+
         return CameraSchema.from_orm(camera)
 
     async def delete_camera(self, camera_id: int) -> bool:
@@ -156,7 +159,7 @@ class CameraService:
         camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
         if not camera:
             return False
-        
+
         camera.is_active = False
         self.db.commit()
         return True
@@ -171,7 +174,7 @@ class CameraService:
                 rtsp_accessible=False,
                 snapshot_accessible=False
             )
-        
+
         return await self._test_camera_connection_internal(camera)
 
     async def test_camera_connection_direct(self, camera_data: CameraCreate) -> CameraTestResponse:
@@ -183,12 +186,12 @@ class CameraService:
             protocol=camera_data.protocol,
             address=camera_data.address,
             username=camera_data.username,
-            password_enc=base64.b64encode(camera_data.password.encode()).decode() if camera_data.password else None,
+            password_enc=encrypt(camera_data.password) if camera_data.password else None,
             port=camera_data.port,
             stream_path=camera_data.stream_path,
             snapshot_url=camera_data.snapshot_url
         )
-        
+
         return await self._test_camera_connection_internal(camera)
 
     async def _test_camera_connection_internal(self, camera: Camera) -> CameraTestResponse:
@@ -196,7 +199,7 @@ class CameraService:
         rtsp_accessible = False
         snapshot_accessible = False
         error_details = []
-        
+
         # Test RTSP connection
         try:
             rtsp_url = self._build_rtsp_url(camera)
@@ -205,7 +208,7 @@ class CameraService:
                 error_details.append("RTSP stream not accessible")
         except Exception as e:
             error_details.append(f"RTSP test error: {str(e)}")
-        
+
         # Test snapshot URL
         if camera.snapshot_url:
             try:
@@ -214,15 +217,15 @@ class CameraService:
                     error_details.append("Snapshot URL not accessible")
             except Exception as e:
                 error_details.append(f"Snapshot test error: {str(e)}")
-        
+
         success = rtsp_accessible and (snapshot_accessible or not camera.snapshot_url)
-        
+
         # Update last_seen timestamp if test successful and camera has an ID (saved in DB)
         if success and hasattr(camera, 'id') and camera.id:
-            camera.last_seen = datetime.utcnow()
+            camera.last_seen = datetime.now(timezone.utc)
             self.db.commit()
-            print(f"DEBUG: Updated last_seen for camera {camera.id} ({camera.name})")
-        
+            logger.debug("Updated last_seen for camera %d (%s)", camera.id, camera.name)
+
         return CameraTestResponse(
             success=success,
             message="Camera test completed",
@@ -233,7 +236,7 @@ class CameraService:
 
     async def _test_rtsp_connection(self, rtsp_url: str) -> bool:
         """Test RTSP connection using FFmpeg"""
-        print(f"DEBUG: Testing RTSP URL with FFmpeg: {rtsp_url}")
+        logger.debug("Testing RTSP URL with FFmpeg: %s", redact_url(rtsp_url))
         try:
             # Use FFmpeg to test the stream with a 10-second timeout (cameras need time to respond)
             cmd = [
@@ -256,18 +259,18 @@ class CameraService:
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15.0)
                 result = process.returncode == 0
-                print(f"DEBUG: FFmpeg test result - return code: {process.returncode}")
+                logger.debug("FFmpeg test result - return code: %d", process.returncode)
                 if stderr:
                     stderr_str = stderr.decode()
-                    print(f"DEBUG: FFmpeg stderr: {stderr_str[:500]}...")
+                    logger.debug("FFmpeg stderr: %s", stderr_str[:500])
                 return result
             except asyncio.TimeoutError:
-                print("DEBUG: FFmpeg test timed out after 15 seconds")
+                logger.warning("FFmpeg test timed out after 15 seconds")
                 process.kill()
                 return False
-                
+
         except Exception as e:
-            print(f"DEBUG: FFmpeg test exception: {str(e)}")
+            logger.error("FFmpeg test exception: %s", str(e))
             return False
 
     async def _test_snapshot_url(self, snapshot_url: str, username: str, password_enc: str, camera_name: str = "") -> bool:
@@ -276,12 +279,12 @@ class CameraService:
             # Decode password if encrypted
             password = None
             if password_enc:
-                password = base64.b64decode(password_enc).decode()
-            
+                password = decrypt(password_enc)
+
             # Parse URL and strip embedded credentials if present (always use provided username/password)
             parsed_url = urlparse(snapshot_url)
             has_credentials_in_url = '@' in parsed_url.netloc
-            
+
             # Build clean URL without embedded credentials (always strip them)
             if has_credentials_in_url:
                 clean_netloc = parsed_url.netloc.split('@')[-1]
@@ -293,61 +296,60 @@ class CameraService:
                     parsed_url.query,
                     parsed_url.fragment
                 ))
-                print(f"DEBUG: Stripped embedded credentials from snapshot URL for testing")
+                logger.debug("Stripped embedded credentials from snapshot URL for testing")
             else:
                 clean_url = snapshot_url
-            
+
             # Always use provided username/password (never use embedded credentials from URL)
             # Try multiple auth methods for ALL cameras (Digest first, then Basic, then embedded creds)
             if username and password:
-                print(f"DEBUG: Testing snapshot with provided credentials")
-                
-                # Try 1: Digest auth (preferred for IP cameras like Reolink)
-                try:
-                    auth = HTTPDigestAuth(username, password)
-                    response = requests.get(clean_url, auth=auth, timeout=10)
-                    if response.status_code == 200:
-                        print(f"DEBUG: Snapshot accessible with Digest auth")
-                        return True
-                except Exception as e:
-                    print(f"DEBUG: Digest auth test failed: {e}")
-                
-                # Try 2: Basic auth
-                try:
-                    from requests.auth import HTTPBasicAuth
-                    auth = HTTPBasicAuth(username, password)
-                    response = requests.get(clean_url, auth=auth, timeout=10)
-                    if response.status_code == 200:
-                        print(f"DEBUG: Snapshot accessible with Basic auth")
-                        return True
-                except Exception as e:
-                    print(f"DEBUG: Basic auth test failed: {e}")
-                
-                # Try 3: URL with embedded credentials
-                try:
-                    parsed_url = urlparse(clean_url)
-                    if parsed_url.scheme in ['http', 'https']:
-                        encoded_username = quote(username, safe='')
-                        encoded_password = quote(password, safe='')
-                        snapshot_url = f"{parsed_url.scheme}://{encoded_username}:{encoded_password}@{parsed_url.netloc}{parsed_url.path}{'?' + parsed_url.query if parsed_url.query else ''}"
-                        response = requests.get(snapshot_url, timeout=10)
+                logger.debug("Testing snapshot with provided credentials")
+
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    # Try 1: Digest auth (preferred for IP cameras like Reolink)
+                    try:
+                        response = await client.get(clean_url, auth=DigestAuth(username, password))
                         if response.status_code == 200:
-                            print(f"DEBUG: Snapshot accessible with embedded credentials")
+                            logger.debug("Snapshot accessible with Digest auth")
                             return True
-                except Exception as e:
-                    print(f"DEBUG: Embedded credentials test failed: {e}")
-                
+                    except Exception as e:
+                        logger.debug("Digest auth test failed: %s", e)
+
+                    # Try 2: Basic auth
+                    try:
+                        response = await client.get(clean_url, auth=BasicAuth(username, password))
+                        if response.status_code == 200:
+                            logger.debug("Snapshot accessible with Basic auth")
+                            return True
+                    except Exception as e:
+                        logger.debug("Basic auth test failed: %s", e)
+
+                    # Try 3: URL with embedded credentials
+                    try:
+                        parsed_url = urlparse(clean_url)
+                        if parsed_url.scheme in ['http', 'https']:
+                            encoded_username = quote(username, safe='')
+                            encoded_password = quote(password, safe='')
+                            cred_url = f"{parsed_url.scheme}://{encoded_username}:{encoded_password}@{parsed_url.netloc}{parsed_url.path}{'?' + parsed_url.query if parsed_url.query else ''}"
+                            response = await client.get(cred_url)
+                            if response.status_code == 200:
+                                logger.debug("Snapshot accessible with embedded credentials")
+                                return True
+                    except Exception as e:
+                        logger.debug("Embedded credentials test failed: %s", e)
+
                 return False
-            
+
             # No credentials - try without auth
             try:
-                response = requests.get(clean_url, timeout=10)
-                return response.status_code == 200
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(clean_url)
+                    return response.status_code == 200
             except Exception as e:
-                print(f"DEBUG: No-auth test failed: {e}")
+                logger.debug("No-auth test failed: %s", e)
                 return False
         except Exception as e:
-            print(f"DEBUG: Snapshot test exception: {e}")
+            logger.error("Snapshot test exception: %s", e)
             return False
 
     def _build_rtsp_url(self, camera: Camera) -> str:
@@ -355,12 +357,12 @@ class CameraService:
         # Decode password if encrypted
         password = None
         if camera.password_enc:
-            password = base64.b64decode(camera.password_enc).decode()
-        
-        print(f"DEBUG: Building RTSP URL for {camera.name}")
-        print(f"DEBUG: Username: {camera.username}, Password available: {password is not None}")
-        print(f"DEBUG: Address: {camera.address}, Port: {camera.port}, Path: {camera.stream_path}")
-        
+            password = decrypt(camera.password_enc)
+
+        logger.debug("Building RTSP URL for %s", camera.name)
+        logger.debug("Username: %s, Password available: %s", camera.username, password is not None)
+        logger.debug("Address: %s, Port: %s, Path: %s", camera.address, camera.port, camera.stream_path)
+
         # Build URL (URL-encode credentials to handle special characters like !, @, #)
         if camera.username and password:
             encoded_username = quote(camera.username, safe='')
@@ -368,21 +370,21 @@ class CameraService:
             url = f"rtsp://{encoded_username}:{encoded_password}@{camera.address}:{camera.port}{camera.stream_path}"
         else:
             url = f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
-        
-        print(f"DEBUG: Final RTSP URL: {url}")
+
+        logger.debug("Final RTSP URL: %s", redact_url(url))
         return url
 
     async def _check_camera_status(self, camera: Camera) -> dict:
         """Check camera status (online/offline/error) - optimized for speed"""
         try:
             # Use cached status if camera was seen recently (within 5 minutes)
-            if camera.last_seen and (datetime.utcnow() - camera.last_seen).total_seconds() < 300:
+            if camera.last_seen and (datetime.now(timezone.utc) - camera.last_seen).total_seconds() < 300:
                 return {"status": "online"}
 
             probe_success, probe_error = await self._quick_probe_camera(camera)
 
             if probe_success:
-                camera.last_seen = datetime.utcnow()
+                camera.last_seen = datetime.now(timezone.utc)
                 self.db.commit()
                 return {"status": "online"}
 
@@ -399,14 +401,14 @@ class CameraService:
         password = None
         if camera.password_enc:
             try:
-                password = base64.b64decode(camera.password_enc).decode()
+                password = decrypt(camera.password_enc)
             except Exception as exc:
                 return False, f"Failed to decode camera credentials: {exc}"
 
         # Parse URL and strip embedded credentials if present (always use camera username/password fields)
         parsed_url = urlparse(camera.snapshot_url)
         has_credentials_in_url = '@' in parsed_url.netloc
-        
+
         # Build clean URL without embedded credentials (always strip them)
         if has_credentials_in_url:
             clean_netloc = parsed_url.netloc.split('@')[-1]
@@ -418,7 +420,7 @@ class CameraService:
                 parsed_url.query,
                 parsed_url.fragment
             ))
-            print(f"DEBUG: Stripped embedded credentials from snapshot URL for probe")
+            logger.debug("Stripped embedded credentials from snapshot URL for probe")
         else:
             probe_url = camera.snapshot_url
 
@@ -427,51 +429,48 @@ class CameraService:
         if camera.username and password:
             # Try 1: Digest auth (preferred for IP cameras like Reolink)
             try:
-                auth = HTTPDigestAuth(camera.username, password)
-                response = requests.head(probe_url, auth=auth, timeout=3)
-                if response.status_code < 400:
-                    print(f"DEBUG: Snapshot probe succeeded with Digest auth")
-                    return True, None
-                if response.status_code == 405:
-                    # Try GET instead of HEAD
-                    response = requests.get(probe_url, auth=auth, timeout=3, stream=True)
-                    response.close()
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    response = await client.head(probe_url, auth=DigestAuth(camera.username, password))
                     if response.status_code < 400:
-                        print(f"DEBUG: Snapshot probe succeeded with Digest auth (GET)")
+                        logger.debug("Snapshot probe succeeded with Digest auth")
                         return True, None
+                    if response.status_code == 405:
+                        # Try GET instead of HEAD
+                        response = await client.get(probe_url, auth=DigestAuth(camera.username, password))
+                        if response.status_code < 400:
+                            logger.debug("Snapshot probe succeeded with Digest auth (GET)")
+                            return True, None
             except Exception as e:
-                print(f"DEBUG: Digest auth probe failed: {e}")
-            
+                logger.debug("Digest auth probe failed: %s", e)
+
             # Try 2: Basic auth
             try:
-                from requests.auth import HTTPBasicAuth
-                auth = HTTPBasicAuth(camera.username, password)
-                response = requests.head(probe_url, auth=auth, timeout=3)
-                if response.status_code < 400:
-                    print(f"DEBUG: Snapshot probe succeeded with Basic auth")
-                    return True, None
-                if response.status_code == 405:
-                    response = requests.get(probe_url, auth=auth, timeout=3, stream=True)
-                    response.close()
+                async with httpx.AsyncClient(timeout=3.0) as client:
+                    response = await client.head(probe_url, auth=BasicAuth(camera.username, password))
                     if response.status_code < 400:
-                        print(f"DEBUG: Snapshot probe succeeded with Basic auth (GET)")
+                        logger.debug("Snapshot probe succeeded with Basic auth")
                         return True, None
+                    if response.status_code == 405:
+                        response = await client.get(probe_url, auth=BasicAuth(camera.username, password))
+                        if response.status_code < 400:
+                            logger.debug("Snapshot probe succeeded with Basic auth (GET)")
+                            return True, None
             except Exception as e:
-                print(f"DEBUG: Basic auth probe failed: {e}")
-            
+                logger.debug("Basic auth probe failed: %s", e)
+
             return False, "Snapshot probe unauthorized (tried Digest and Basic auth)"
-        
+
         # No credentials - try without auth
         try:
-            response = requests.head(probe_url, timeout=3)
-            if response.status_code < 400:
-                return True, None
-            if response.status_code == 405:
-                response = requests.get(probe_url, timeout=3, stream=True)
-                response.close()
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.head(probe_url)
                 if response.status_code < 400:
                     return True, None
-            return False, f"Snapshot probe returned status {response.status_code}"
+                if response.status_code == 405:
+                    response = await client.get(probe_url)
+                    if response.status_code < 400:
+                        return True, None
+                return False, f"Snapshot probe returned status {response.status_code}"
         except Exception as exc:
             return False, str(exc)
 
@@ -480,17 +479,17 @@ class CameraService:
         camera = self.db.query(Camera).filter(Camera.id == camera_id).first()
         if not camera or not camera.snapshot_url:
             return None
-        
+
         try:
             # Decode password if encrypted
             password = None
             if camera.password_enc:
-                password = base64.b64decode(camera.password_enc).decode()
-            
+                password = decrypt(camera.password_enc)
+
             # Parse URL and strip embedded credentials if present (always use camera username/password fields)
             parsed_url = urlparse(camera.snapshot_url)
             has_credentials_in_url = '@' in parsed_url.netloc
-            
+
             # Build clean URL without embedded credentials (always strip them)
             if has_credentials_in_url:
                 clean_netloc = parsed_url.netloc.split('@')[-1]
@@ -502,97 +501,96 @@ class CameraService:
                     parsed_url.query,
                     parsed_url.fragment
                 ))
-                print(f"DEBUG: Stripped embedded credentials from snapshot URL")
+                logger.debug("Stripped embedded credentials from snapshot URL")
             else:
                 clean_url = camera.snapshot_url
-            
+
             # Always use camera username/password fields (never use embedded credentials from URL)
             # Try multiple auth methods: Digest first (used by Reolink and many IP cameras), then Basic
             if camera.username and password:
-                # Try 1: Digest auth (preferred for IP cameras like Reolink)
-                print(f"DEBUG: Trying Digest auth for snapshot")
-                try:
-                    auth = HTTPDigestAuth(camera.username, password)
-                    response = requests.get(clean_url, auth=auth, timeout=10)
-                    
-                    if response.status_code == 200:
-                        content_type = response.headers.get("content-type", "")
-                        print(f"DEBUG: Snapshot with Digest auth - content-type: {content_type}")
-                        
-                        if content_type.startswith("image/"):
-                            image_data = base64.b64encode(response.content).decode()
-                            return {
-                                "image_data": image_data,
-                                "content_type": content_type,
-                                "timestamp": datetime.utcnow().isoformat()
-                            }
-                except Exception as e:
-                    print(f"DEBUG: Digest auth failed: {e}")
-                
-                # Try 2: Basic auth
-                print(f"DEBUG: Trying Basic auth for snapshot")
-                try:
-                    from requests.auth import HTTPBasicAuth
-                    auth = HTTPBasicAuth(camera.username, password)
-                    response = requests.get(clean_url, auth=auth, timeout=10)
-                    
-                    if response.status_code == 200:
-                        content_type = response.headers.get("content-type", "")
-                        print(f"DEBUG: Snapshot with Basic auth - content-type: {content_type}")
-                        
-                        if content_type.startswith("image/"):
-                            image_data = base64.b64encode(response.content).decode()
-                            return {
-                                "image_data": image_data,
-                                "content_type": content_type,
-                                "timestamp": datetime.utcnow().isoformat()
-                            }
-                except Exception as e:
-                    print(f"DEBUG: Basic auth failed: {e}")
-                
-                # Try 3: URL with embedded credentials
-                print(f"DEBUG: Trying URL with embedded credentials for snapshot")
-                try:
-                    parsed_url = urlparse(clean_url)
-                    if parsed_url.scheme in ['http', 'https']:
-                        encoded_username = quote(camera.username, safe='')
-                        encoded_password = quote(password, safe='')
-                        snapshot_url = f"{parsed_url.scheme}://{encoded_username}:{encoded_password}@{parsed_url.netloc}{parsed_url.path}{'?' + parsed_url.query if parsed_url.query else ''}"
-                        response = requests.get(snapshot_url, timeout=10)
-                        
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    # Try 1: Digest auth (preferred for IP cameras like Reolink)
+                    logger.debug("Trying Digest auth for snapshot")
+                    try:
+                        response = await client.get(clean_url, auth=DigestAuth(camera.username, password))
+
                         if response.status_code == 200:
                             content_type = response.headers.get("content-type", "")
-                            print(f"DEBUG: Snapshot with embedded creds - content-type: {content_type}")
-                            
+                            logger.debug("Snapshot with Digest auth - content-type: %s", content_type)
+
                             if content_type.startswith("image/"):
                                 image_data = base64.b64encode(response.content).decode()
                                 return {
                                     "image_data": image_data,
                                     "content_type": content_type,
-                                    "timestamp": datetime.utcnow().isoformat()
+                                    "timestamp": datetime.now(timezone.utc).isoformat()
                                 }
-                except Exception as e:
-                    print(f"DEBUG: Embedded credentials failed: {e}")
-                
-                print(f"DEBUG: All HTTP auth methods failed for snapshot, trying FFmpeg RTSP fallback")
+                    except Exception as e:
+                        logger.debug("Digest auth failed: %s", e)
+
+                    # Try 2: Basic auth
+                    logger.debug("Trying Basic auth for snapshot")
+                    try:
+                        response = await client.get(clean_url, auth=BasicAuth(camera.username, password))
+
+                        if response.status_code == 200:
+                            content_type = response.headers.get("content-type", "")
+                            logger.debug("Snapshot with Basic auth - content-type: %s", content_type)
+
+                            if content_type.startswith("image/"):
+                                image_data = base64.b64encode(response.content).decode()
+                                return {
+                                    "image_data": image_data,
+                                    "content_type": content_type,
+                                    "timestamp": datetime.now(timezone.utc).isoformat()
+                                }
+                    except Exception as e:
+                        logger.debug("Basic auth failed: %s", e)
+
+                    # Try 3: URL with embedded credentials
+                    logger.debug("Trying URL with embedded credentials for snapshot")
+                    try:
+                        parsed_url = urlparse(clean_url)
+                        if parsed_url.scheme in ['http', 'https']:
+                            encoded_username = quote(camera.username, safe='')
+                            encoded_password = quote(password, safe='')
+                            cred_url = f"{parsed_url.scheme}://{encoded_username}:{encoded_password}@{parsed_url.netloc}{parsed_url.path}{'?' + parsed_url.query if parsed_url.query else ''}"
+                            response = await client.get(cred_url)
+
+                            if response.status_code == 200:
+                                content_type = response.headers.get("content-type", "")
+                                logger.debug("Snapshot with embedded creds - content-type: %s", content_type)
+
+                                if content_type.startswith("image/"):
+                                    image_data = base64.b64encode(response.content).decode()
+                                    return {
+                                        "image_data": image_data,
+                                        "content_type": content_type,
+                                        "timestamp": datetime.now(timezone.utc).isoformat()
+                                    }
+                    except Exception as e:
+                        logger.debug("Embedded credentials failed: %s", e)
+
+                logger.debug("All HTTP auth methods failed for snapshot, trying FFmpeg RTSP fallback")
                 return await self._ffmpeg_snapshot(camera)
-            
+
             # No credentials - try without auth
-            print(f"DEBUG: No credentials, trying snapshot without auth")
-            response = requests.get(clean_url, timeout=10)
-            if response.status_code == 200:
-                content_type = response.headers.get("content-type", "")
-                if content_type.startswith("image/"):
-                    image_data = base64.b64encode(response.content).decode()
-                    return {
-                        "image_data": image_data,
-                        "content_type": content_type,
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
+            logger.debug("No credentials, trying snapshot without auth")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(clean_url)
+                if response.status_code == 200:
+                    content_type = response.headers.get("content-type", "")
+                    if content_type.startswith("image/"):
+                        image_data = base64.b64encode(response.content).decode()
+                        return {
+                            "image_data": image_data,
+                            "content_type": content_type,
+                            "timestamp": datetime.now(timezone.utc).isoformat()
+                        }
             return None
         except Exception as e:
-            print(f"Error getting snapshot: {e}")
-        
+            logger.error("Error getting snapshot: %s", e)
+
         return None
 
     async def _ffmpeg_snapshot(self, camera) -> Optional[dict]:
@@ -610,14 +608,14 @@ class CameraService:
                 with open(tmp_path, "rb") as f:
                     image_data = base64.b64encode(f.read()).decode()
                 os.remove(tmp_path)
-                print(f"DEBUG: FFmpeg RTSP snapshot succeeded for {camera.name}")
+                logger.info("FFmpeg RTSP snapshot succeeded for %s", camera.name)
                 return {
                     "image_data": image_data,
                     "content_type": "image/jpeg",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
         except Exception as e:
-            print(f"DEBUG: FFmpeg snapshot failed: {e}")
+            logger.error("FFmpeg snapshot failed: %s", e)
         return None
 
     async def create_preset(self, preset_data: PresetCreate) -> Preset:
@@ -629,11 +627,11 @@ class CameraService:
             tilt=preset_data.tilt,
             zoom=preset_data.zoom
         )
-        
+
         self.db.add(preset)
         self.db.commit()
         self.db.refresh(preset)
-        
+
         return preset
 
     async def get_camera_presets(self, camera_id: int) -> List[Preset]:
@@ -647,10 +645,10 @@ class CameraService:
             Preset.id == preset_id,
             Preset.camera_id == camera_id
         ).first()
-        
+
         if not preset:
             return False
-        
+
         # TODO: Implement actual PTZ control via ONVIF
         # For now, just return success
         return True

@@ -5,7 +5,7 @@ Captures camera clips, converts to portrait format, generates AI content, publis
 
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, JSON, DateTime, Text
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from .database import Base
 
 
@@ -58,8 +58,8 @@ class ReelTemplate(Base):
     
     # Status
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     camera = relationship("Camera", foreign_keys=[camera_id])
@@ -114,8 +114,8 @@ class ReelPost(Base):
     published_url = Column(String)  # URL of the published video
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     capture_started_at = Column(DateTime)
     capture_completed_at = Column(DateTime)
     processing_started_at = Column(DateTime)
@@ -150,8 +150,8 @@ class ReelPublishTarget(Base):
     is_active = Column(Boolean, default=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationships
     exports = relationship("ReelExport", back_populates="target")
@@ -181,10 +181,10 @@ class ReelExport(Base):
     hashtags = Column(String)
     
     # Timestamps
-    exported_at = Column(DateTime, default=datetime.utcnow)
+    exported_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     posted_at = Column(DateTime)  # User marks when they posted
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships
     post = relationship("ReelPost", back_populates="exports")
@@ -214,7 +214,7 @@ class ReelCaptureQueue(Base):
     priority = Column(Integer, default=0)  # Higher = more urgent
     
     # Timing
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime)  # Optional expiration
     started_at = Column(DateTime)
     completed_at = Column(DateTime)

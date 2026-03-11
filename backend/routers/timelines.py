@@ -5,13 +5,14 @@ Timeline management API endpoints
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.database import get_db
 from models.timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecution
 from pydantic import BaseModel
+from routers.auth import get_current_user
 
-router = APIRouter(prefix="/api/timelines", tags=["timelines"])
+router = APIRouter(prefix="/api/timelines", tags=["timelines"], dependencies=[Depends(get_current_user)])
 
 
 # Pydantic schemas
@@ -228,7 +229,7 @@ def update_timeline(timeline_id: int, timeline_data: TimelineUpdate, db: Session
                     )
                     db.add(cue)
         
-        timeline.updated_at = datetime.utcnow()
+        timeline.updated_at = datetime.now(timezone.utc)
         
         db.commit()
         db.refresh(timeline)
