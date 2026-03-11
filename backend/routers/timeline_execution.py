@@ -52,9 +52,12 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     if not destinations:
         raise HTTPException(status_code=404, detail="No valid destinations found")
 
-    # Auto-create YouTube broadcasts for OAuth destinations
+    # Auto-create YouTube broadcasts for OAuth destinations (skip if broadcast already exists)
     for dest in destinations:
         if dest.platform == "youtube_oauth" and dest.youtube_oauth_connected and dest.youtube_oauth_refresh_token_enc:
+            if dest.youtube_broadcast_id and dest.stream_key and dest.rtmp_url:
+                logger.info("Reusing existing broadcast %s for destination %s", dest.youtube_broadcast_id, dest.name)
+                continue
             try:
                 from services.youtube_destination_service import get_credentials, create_broadcast
                 from utils.crypto import decrypt
@@ -68,7 +71,7 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
                 result = create_broadcast(
                     credentials=credentials,
                     title=f"{timeline.name} - Live",
-                    description=f"Live stream from VistterStream",
+                    description="Live stream from VistterStream",
                     privacy_status="public",
                     create_stream=True,
                 )
