@@ -361,9 +361,11 @@ class CameraService:
         print(f"DEBUG: Username: {camera.username}, Password available: {password is not None}")
         print(f"DEBUG: Address: {camera.address}, Port: {camera.port}, Path: {camera.stream_path}")
         
-        # Build URL
+        # Build URL (URL-encode credentials to handle special characters like !, @, #)
         if camera.username and password:
-            url = f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
+            encoded_username = quote(camera.username, safe='')
+            encoded_password = quote(password, safe='')
+            url = f"rtsp://{encoded_username}:{encoded_password}@{camera.address}:{camera.port}{camera.stream_path}"
         else:
             url = f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
         
