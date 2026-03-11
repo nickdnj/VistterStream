@@ -80,6 +80,7 @@ const OverlayItem: React.FC<OverlayItemProps> = ({
         onSelect();
         handleDragStart(e);
       }}
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Image or placeholder */}
       {imageUrl ? (
