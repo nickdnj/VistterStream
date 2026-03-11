@@ -6,6 +6,7 @@ streaming destinations. Reuses OAuth patterns from youtube_shorts_service.py.
 """
 
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Tuple
 
 from google.oauth2.credentials import Credentials
@@ -155,7 +156,7 @@ def create_broadcast(
         "snippet": {
             "title": title,
             "description": description,
-            "scheduledStartTime": "1970-01-01T00:00:00Z",  # start immediately
+            "scheduledStartTime": (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat(),
         },
         "status": {
             "privacyStatus": privacy_status,
