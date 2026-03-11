@@ -483,10 +483,11 @@ class FFmpegProcessManager:
                 overlay_input = f"[{idx+1}:v]"
                 if width or height:
                     # Build scale filter (width:height, -1 means maintain aspect ratio)
+                    # force_original_aspect_ratio=decrease matches frontend object-contain
                     w = width if width else -1
                     h = height if height else -1
                     scaled_label = f"scaled{idx}"
-                    filter_parts.append(f"{overlay_input}scale={w}:{h}[{scaled_label}]")
+                    filter_parts.append(f"{overlay_input}scale={w}:{h}:force_original_aspect_ratio=decrease[{scaled_label}]")
                     overlay_input = f"[{scaled_label}]"
                 
                 # Overlay filter with positioning
