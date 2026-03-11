@@ -51,10 +51,43 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     
     if not destinations:
         raise HTTPException(status_code=404, detail="No valid destinations found")
-    
+
+    # Auto-create YouTube broadcasts for OAuth destinations
+    for dest in destinations:
+        if dest.platform == "youtube_oauth" and dest.youtube_oauth_connected and dest.youtube_oauth_refresh_token_enc:
+            try:
+                from services.youtube_destination_service import get_credentials, create_broadcast
+                from utils.crypto import decrypt
+                client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
+                refresh_token = decrypt(dest.youtube_oauth_refresh_token_enc)
+                credentials = get_credentials(
+                    client_id=dest.youtube_oauth_client_id,
+                    client_secret=client_secret,
+                    refresh_token=refresh_token,
+                )
+                result = create_broadcast(
+                    credentials=credentials,
+                    title=f"{timeline.name} - Live",
+                    description=f"Live stream from VistterStream",
+                    privacy_status="public",
+                    create_stream=True,
+                )
+                dest.youtube_broadcast_id = result.get("broadcast_id")
+                dest.youtube_stream_id = result.get("stream_id")
+                if result.get("stream_key"):
+                    dest.stream_key = result["stream_key"]
+                if result.get("rtmp_url"):
+                    dest.rtmp_url = result["rtmp_url"]
+                if result.get("watch_url"):
+                    dest.youtube_watch_url = result["watch_url"]
+                logger.info("Auto-created YouTube broadcast %s for destination %s", result.get("broadcast_id"), dest.name)
+            except Exception as e:
+                logger.error("Failed to auto-create broadcast for %s: %s", dest.name, e)
+                raise HTTPException(status_code=500, detail=f"Failed to create YouTube broadcast for {dest.name}: {e}")
+
     output_urls = [dest.get_full_rtmp_url() for dest in destinations]
     destination_names = [dest.name for dest in destinations]
-    
+
     # Mark destinations as used
     for dest in destinations:
         dest.last_used = datetime.now(timezone.utc)
