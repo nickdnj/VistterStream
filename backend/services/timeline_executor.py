@@ -548,17 +548,18 @@ class TimelineExecutor:
                 cue_width = params.get('width', asset.width)
                 cue_height = params.get('height', asset.height)
 
-                # Calculate pixel positions from normalized coordinates (0-1 range)
+                # Pass normalized 0-1 coordinates; FFmpeg manager converts to
+                # pixels using its actual output resolution (which may differ
+                # from the timeline's declared resolution).
                 res_parts = timeline.resolution.split('x') if timeline.resolution else ['1920', '1080']
-                res_w = int(res_parts[0]) if len(res_parts) == 2 else 1920
-                res_h = int(res_parts[1]) if len(res_parts) == 2 else 1080
-                x_pixels = int(pos_x * res_w)
-                y_pixels = int(pos_y * res_h)
+                src_w = int(res_parts[0]) if len(res_parts) == 2 else 1920
+                src_h = int(res_parts[1]) if len(res_parts) == 2 else 1080
 
                 timed_overlay = {
                     'path': image_path,
-                    'x': x_pixels,
-                    'y': y_pixels,
+                    'norm_x': pos_x,
+                    'norm_y': pos_y,
+                    'source_resolution': (src_w, src_h),
                     'opacity': cue_opacity,
                     'start_time': float(cue.start_time),
                     'end_time': float(cue.start_time + cue.duration),
@@ -576,7 +577,7 @@ class TimelineExecutor:
                 
                 logger.info(
                     f"  🖼️  {asset.name}: t={cue.start_time:.1f}s-{cue.start_time + cue.duration:.1f}s "
-                    f"at ({x_pixels}, {y_pixels})"
+                    f"at norm({pos_x:.3f}, {pos_y:.3f})"
                 )
         
         logger.info(f"🎨 Pre-fetched {len(timed_overlays)} overlay(s) for timeline")

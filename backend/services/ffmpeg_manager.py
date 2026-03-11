@@ -458,12 +458,27 @@ class FFmpegProcessManager:
             current_label = "base"
             for idx, overlay in enumerate(overlays_to_add):
                 next_label = f"tmp{idx}" if idx < len(overlays_to_add) - 1 else "out"
-                x = int(overlay.get('x', 0))
-                y = int(overlay.get('y', 0))
+                # Prefer normalized 0-1 coords (converted to output resolution pixels)
+                if 'norm_x' in overlay:
+                    x = int(overlay['norm_x'] * profile.resolution[0])
+                    y = int(overlay['norm_y'] * profile.resolution[1])
+                else:
+                    x = int(overlay.get('x', 0))
+                    y = int(overlay.get('y', 0))
                 opacity = overlay.get('opacity', 1.0)
                 width = overlay.get('width')
                 height = overlay.get('height')
-                
+
+                # Scale dimensions from source (timeline) resolution to output resolution
+                src_res = overlay.get('source_resolution')
+                if src_res and (width or height):
+                    scale_w = profile.resolution[0] / src_res[0]
+                    scale_h = profile.resolution[1] / src_res[1]
+                    if width:
+                        width = int(width * scale_w)
+                    if height:
+                        height = int(height * scale_h)
+
                 # Scale overlay if dimensions specified
                 overlay_input = f"[{idx+1}:v]"
                 if width or height:
