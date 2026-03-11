@@ -574,8 +574,8 @@ class CameraService:
                 except Exception as e:
                     print(f"DEBUG: Embedded credentials failed: {e}")
                 
-                print(f"DEBUG: All auth methods failed for snapshot")
-                return None
+                print(f"DEBUG: All HTTP auth methods failed for snapshot, trying FFmpeg RTSP fallback")
+                return await self._ffmpeg_snapshot(camera)
             
             # No credentials - try without auth
             print(f"DEBUG: No credentials, trying snapshot without auth")
@@ -593,6 +593,31 @@ class CameraService:
         except Exception as e:
             print(f"Error getting snapshot: {e}")
         
+        return None
+
+    async def _ffmpeg_snapshot(self, camera) -> Optional[dict]:
+        """Grab a single frame from the camera's RTSP stream using FFmpeg"""
+        import subprocess, tempfile, os
+        rtsp_url = self._build_rtsp_url(camera)
+        tmp_path = f"/tmp/snapshot_{camera.id}.jpg"
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-rtsp_transport", "tcp",
+                 "-i", rtsp_url, "-frames:v", "1", "-f", "image2", tmp_path],
+                capture_output=True, timeout=15
+            )
+            if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+                with open(tmp_path, "rb") as f:
+                    image_data = base64.b64encode(f.read()).decode()
+                os.remove(tmp_path)
+                print(f"DEBUG: FFmpeg RTSP snapshot succeeded for {camera.name}")
+                return {
+                    "image_data": image_data,
+                    "content_type": "image/jpeg",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+        except Exception as e:
+            print(f"DEBUG: FFmpeg snapshot failed: {e}")
         return None
 
     async def create_preset(self, preset_data: PresetCreate) -> Preset:
