@@ -43,6 +43,7 @@ class StreamingDestination(Base):
     youtube_oauth_connected = Column(Boolean, default=False)
     youtube_oauth_channel_name = Column(String, nullable=True)
     youtube_oauth_token_expires_at = Column(DateTime, nullable=True)
+    youtube_oauth_code_verifier = Column(String, nullable=True)  # temporary, used during OAuth flow
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

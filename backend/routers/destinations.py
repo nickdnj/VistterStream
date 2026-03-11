@@ -275,13 +275,17 @@ def youtube_oauth_start(destination_id: int, body: OAuthStartRequest, db: Sessio
 
     client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
 
-    auth_url = get_oauth_url(
+    auth_url, code_verifier = get_oauth_url(
         client_id=dest.youtube_oauth_client_id,
         client_secret=client_secret,
         redirect_uri=dest.youtube_oauth_redirect_uri,
         state=str(dest.id),
         prompt_consent=body.prompt_consent,
     )
+
+    # Store code_verifier for the callback to use (PKCE)
+    dest.youtube_oauth_code_verifier = code_verifier
+    db.commit()
 
     return {"authorization_url": auth_url}
 
@@ -398,12 +402,14 @@ def youtube_oauth_callback(
             client_id=dest.youtube_oauth_client_id,
             client_secret=client_secret,
             redirect_uri=dest.youtube_oauth_redirect_uri or "",
+            code_verifier=dest.youtube_oauth_code_verifier,
         )
 
         # Store encrypted refresh token and mark as connected
         dest.youtube_oauth_refresh_token_enc = encrypt(result["refresh_token"])
         dest.youtube_oauth_connected = True
         dest.youtube_oauth_channel_name = result["channel_name"]
+        dest.youtube_oauth_code_verifier = None  # clear temporary value
         dest.updated_at = datetime.now(timezone.utc)
         db.commit()
 

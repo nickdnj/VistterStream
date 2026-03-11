@@ -55,6 +55,7 @@ def ensure_streaming_destination_oauth_columns() -> None:
         ("youtube_oauth_connected", "BOOLEAN DEFAULT 0"),
         ("youtube_oauth_channel_name", "TEXT"),
         ("youtube_oauth_token_expires_at", "DATETIME"),
+        ("youtube_oauth_code_verifier", "TEXT"),
     ]
 
     try:

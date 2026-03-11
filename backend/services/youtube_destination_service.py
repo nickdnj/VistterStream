@@ -6,7 +6,7 @@ streaming destinations. Reuses OAuth patterns from youtube_shorts_service.py.
 """
 
 import logging
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -47,7 +47,7 @@ def get_oauth_url(
     redirect_uri: str,
     state: str = "",
     prompt_consent: bool = True,
-) -> str:
+) -> Tuple[str, Optional[str]]:
     """
     Generate an OAuth authorization URL for YouTube.
 
@@ -76,7 +76,7 @@ def get_oauth_url(
         kwargs["prompt"] = "consent"
 
     auth_url, _ = flow.authorization_url(**kwargs)
-    return auth_url
+    return auth_url, getattr(flow, "code_verifier", None)
 
 
 def exchange_code(
@@ -84,6 +84,7 @@ def exchange_code(
     client_id: str,
     client_secret: str,
     redirect_uri: str,
+    code_verifier: Optional[str] = None,
 ) -> Dict:
     """
     Exchange an authorization code for tokens and fetch channel info.
@@ -96,6 +97,8 @@ def exchange_code(
         scopes=YOUTUBE_DESTINATION_SCOPES,
         redirect_uri=redirect_uri,
     )
+    if code_verifier:
+        flow.code_verifier = code_verifier
     flow.fetch_token(code=code)
     credentials = flow.credentials
 
