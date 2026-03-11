@@ -899,6 +899,8 @@ const TimelineEditor: React.FC = () => {
         destination_ids: selectedDestinations
       });
       setIsRunning(true);
+      // Refresh destinations to pick up auto-created broadcast IDs
+      await loadDestinations();
       // Immediately refresh status from backend to avoid drift
       try { await api.get(`/timeline-execution/status/${selectedTimeline.id}`).then(r => setIsRunning(Boolean(r.data?.is_running))); } catch {}
       const destNames = response.data.destinations.join(', ');
@@ -972,13 +974,15 @@ const TimelineEditor: React.FC = () => {
       setIsRunning(true);
       // Update playhead to the jump position
       setPlayheadTime(targetTime);
-      
+      // Refresh destinations to pick up auto-created broadcast IDs
+      await loadDestinations();
+
       // Refresh status from backend
-      try { 
+      try {
         await api.get(`/timeline-execution/status/${selectedTimeline.id}`)
-          .then(r => setIsRunning(Boolean(r.data?.is_running))); 
+          .then(r => setIsRunning(Boolean(r.data?.is_running)));
       } catch {}
-      
+
       console.log(`✅ Jumped to ${formatTime(targetTime)}`);
     } catch (error: any) {
       console.error('Failed to jump to position:', error);
