@@ -540,26 +540,37 @@ class TimelineExecutor:
                 if image_path.startswith('/tmp/') or image_path.startswith(tempfile.gettempdir()):
                     temp_files.append(image_path)
                 
+                # Per-cue overrides from action_params take priority over asset defaults
+                params = cue.action_params or {}
+                pos_x = params.get('position_x', asset.position_x)
+                pos_y = params.get('position_y', asset.position_y)
+                cue_opacity = params.get('opacity', asset.opacity)
+                cue_width = params.get('width', asset.width)
+                cue_height = params.get('height', asset.height)
+
                 # Calculate pixel positions from normalized coordinates (0-1 range)
-                x_pixels = int(asset.position_x * 1920)
-                y_pixels = int(asset.position_y * 1080)
-                
+                res_parts = timeline.resolution.split('x') if timeline.resolution else ['1920', '1080']
+                res_w = int(res_parts[0]) if len(res_parts) == 2 else 1920
+                res_h = int(res_parts[1]) if len(res_parts) == 2 else 1080
+                x_pixels = int(pos_x * res_w)
+                y_pixels = int(pos_y * res_h)
+
                 timed_overlay = {
                     'path': image_path,
                     'x': x_pixels,
                     'y': y_pixels,
-                    'opacity': asset.opacity,
+                    'opacity': cue_opacity,
                     'start_time': float(cue.start_time),
                     'end_time': float(cue.start_time + cue.duration),
                     'asset_id': asset_id,
                     'asset_name': asset.name
                 }
-                
+
                 # Add dimensions if specified
-                if asset.width:
-                    timed_overlay['width'] = asset.width
-                if asset.height:
-                    timed_overlay['height'] = asset.height
+                if cue_width:
+                    timed_overlay['width'] = cue_width
+                if cue_height:
+                    timed_overlay['height'] = cue_height
                 
                 timed_overlays.append(timed_overlay)
                 

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import OverlayPreviewPanel, { CueKey, OverlayPositionUpdate, OverlayInfo } from './timeline/OverlayPreviewPanel';
 
 // UI Version for debugging deployment
 const UI_VERSION = 'v1.0.3-constraints';
@@ -51,6 +52,12 @@ interface Cue {
     preset_id?: number;
     asset_id?: number;
     transition?: string;
+    // Per-cue overlay position overrides (falls back to Asset defaults)
+    position_x?: number;
+    position_y?: number;
+    width?: number;
+    height?: number;
+    opacity?: number;
   };
   transition_type: string;
   transition_duration: number;
@@ -1180,6 +1187,74 @@ const TimelineEditor: React.FC = () => {
     }
   }, [playheadTime, selectedTimeline]);
 
+  // Compute current snapshot URL for overlay preview
+  const currentSnapshotUrl = useMemo(() => {
+    const cues = getCurrentCues();
+    const videoCue = cues.find(c => c.track.track_type === 'video');
+    const camId = videoCue?.cue.action_params.camera_id;
+    return camId ? cameraSnapshots[camId] ?? null : null;
+  }, [selectedTimeline, playheadTime, cameraSnapshots]);
+
+  // Compute overlay info for preview panel
+  const currentOverlays: OverlayInfo[] = useMemo(() => {
+    const cues = getCurrentCues();
+    return cues
+      .filter(c => c.track.track_type === 'overlay' && c.cue.action_params.asset_id)
+      .map(c => {
+        const asset = getAssetById(c.cue.action_params.asset_id!);
+        if (!asset) return null;
+        const cueIndex = c.track.cues.indexOf(c.cue);
+        return {
+          cueKey: { trackIndex: c.trackIndex, cueIndex },
+          asset,
+          position_x: c.cue.action_params.position_x ?? asset.position_x,
+          position_y: c.cue.action_params.position_y ?? asset.position_y,
+          width: c.cue.action_params.width ?? asset.width ?? null,
+          height: c.cue.action_params.height ?? asset.height ?? null,
+          opacity: c.cue.action_params.opacity ?? asset.opacity,
+        } as OverlayInfo;
+      })
+      .filter((o): o is OverlayInfo => o !== null);
+  }, [selectedTimeline, playheadTime, assets]);
+
+  // Update overlay position/size/opacity per-cue
+  const handleOverlayPositionUpdate = (cueKey: CueKey, updates: OverlayPositionUpdate) => {
+    if (!selectedTimeline) return;
+    const updatedTimeline = { ...selectedTimeline };
+    const track = updatedTimeline.tracks[cueKey.trackIndex];
+    if (!track) return;
+    const cue = track.cues[cueKey.cueIndex];
+    if (!cue) return;
+    cue.action_params = { ...cue.action_params, ...updates };
+    setSelectedTimeline({ ...updatedTimeline });
+  };
+
+  // Reset overlay to asset defaults
+  const handleResetOverlay = (cueKey: CueKey) => {
+    if (!selectedTimeline) return;
+    const updatedTimeline = { ...selectedTimeline };
+    const cue = updatedTimeline.tracks[cueKey.trackIndex]?.cues[cueKey.cueIndex];
+    if (!cue) return;
+    const { position_x, position_y, width, height, opacity, ...rest } = cue.action_params;
+    cue.action_params = rest;
+    setSelectedTimeline({ ...updatedTimeline });
+  };
+
+  // Force re-fetch camera snapshot
+  const handleRefreshSnapshot = () => {
+    const cues = getCurrentCues();
+    const videoCue = cues.find(c => c.track.track_type === 'video');
+    const camId = videoCue?.cue.action_params.camera_id;
+    if (camId) {
+      setCameraSnapshots(prev => {
+        const next = { ...prev };
+        delete next[camId];
+        return next;
+      });
+      fetchCameraSnapshot(camId);
+    }
+  };
+
   const getTrackColor = (trackType: string) => {
     switch (trackType) {
       case 'video': return 'bg-blue-600';
@@ -1625,11 +1700,10 @@ const TimelineEditor: React.FC = () => {
                 </div>
               </div>
 
-              {/* YouTube Live Preview */}
-              <div className="bg-dark-800 border-b border-dark-700">
-                <div className="max-w-4xl mx-auto p-4">
-                  {isRunning && hasYoutubeDestination && youtubeVideoId ? (
-                    /* Stream running with valid YouTube broadcast ID - show embed */
+              {/* Preview Panel: YouTube Live embed when streaming, Overlay Editor when idle */}
+              {isRunning && hasYoutubeDestination && youtubeVideoId ? (
+                <div className="bg-dark-800 border-b border-dark-700">
+                  <div className="max-w-4xl mx-auto p-4">
                     <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                       <iframe
                         className="absolute inset-0 w-full h-full rounded-lg"
@@ -1644,35 +1718,18 @@ const TimelineEditor: React.FC = () => {
                         LIVE
                       </div>
                     </div>
-                  ) : (
-                    /* Placeholder states */
-                    <div className="bg-dark-900 rounded-lg p-8 text-center border border-dark-700">
-                      <div className="text-5xl mb-4">
-                        {isRunning ? (hasYoutubeDestination ? '🔗' : '📺') : '▶️'}
-                      </div>
-                      <h3 className="text-lg font-semibold text-white mb-2">
-                        {isRunning 
-                          ? hasYoutubeDestination 
-                            ? 'Broadcast ID Required'
-                            : 'YouTube Preview Unavailable'
-                          : 'Live Preview'}
-                      </h3>
-                      <p className="text-gray-400 text-sm max-w-md mx-auto">
-                        {isRunning 
-                          ? hasYoutubeDestination 
-                            ? 'Add a Broadcast ID to your YouTube destination to enable live preview. Edit the destination in Settings to add the ID.'
-                            : 'YouTube live preview is only available when streaming to a YouTube destination. Select a YouTube destination to enable preview.'
-                          : 'Start the stream to view your YouTube live preview here. The embedded player will show your actual YouTube stream.'}
-                      </p>
-                      {!isRunning && hasYoutubeDestination && youtubeVideoId && (
-                        <p className="text-green-400 text-xs mt-3">
-                          Ready to preview: {selectedYoutubeDestination?.name}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              ) : selectedTimeline ? (
+                <OverlayPreviewPanel
+                  snapshotUrl={currentSnapshotUrl}
+                  overlays={currentOverlays}
+                  resolution={selectedTimeline.resolution}
+                  onOverlayUpdate={handleOverlayPositionUpdate}
+                  onRefreshSnapshot={handleRefreshSnapshot}
+                  onResetOverlay={handleResetOverlay}
+                />
+              ) : null}
 
               {/* Track Controls */}
               <div className="flex items-center justify-between gap-2 px-4 py-1.5 bg-dark-800 border-b border-dark-700">
