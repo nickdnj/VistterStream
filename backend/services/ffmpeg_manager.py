@@ -67,7 +67,7 @@ class EncodingProfile:
         with overlay compositing.
         """
         if hw_capabilities.supports_hardware:
-            # Hardware encoding (Mac, future Pi with HW support)
+            # Hardware encoding (Mac VideoToolbox, Intel QSV/VAAPI, future Pi HW)
             return cls(
                 codec=hw_capabilities.encoder,
                 resolution=(1920, 1080),

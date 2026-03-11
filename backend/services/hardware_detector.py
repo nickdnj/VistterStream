@@ -30,37 +30,40 @@ class HardwareCapabilities:
 class HardwareDetector:
     """
     Detects available hardware encoders and capabilities.
-    
+
     Detection priority:
     1. Raspberry Pi 5 V4L2 (h264_v4l2m2m)
     2. Mac VideoToolbox (h264_videotoolbox)
-    3. Software fallback (libx264)
+    3. Intel Quick Sync / VA-API (h264_qsv or h264_vaapi)
+    4. Software fallback (libx264)
     """
-    
+
     def __init__(self):
         self.capabilities: Optional[HardwareCapabilities] = None
         self._ffmpeg_encoders: List[str] = []
-    
+
     async def detect(self) -> HardwareCapabilities:
         """
         Detect hardware encoder capabilities.
-        
+
         Returns:
             HardwareCapabilities with detected encoder and limits
         """
         logger.info("Detecting hardware acceleration capabilities...")
-        
+
         # Get available FFmpeg encoders
         await self._probe_ffmpeg_encoders()
-        
+
         # Detect platform and hardware
         system = platform.system()
         machine = platform.machine()
-        
+
         if self._is_pi5():
             capabilities = await self._detect_pi5()
         elif system == 'Darwin':  # macOS
             capabilities = await self._detect_mac()
+        elif self._has_intel_gpu():
+            capabilities = await self._detect_intel_qsv()
         else:
             capabilities = self._fallback_software()
         
@@ -135,6 +138,67 @@ class HardwareDetector:
         
         return self._fallback_software()
     
+    def _has_intel_gpu(self) -> bool:
+        """Check if an Intel GPU (DRI render node) is available"""
+        return os.path.exists('/dev/dri/renderD128')
+
+    async def _detect_intel_qsv(self) -> HardwareCapabilities:
+        """Detect Intel Quick Sync / VA-API hardware capabilities"""
+        logger.info("Intel GPU detected (/dev/dri/renderD128)")
+
+        # Prefer QSV over VA-API (better performance on Intel)
+        if 'h264_qsv' in self._ffmpeg_encoders:
+            if await self._test_encoder('h264_qsv'):
+                logger.info("Intel hardware encoder available: h264_qsv")
+                return HardwareCapabilities(
+                    encoder='h264_qsv',
+                    decoder='h264_qsv',
+                    platform='intel',
+                    max_concurrent_streams=5,
+                    supports_hardware=True
+                )
+
+        # Fall back to VA-API
+        if 'h264_vaapi' in self._ffmpeg_encoders:
+            if await self._test_encoder('h264_vaapi', extra_args=[
+                '-vaapi_device', '/dev/dri/renderD128',
+                '-vf', 'format=nv12,hwupload'
+            ]):
+                logger.info("Intel hardware encoder available: h264_vaapi")
+                return HardwareCapabilities(
+                    encoder='h264_vaapi',
+                    decoder='h264',
+                    platform='intel',
+                    max_concurrent_streams=5,
+                    supports_hardware=True
+                )
+
+        logger.warning("Intel GPU present but no working QSV/VAAPI encoder, falling back to software")
+        return self._fallback_software()
+
+    async def _test_encoder(self, encoder: str, extra_args: List[str] = None) -> bool:
+        """Test if a given encoder actually works"""
+        try:
+            cmd = ['ffmpeg', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=320x240:rate=30']
+            if extra_args:
+                cmd.extend(extra_args)
+            cmd.extend(['-c:v', encoder, '-t', '1', '-f', 'null', '-'])
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            try:
+                await asyncio.wait_for(process.wait(), timeout=10.0)
+                return process.returncode == 0
+            except asyncio.TimeoutError:
+                process.kill()
+                return False
+        except Exception as e:
+            logger.debug(f"Encoder test failed for {encoder}: {e}")
+            return False
+
     def _fallback_software(self) -> HardwareCapabilities:
         """Fallback to software encoding"""
         logger.info("Using software encoder: libx264")
@@ -234,7 +298,7 @@ class HardwareDetector:
                 '-num_output_buffers', '32',
                 '-num_capture_buffers', '16'
             ]
-        
+
         elif encoder == 'h264_videotoolbox':
             # Mac VideoToolbox encoder args
             return [
@@ -242,7 +306,23 @@ class HardwareDetector:
                 '-allow_sw', '1',  # Allow software fallback if HW busy
                 '-realtime', '1'
             ]
-        
+
+        elif encoder == 'h264_qsv':
+            # Intel Quick Sync encoder args
+            return [
+                '-c:v', 'h264_qsv',
+                '-preset', 'fast',
+                '-global_quality', '23'
+            ]
+
+        elif encoder == 'h264_vaapi':
+            # Intel VA-API encoder args
+            return [
+                '-vaapi_device', '/dev/dri/renderD128',
+                '-c:v', 'h264_vaapi',
+                '-qp', '23'
+            ]
+
         else:  # libx264 software
             return [
                 '-c:v', 'libx264',

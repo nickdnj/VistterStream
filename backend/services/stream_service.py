@@ -5,6 +5,7 @@ Stream service for managing streaming operations
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
+from urllib.parse import quote
 import base64
 
 from models.database import Stream, Camera
@@ -84,9 +85,12 @@ class StreamService:
         password = None
         if camera.password_enc:
             password = base64.b64decode(camera.password_enc).decode()
-        
+
+        # URL-encode credentials to handle special characters like !, @, #
         if camera.username and password:
-            return f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
+            encoded_username = quote(camera.username, safe='')
+            encoded_password = quote(password, safe='')
+            return f"rtsp://{encoded_username}:{encoded_password}@{camera.address}:{camera.port}{camera.stream_path}"
         else:
             return f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
 
