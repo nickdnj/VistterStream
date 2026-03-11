@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Callable
 from enum import Enum
 import logging
+from utils.time_utils import utcnow
 
 from .hardware_detector import get_hardware_capabilities, HardwareCapabilities
 
@@ -747,7 +748,7 @@ class FFmpegProcessManager:
             
             # Calculate uptime
             if stream_process.started_at:
-                metrics.uptime_seconds = int((datetime.now(timezone.utc) - stream_process.started_at).total_seconds())
+                metrics.uptime_seconds = int((utcnow() - stream_process.started_at).total_seconds())
             
             metrics.last_update = datetime.now(timezone.utc)
             

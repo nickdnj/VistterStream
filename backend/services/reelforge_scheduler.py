@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from models.database import SessionLocal, Settings, ReelForgeSettings
 from models.reelforge import ReelPost, ReelCaptureQueue
 
+from utils.time_utils import utcnow
+
 logger = logging.getLogger(__name__)
 
 
@@ -228,7 +230,7 @@ class ReelForgeScheduler:
                         logger.info(f"🗓️ Recurring schedule triggered for post {post.id}")
                         
                         # Check if already queued in last 5 minutes
-                        five_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
+                        five_mins_ago = utcnow() - timedelta(minutes=5)
                         recent_queue = db.query(ReelCaptureQueue).filter(
                             ReelCaptureQueue.post_id == post.id,
                             ReelCaptureQueue.created_at >= five_mins_ago

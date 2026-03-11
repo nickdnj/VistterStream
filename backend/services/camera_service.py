@@ -16,6 +16,7 @@ from urllib.parse import urlparse, quote, urlunparse, unquote
 from models.database import Camera, Preset
 from utils.crypto import encrypt, decrypt
 from utils.log_utils import redact_url
+from utils.time_utils import utcnow
 from models.schemas import (
     CameraCreate, CameraUpdate, Camera as CameraSchema,
     CameraWithStatus, CameraTestResponse, PresetCreate, Preset
@@ -378,7 +379,7 @@ class CameraService:
         """Check camera status (online/offline/error) - optimized for speed"""
         try:
             # Use cached status if camera was seen recently (within 5 minutes)
-            if camera.last_seen and (datetime.now(timezone.utc) - camera.last_seen).total_seconds() < 300:
+            if camera.last_seen and (utcnow() - camera.last_seen).total_seconds() < 300:
                 return {"status": "online"}
 
             probe_success, probe_error = await self._quick_probe_camera(camera)
