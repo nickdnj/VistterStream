@@ -174,6 +174,7 @@ app.include_router(streams.router, prefix="/api/streams", tags=["streams"])
 app.include_router(presets_router.router)  # PTZ Presets
 app.include_router(assets.router)  # Assets (overlays, graphics, API images)
 app.include_router(status.router, prefix="/api/status", tags=["status"])
+app.include_router(destinations.public_router)  # YouTube OAuth callback (no auth)
 app.include_router(destinations.router)  # Streaming destinations (YouTube, Facebook, etc.)
 app.include_router(watchdog.router)  # YouTube stream watchdog management
 app.include_router(timelines.router)  # Timeline CRUD

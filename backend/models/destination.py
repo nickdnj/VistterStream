@@ -10,20 +10,20 @@ from .database import Base
 class StreamingDestination(Base):
     """Configured streaming destinations (YouTube, Facebook, Twitch, etc.)"""
     __tablename__ = "streaming_destinations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     platform = Column(String, nullable=False)
-    
+
     # RTMP configuration
     rtmp_url = Column(String, nullable=False)
     stream_key = Column(String, nullable=False)
     channel_id = Column(String)
-    
+
     # Optional metadata
     description = Column(String)
     is_active = Column(Boolean, default=True)
-    
+
     # Watchdog configuration
     enable_watchdog = Column(Boolean, default=True)
     youtube_api_key = Column(String)
@@ -34,11 +34,20 @@ class StreamingDestination(Base):
     watchdog_enable_frame_probe = Column(Boolean, default=False)
     watchdog_enable_daily_reset = Column(Boolean, default=False)
     watchdog_daily_reset_hour = Column(Integer, default=3)
-    
+
+    # YouTube OAuth configuration (for youtube_oauth platform type)
+    youtube_oauth_client_id = Column(String, nullable=True)
+    youtube_oauth_client_secret_enc = Column(String, nullable=True)
+    youtube_oauth_redirect_uri = Column(String, nullable=True)
+    youtube_oauth_refresh_token_enc = Column(String, nullable=True)
+    youtube_oauth_connected = Column(Boolean, default=False)
+    youtube_oauth_channel_name = Column(String, nullable=True)
+    youtube_oauth_token_expires_at = Column(DateTime, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_used = Column(DateTime)
-    
+
     def get_full_rtmp_url(self) -> str:
         return f"{self.rtmp_url}/{self.stream_key}"

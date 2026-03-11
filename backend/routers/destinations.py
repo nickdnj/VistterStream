@@ -2,18 +2,30 @@
 Streaming Destinations API - Configure YouTube, Facebook, Twitch, etc.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
+import logging
 
 from models.database import get_db
 from models.destination import StreamingDestination
 from routers.auth import get_current_user
+from utils.crypto import encrypt, decrypt
 
+logger = logging.getLogger(__name__)
+
+# ── Authenticated router (all existing routes + new YouTube OAuth routes) ────
 router = APIRouter(prefix="/api/destinations", tags=["destinations"], dependencies=[Depends(get_current_user)])
 
+# ── Public router for the OAuth callback (no auth required) ──────────────────
+# Google redirects the browser here; there is no Bearer token in the request.
+public_router = APIRouter(prefix="/api/destinations", tags=["destinations"])
+
+
+# ── Pydantic models ─────────────────────────────────────────────────────────
 
 class YouTubeWatchdogConfig(BaseModel):
     enable_watchdog: bool = True
@@ -30,8 +42,8 @@ class YouTubeWatchdogConfig(BaseModel):
 class DestinationCreate(BaseModel):
     name: str
     platform: str
-    rtmp_url: str
-    stream_key: str
+    rtmp_url: str = ""
+    stream_key: str = ""
     description: str = ""
     channel_id: Optional[str] = None
     enable_watchdog: bool = True
@@ -43,6 +55,10 @@ class DestinationCreate(BaseModel):
     watchdog_enable_frame_probe: bool = False
     watchdog_enable_daily_reset: bool = False
     watchdog_daily_reset_hour: int = 3
+    # YouTube OAuth fields (plaintext secret from client)
+    youtube_oauth_client_id: Optional[str] = None
+    youtube_oauth_client_secret: Optional[str] = None
+    youtube_oauth_redirect_uri: Optional[str] = None
 
 
 class DestinationUpdate(BaseModel):
@@ -62,6 +78,10 @@ class DestinationUpdate(BaseModel):
     watchdog_enable_frame_probe: Optional[bool] = None
     watchdog_enable_daily_reset: Optional[bool] = None
     watchdog_daily_reset_hour: Optional[int] = None
+    # YouTube OAuth fields (plaintext secret from client)
+    youtube_oauth_client_id: Optional[str] = None
+    youtube_oauth_client_secret: Optional[str] = None
+    youtube_oauth_redirect_uri: Optional[str] = None
 
 
 class DestinationResponse(BaseModel):
@@ -85,18 +105,66 @@ class DestinationResponse(BaseModel):
     watchdog_enable_frame_probe: bool = False
     watchdog_enable_daily_reset: bool = False
     watchdog_daily_reset_hour: int = 3
+    # YouTube OAuth (public fields only - never expose secrets/tokens)
+    youtube_oauth_connected: bool = False
+    youtube_oauth_channel_name: Optional[str] = None
+    youtube_oauth_token_expires_at: Optional[datetime] = None
+    youtube_oauth_scopes: Optional[str] = None
+    youtube_oauth_client_id: Optional[str] = None
+    youtube_oauth_redirect_uri: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
+class OAuthStartRequest(BaseModel):
+    prompt_consent: bool = True
+
+
+class CreateBroadcastRequest(BaseModel):
+    title: str
+    description: str = ""
+    privacy_status: str = "unlisted"
+    create_stream: bool = True
+    frame_rate: str = "30fps"
+    resolution: str = "1080p"
+    enable_dvr: bool = True
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _get_dest_or_404(destination_id: int, db: Session) -> StreamingDestination:
+    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
+    if not dest:
+        raise HTTPException(status_code=404, detail="Destination not found")
+    return dest
+
+
+def _dest_to_response(dest: StreamingDestination) -> dict:
+    """Convert a destination ORM object to a dict safe for DestinationResponse."""
+    data = {c.name: getattr(dest, c.name) for c in dest.__table__.columns}
+    # Strip encrypted fields and add computed response fields
+    data.pop("youtube_oauth_client_secret_enc", None)
+    data.pop("youtube_oauth_refresh_token_enc", None)
+    data["youtube_oauth_scopes"] = (
+        "youtube, youtube.upload, youtube.readonly" if dest.youtube_oauth_connected else None
+    )
+    data.setdefault("youtube_oauth_connected", False)
+    data.setdefault("youtube_oauth_channel_name", None)
+    data.setdefault("youtube_oauth_token_expires_at", None)
+    return data
+
+
 PLATFORM_PRESETS = {
     "youtube": {"name": "YouTube Live", "rtmp_url": "rtmp://a.rtmp.youtube.com/live2", "description": "YouTube Live"},
+    "youtube_oauth": {"name": "YouTube (OAuth)", "rtmp_url": "", "description": "YouTube Live via OAuth - auto-creates broadcasts"},
     "facebook": {"name": "Facebook Live", "rtmp_url": "rtmps://live-api-s.facebook.com:443/rtmp", "description": "Facebook Live"},
     "twitch": {"name": "Twitch", "rtmp_url": "rtmp://live.twitch.tv/app", "description": "Twitch"},
-    "custom": {"name": "Custom RTMP", "rtmp_url": "", "description": "Custom RTMP server"}
+    "custom": {"name": "Custom RTMP", "rtmp_url": "", "description": "Custom RTMP server"},
 }
 
+
+# ── Existing CRUD routes ────────────────────────────────────────────────────
 
 @router.get("/presets")
 def get_platform_presets():
@@ -105,51 +173,49 @@ def get_platform_presets():
 
 @router.get("", response_model=List[DestinationResponse])
 def get_destinations(db: Session = Depends(get_db)):
-    return db.query(StreamingDestination).order_by(StreamingDestination.created_at.desc()).all()
+    dests = db.query(StreamingDestination).order_by(StreamingDestination.created_at.desc()).all()
+    return [_dest_to_response(d) for d in dests]
 
 
 @router.get("/{destination_id}", response_model=DestinationResponse)
 def get_destination(destination_id: int, db: Session = Depends(get_db)):
-    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
-    if not dest:
-        raise HTTPException(status_code=404, detail="Destination not found")
-    return dest
+    dest = _get_dest_or_404(destination_id, db)
+    return _dest_to_response(dest)
 
 
 @router.post("", response_model=DestinationResponse)
 def create_destination(data: DestinationCreate, db: Session = Depends(get_db)):
-    dest = StreamingDestination(
-        name=data.name, platform=data.platform, rtmp_url=data.rtmp_url, stream_key=data.stream_key,
-        description=data.description, channel_id=data.channel_id, enable_watchdog=data.enable_watchdog,
-        youtube_api_key=data.youtube_api_key, youtube_stream_id=data.youtube_stream_id,
-        youtube_broadcast_id=data.youtube_broadcast_id, youtube_watch_url=data.youtube_watch_url,
-        watchdog_check_interval=data.watchdog_check_interval, watchdog_enable_frame_probe=data.watchdog_enable_frame_probe,
-        watchdog_enable_daily_reset=data.watchdog_enable_daily_reset, watchdog_daily_reset_hour=data.watchdog_daily_reset_hour
-    )
+    fields = data.model_dump(exclude={"youtube_oauth_client_secret"})
+    # Encrypt the OAuth client secret if provided
+    secret = data.youtube_oauth_client_secret
+    if secret:
+        fields["youtube_oauth_client_secret_enc"] = encrypt(secret)
+    dest = StreamingDestination(**fields)
     db.add(dest)
     db.commit()
     db.refresh(dest)
-    return dest
+    return _dest_to_response(dest)
 
 
 @router.put("/{destination_id}", response_model=DestinationResponse)
 def update_destination(destination_id: int, data: DestinationUpdate, db: Session = Depends(get_db)):
-    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
-    if not dest:
-        raise HTTPException(status_code=404, detail="Destination not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    dest = _get_dest_or_404(destination_id, db)
+    updates = data.model_dump(exclude_unset=True)
+    # Handle OAuth secret encryption
+    secret = updates.pop("youtube_oauth_client_secret", None)
+    if secret is not None:
+        dest.youtube_oauth_client_secret_enc = encrypt(secret) if secret else None
+    for field, value in updates.items():
         setattr(dest, field, value)
     dest.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(dest)
-    return dest
+    return _dest_to_response(dest)
 
 
 @router.delete("/{destination_id}")
 def delete_destination(destination_id: int, db: Session = Depends(get_db)):
-    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
-    if not dest:
-        raise HTTPException(status_code=404, detail="Destination not found")
+    dest = _get_dest_or_404(destination_id, db)
     db.delete(dest)
     db.commit()
     return {"message": "Destination deleted"}
@@ -157,9 +223,7 @@ def delete_destination(destination_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{destination_id}/mark-used")
 def mark_destination_used(destination_id: int, db: Session = Depends(get_db)):
-    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
-    if not dest:
-        raise HTTPException(status_code=404, detail="Destination not found")
+    dest = _get_dest_or_404(destination_id, db)
     dest.last_used = datetime.now(timezone.utc)
     db.commit()
     return {"message": "Marked as used"}
@@ -167,9 +231,7 @@ def mark_destination_used(destination_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{destination_id}/watchdog-config", response_model=YouTubeWatchdogConfig)
 def get_watchdog_config(destination_id: int, db: Session = Depends(get_db)):
-    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
-    if not dest:
-        raise HTTPException(status_code=404, detail="Destination not found")
+    dest = _get_dest_or_404(destination_id, db)
     return YouTubeWatchdogConfig(
         enable_watchdog=dest.enable_watchdog or False, youtube_api_key=dest.youtube_api_key,
         youtube_stream_id=dest.youtube_stream_id, youtube_broadcast_id=dest.youtube_broadcast_id,
@@ -182,9 +244,7 @@ def get_watchdog_config(destination_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{destination_id}/watchdog-config", response_model=YouTubeWatchdogConfig)
 def update_watchdog_config(destination_id: int, config: YouTubeWatchdogConfig, db: Session = Depends(get_db)):
-    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
-    if not dest:
-        raise HTTPException(status_code=404, detail="Destination not found")
+    dest = _get_dest_or_404(destination_id, db)
     dest.enable_watchdog = config.enable_watchdog
     dest.youtube_api_key = config.youtube_api_key
     dest.youtube_stream_id = config.youtube_stream_id
@@ -197,3 +257,188 @@ def update_watchdog_config(destination_id: int, config: YouTubeWatchdogConfig, d
     dest.updated_at = datetime.now(timezone.utc)
     db.commit()
     return config
+
+
+# ── YouTube OAuth routes (authenticated) ────────────────────────────────────
+
+@router.post("/{destination_id}/youtube/oauth-start")
+def youtube_oauth_start(destination_id: int, body: OAuthStartRequest, db: Session = Depends(get_db)):
+    """Generate a YouTube OAuth authorization URL for this destination."""
+    from services.youtube_destination_service import get_oauth_url
+
+    dest = _get_dest_or_404(destination_id, db)
+
+    if not dest.youtube_oauth_client_id or not dest.youtube_oauth_client_secret_enc:
+        raise HTTPException(status_code=400, detail="YouTube OAuth client credentials not configured on this destination")
+    if not dest.youtube_oauth_redirect_uri:
+        raise HTTPException(status_code=400, detail="YouTube OAuth redirect URI not configured on this destination")
+
+    client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
+
+    auth_url = get_oauth_url(
+        client_id=dest.youtube_oauth_client_id,
+        client_secret=client_secret,
+        redirect_uri=dest.youtube_oauth_redirect_uri,
+        state=str(dest.id),
+        prompt_consent=body.prompt_consent,
+    )
+
+    return {"authorization_url": auth_url}
+
+
+@router.get("/{destination_id}/youtube/oauth-status")
+def youtube_oauth_status(destination_id: int, db: Session = Depends(get_db)):
+    """Return the current YouTube OAuth connection status."""
+    dest = _get_dest_or_404(destination_id, db)
+    return {
+        "connected": dest.youtube_oauth_connected or False,
+        "channel_name": dest.youtube_oauth_channel_name,
+        "expires_at": dest.youtube_oauth_token_expires_at.isoformat() if dest.youtube_oauth_token_expires_at else None,
+        "scopes": "youtube, youtube.upload, youtube.readonly" if dest.youtube_oauth_connected else None,
+    }
+
+
+@router.delete("/{destination_id}/youtube/oauth")
+def youtube_oauth_disconnect(destination_id: int, db: Session = Depends(get_db)):
+    """Disconnect the YouTube OAuth account from this destination."""
+    dest = _get_dest_or_404(destination_id, db)
+    dest.youtube_oauth_refresh_token_enc = None
+    dest.youtube_oauth_connected = False
+    dest.youtube_oauth_channel_name = None
+    dest.youtube_oauth_token_expires_at = None
+    dest.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": "Disconnected"}
+
+
+@router.post("/{destination_id}/youtube/create-broadcast")
+def youtube_create_broadcast(destination_id: int, body: CreateBroadcastRequest, db: Session = Depends(get_db)):
+    """Create a YouTube live broadcast (and optionally a bound stream) using stored OAuth creds."""
+    from services.youtube_destination_service import get_credentials, create_broadcast
+
+    dest = _get_dest_or_404(destination_id, db)
+
+    if not dest.youtube_oauth_connected or not dest.youtube_oauth_refresh_token_enc:
+        raise HTTPException(status_code=400, detail="YouTube OAuth not connected for this destination")
+    if not dest.youtube_oauth_client_id or not dest.youtube_oauth_client_secret_enc:
+        raise HTTPException(status_code=400, detail="YouTube OAuth client credentials missing")
+
+    client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
+    refresh_token = decrypt(dest.youtube_oauth_refresh_token_enc)
+
+    credentials = get_credentials(
+        client_id=dest.youtube_oauth_client_id,
+        client_secret=client_secret,
+        refresh_token=refresh_token,
+    )
+
+    try:
+        result = create_broadcast(
+            credentials=credentials,
+            title=body.title,
+            description=body.description,
+            privacy_status=body.privacy_status,
+            create_stream=body.create_stream,
+            frame_rate=body.frame_rate,
+            resolution=body.resolution,
+            enable_dvr=body.enable_dvr,
+        )
+    except Exception as e:
+        logger.error("Failed to create YouTube broadcast: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to create broadcast: {e}")
+
+    # Persist broadcast/stream details back to the destination
+    dest.youtube_broadcast_id = result.get("broadcast_id")
+    dest.youtube_stream_id = result.get("stream_id")
+    if result.get("stream_key"):
+        dest.stream_key = result["stream_key"]
+    if result.get("rtmp_url"):
+        dest.rtmp_url = result["rtmp_url"]
+    if result.get("watch_url"):
+        dest.youtube_watch_url = result["watch_url"]
+    dest.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return result
+
+
+# ── YouTube OAuth callback (public - no auth) ───────────────────────────────
+
+@public_router.get("/youtube/oauth/callback", response_class=HTMLResponse)
+def youtube_oauth_callback(
+    code: str = Query(...),
+    state: str = Query(""),
+    db: Session = Depends(get_db),
+):
+    """
+    Handle the Google OAuth redirect. ``state`` contains the destination ID.
+    Returns HTML that posts a message to the opener window and auto-closes.
+    """
+    from services.youtube_destination_service import exchange_code
+
+    if not state:
+        return HTMLResponse(content=_oauth_error_html("Missing state parameter"), status_code=400)
+
+    try:
+        destination_id = int(state)
+    except ValueError:
+        return HTMLResponse(content=_oauth_error_html("Invalid state parameter"), status_code=400)
+
+    dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
+    if not dest:
+        return HTMLResponse(content=_oauth_error_html("Destination not found"), status_code=404)
+
+    if not dest.youtube_oauth_client_id or not dest.youtube_oauth_client_secret_enc:
+        return HTMLResponse(content=_oauth_error_html("OAuth credentials not configured"), status_code=400)
+
+    try:
+        client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
+        result = exchange_code(
+            code=code,
+            client_id=dest.youtube_oauth_client_id,
+            client_secret=client_secret,
+            redirect_uri=dest.youtube_oauth_redirect_uri or "",
+        )
+
+        # Store encrypted refresh token and mark as connected
+        dest.youtube_oauth_refresh_token_enc = encrypt(result["refresh_token"])
+        dest.youtube_oauth_connected = True
+        dest.youtube_oauth_channel_name = result["channel_name"]
+        dest.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        return HTMLResponse(content=_oauth_success_html(result["channel_name"]))
+
+    except Exception as e:
+        logger.error("YouTube OAuth callback failed for destination %s: %s", destination_id, e)
+        return HTMLResponse(content=_oauth_error_html(str(e)), status_code=500)
+
+
+def _oauth_success_html(channel_name: str) -> str:
+    return f"""
+    <html>
+    <body>
+        <h1>YouTube Connected!</h1>
+        <p>Connected to channel: <strong>{channel_name}</strong></p>
+        <p>You can close this window.</p>
+        <script>
+            window.opener.postMessage('youtube-connected', '*');
+            setTimeout(() => window.close(), 2000);
+        </script>
+    </body>
+    </html>
+    """
+
+
+def _oauth_error_html(message: str) -> str:
+    return f"""
+    <html>
+    <body>
+        <h1>Connection Failed</h1>
+        <p>{message}</p>
+        <script>
+            window.opener.postMessage('youtube-error', '*');
+        </script>
+    </body>
+    </html>
+    """
