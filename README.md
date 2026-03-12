@@ -35,15 +35,21 @@ VistterStream was built and tested on this production hardware setup:
 
 ### Compute Platform
 
-**Raspberry Pi 5 (8GB RAM)**
-- **Model**: Raspberry Pi 5
-- **RAM**: 8GB
-- **Storage**: MicroSD card (32GB+ recommended) or NVMe SSD via PCIe
-- **Power**: 27W USB-C power supply (5.1V/5A)
-- **Networking**: Gigabit Ethernet (recommended for stable streaming)
-- **Why**: Powerful ARM64 processor with hardware video encoding, runs Docker natively, low power consumption (~15W), perfect for 24/7 operation
+**Beelink Mini S12 (Intel N95, 8GB RAM)**
+- **CPU**: Intel 12th Gen Alder Lake N95 (4C/4T, up to 3.4GHz, 6MB cache)
+- **RAM**: 8GB DDR4 (expandable to 16GB)
+- **Storage**: 256GB M.2 SSD (replaceable up to 2TB)
+- **GPU**: Intel UHD Graphics with VA-API hardware encoding
+- **Power**: 25W max (TDP 15-20W) — power supply included
+- **Networking**: Gigabit Ethernet + WiFi 5 + Bluetooth 4.2
+- **Display**: Dual HDMI 4K@60Hz
+- **Size**: 4.52 × 4.01 × 1.54 inches
+- **Price**: ~$130-170 (includes case, power supply, SSD — ready to use)
+- **OS**: Ships with Windows 11 Home; runs Ubuntu/Debian for VistterStream
 
-**Performance**: The Raspberry Pi 5's VideoCore VII GPU provides hardware-accelerated H.264 encoding, enabling smooth 1080p60 streaming with multiple overlays while maintaining low CPU usage.
+**Performance**: The Intel N95's integrated GPU provides hardware-accelerated H.264 encoding via VA-API, offloading video encoding from the CPU to the GPU. This enables 1080p30 streaming with multiple overlays to up to 5 simultaneous destinations while maintaining headroom for overlay compositing, RTSP decoding, and background services.
+
+> **Why not Raspberry Pi?** VistterStream was originally prototyped on a Raspberry Pi 5 (8GB). While the Pi runs Docker and handles basic streaming, it lacks accessible hardware video encoding in Linux/FFmpeg, resulting in high CPU usage (~170%) for a single 1080p stream with overlays — leaving no headroom for multi-destination streaming or additional cameras. The Beelink Mini S12 costs roughly the same as a fully-equipped Pi 5 ($125 board + $15-25 case + $15-25 PSU + $30-60 NVMe HAT + SSD = $185-235) while providing significantly more compute power, a built-in SSD, hardware video encoding, and support for concurrent streams to multiple platforms.
 
 ### Cameras
 
@@ -87,28 +93,27 @@ VistterStream was built and tested on this production hardware setup:
 - **Internet**: 10+ Mbps upload for 1080p streaming (20+ Mbps recommended for multi-streaming)
 - **Local Network**: Gigabit Ethernet switch recommended
 - **Router**: Port forwarding not required (outbound connections only)
-- **Cameras**: All cameras and Pi on same local network
+- **Cameras**: All cameras and mini PC on same local network
 
 ### Optional Accessories
 
 - **PoE Switch**: Power cameras via Ethernet (if cameras support PoE)
 - **UPS**: Uninterruptible power supply for 24/7 reliability
-- **Cooling**: Raspberry Pi 5 case with active cooling for sustained performance
-- **Storage**: External SSD for local recording (optional)
+- **VESA Mount**: Mount the mini PC behind a monitor or on a wall
 
 ### Total System Power
 
-- Raspberry Pi 5: ~15W
+- Beelink Mini S12: ~20W (typical), 25W max
 - Sunba PTZ Camera: ~12W
 - Reolink Camera: ~6W
 - Network Switch: ~10W
-- **Total**: ~43W (less than a standard light bulb!)
+- **Total**: ~48W (less than a standard light bulb!)
 
 Perfect for 24/7 operation with minimal power costs.
 
 ## What Is VistterStream?
 
-VistterStream is a **standalone streaming appliance** that runs on Raspberry Pi, Intel NUC, or Mac hardware in a Docker container. It provides a beautiful web interface for managing cameras, creating automated shows, and streaming to multiple platforms simultaneously.
+VistterStream is a **standalone streaming appliance** that runs on an Intel mini PC (or similar x86_64 hardware) in a Docker container. It provides a beautiful web interface for managing cameras, creating automated shows, and streaming to multiple platforms simultaneously.
 
 ### Perfect For
 
@@ -157,12 +162,12 @@ VistterStream is a **standalone streaming appliance** that runs on Raspberry Pi,
 - **Multi-Streaming** - Broadcast to 3+ platforms simultaneously
 
 ### 🔧 System Features
-- **Hardware Acceleration** - Automatic detection and use of GPU encoders
+- **Hardware Acceleration** - Intel VA-API GPU encoding with automatic detection (5+ concurrent streams)
 - **Quality Profiles** - 1080p60, 720p, 480p with custom bitrates
 - **Health Watchdog** - Automatic stream recovery from failures
 - **YouTube API Integration** - Broadcast status monitoring and auto-reset
 - **Beautiful UI** - Dark theme, responsive design, professional interface
-- **Docker Deployment** - Single container, multi-architecture (ARM64/x86_64)
+- **Docker Deployment** - Containerized with GPU passthrough for hardware encoding
 - **Local-First** - All configuration stored locally, no cloud dependencies
 - **Remote Access** - Optional Cloudflare Tunnel integration for secure web access without port forwarding
 
@@ -277,10 +282,6 @@ docker-compose up -d
 open http://localhost:3000
 ```
 
-### Raspberry Pi Installation
-
-See **[Raspberry Pi Setup Guide](docs/RaspberryPi-Docker.md)** for detailed instructions.
-
 ### Manual Installation
 
 See **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** for advanced deployment options.
@@ -293,7 +294,6 @@ See **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** for advanced dep
 - **[Documentation Index](docs/README.md)** - Find any documentation
 
 ### 🔧 Setup & Deployment
-- **[Raspberry Pi Setup](docs/RaspberryPi-Docker.md)** - Deploy on Raspberry Pi
 - **[Docker Testing](docs/Docker-Testing-Complete.md)** - Docker deployment guide
 - **[Cloudflare Tunnel Setup](docs/CLOUDFLARE_TUNNEL_SETUP.md)** - Remote access without port forwarding
 - **[YouTube OAuth Setup](docs/working_documents/oauth/YOUTUBE_OAUTH_SETUP.md)** - Configure YouTube API
@@ -311,19 +311,22 @@ See **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** for advanced dep
 
 ## Current Status
 
-**✅ Production-Ready** (November 2025)
+**✅ Production-Ready** (March 2026)
 
 ### What's Working
 - ✅ Complete camera management (RTSP/RTMP/ONVIF)
 - ✅ PTZ preset system with ONVIF control
 - ✅ Multi-camera timeline system
-- ✅ Asset management and overlay system
-- ✅ Multiple streaming destinations
+- ✅ Asset management and overlay system with aspect-ratio-locked positioning
+- ✅ Multiple streaming destinations (YouTube, Facebook, Twitch, custom RTMP)
+- ✅ Multi-platform simultaneous streaming (up to 5 concurrent GPU-encoded streams)
 - ✅ Automated scheduling
-- ✅ YouTube Live integration with OAuth
+- ✅ YouTube Live integration with OAuth (auto-broadcast creation)
 - ✅ Stream health monitoring and auto-recovery
-- ✅ Beautiful, responsive web UI
-- ✅ Docker deployment (ARM64 + x86_64)
+- ✅ Intel VA-API hardware-accelerated video encoding
+- ✅ Beautiful, responsive web UI with live YouTube embed toggle
+- ✅ Docker deployment with GPU passthrough
+- ✅ Remote access via Cloudflare Tunnel
 
 ### What's Next
 - ⏳ VistterStudio cloud control platform (future)
@@ -380,8 +383,9 @@ This project was built through AI-assisted development. Contributions welcome! P
 Built with the collaborative power of:
 - **ChatGPT** - Architecture and specifications
 - **Cursor** - Code implementation
+- **Claude Code** - Deployment, hardware encoding, streaming pipeline, and ongoing development
 - **Claude** - Documentation and narrative
-- **Codex CLI** - Raspberry Pi deployment
+- **Codex CLI** - Initial deployment
 - **Gemini** - Creative problem solving
 - **Nick DeMarco** - Vision, orchestration, and 40 years of software architecture experience
 
