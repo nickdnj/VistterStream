@@ -19,6 +19,10 @@ RUN apt-get update \
        libffi-dev \
        libssl-dev \
        pkg-config \
+       # VA-API libs for Intel GPU hardware encoding
+       libva-drm2 \
+       libva2 \
+       intel-media-va-driver \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/backend
