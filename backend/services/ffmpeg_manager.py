@@ -515,14 +515,24 @@ class FFmpegProcessManager:
                 filter_parts.append(overlay_filter)
                 current_label = next_label
             
+            # VAAPI needs pixel format conversion + GPU upload after CPU-side compositing
+            if profile.codec == 'h264_vaapi':
+                filter_parts.append("[out]format=nv12,hwupload[vout]")
+                out_label = "[vout]"
+            else:
+                out_label = "[out]"
+
             filter_complex = ";".join(filter_parts)
             # #region agent log
             _dbg_ffmpeg("build_cmd:478", "FFmpeg filter_complex built", {"filter_complex": filter_complex[:500], "num_overlays": len(overlays_to_add), "timeline_loop": timeline_loop, "timeline_duration": timeline_duration}, "C")
             # #endregion
-            cmd.extend(['-filter_complex', filter_complex, '-map', '[out]'])
+            cmd.extend(['-filter_complex', filter_complex, '-map', out_label])
         else:
             # No overlays, just scale video
-            cmd.extend(['-vf', f'scale={resolution_str}'])
+            if profile.codec == 'h264_vaapi':
+                cmd.extend(['-vf', f'scale={resolution_str},format=nv12,hwupload'])
+            else:
+                cmd.extend(['-vf', f'scale={resolution_str}'])
             cmd.extend(['-map', '0:v'])
         
         # Map audio from the silent source to ensure audio is always present
@@ -544,13 +554,28 @@ class FFmpegProcessManager:
                 '-allow_sw', '1',
                 '-realtime', '1',
             ])
+        elif profile.codec == 'h264_vaapi':
+            # Intel VA-API hardware encoding
+            # Overlays are composited on CPU, then uploaded to GPU for encoding
+            cmd.extend([
+                '-vaapi_device', '/dev/dri/renderD128',
+                '-c:v', 'h264_vaapi',
+                '-qp', '23',
+            ])
+        elif profile.codec == 'h264_qsv':
+            # Intel Quick Sync hardware encoding
+            cmd.extend([
+                '-c:v', 'h264_qsv',
+                '-preset', 'fast',
+                '-global_quality', '23',
+            ])
         else:
-            # Software encoding (libx264) - Pi 5 optimized for real-time
+            # Software encoding (libx264) - optimized for real-time
             cmd.extend([
                 '-c:v', 'libx264',
                 '-preset', profile.preset,
                 '-tune', 'zerolatency',
-                '-threads', '4',  # Use all 4 Pi 5 cores
+                '-threads', '4',
             ])
         
         # Common encoding parameters
