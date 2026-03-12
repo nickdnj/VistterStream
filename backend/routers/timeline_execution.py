@@ -52,12 +52,9 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     if not destinations:
         raise HTTPException(status_code=404, detail="No valid destinations found")
 
-    # Auto-create YouTube broadcasts for OAuth destinations (skip if broadcast already exists)
+    # Auto-create YouTube broadcasts for OAuth destinations (always fresh per stream start)
     for dest in destinations:
         if dest.platform == "youtube_oauth" and dest.youtube_oauth_connected and dest.youtube_oauth_refresh_token_enc:
-            if dest.youtube_broadcast_id and dest.stream_key and dest.rtmp_url:
-                logger.info("Reusing existing broadcast %s for destination %s", dest.youtube_broadcast_id, dest.name)
-                continue
             try:
                 from services.youtube_destination_service import get_credentials, create_broadcast
                 from utils.crypto import decrypt
@@ -74,6 +71,7 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
                     description="Live stream from VistterStream",
                     privacy_status="public",
                     create_stream=True,
+                    enable_dvr=False,
                 )
                 dest.youtube_broadcast_id = result.get("broadcast_id")
                 dest.youtube_stream_id = result.get("stream_id")
@@ -135,10 +133,31 @@ async def stop_timeline(timeline_id: int, db: Session = Depends(get_db)):
     
     # Stop timeline
     success = await executor.stop_timeline(timeline_id)
-    
+
     if not success:
         raise HTTPException(status_code=400, detail="Timeline is not running")
-    
+
+    # Clear stale broadcast IDs so the next start creates a fresh broadcast
+    dest_ids = getattr(executor, 'timeline_destination_ids', {}).get(timeline_id) or []
+    if dest_ids:
+        dests = db.query(StreamingDestination).filter(
+            StreamingDestination.id.in_(dest_ids)
+        ).all()
+    else:
+        # Fallback: clear all OAuth destinations that have a broadcast
+        dests = db.query(StreamingDestination).filter(
+            StreamingDestination.platform == "youtube_oauth",
+            StreamingDestination.youtube_broadcast_id.isnot(None),
+        ).all()
+    for dest in dests:
+        if dest.platform == "youtube_oauth" and dest.youtube_broadcast_id:
+            logger.info("Clearing broadcast %s for destination %s after stop", dest.youtube_broadcast_id, dest.name)
+            dest.youtube_broadcast_id = None
+            dest.youtube_stream_id = None
+            dest.youtube_watch_url = None
+    if dests:
+        db.commit()
+
     return {
         "message": "Timeline stopped successfully",
         "timeline_id": timeline_id
