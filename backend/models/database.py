@@ -2,17 +2,41 @@
 Database models and configuration
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, ForeignKey
+from sqlalchemy import create_engine, event, Column, Integer, String, Float, DateTime, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime, timezone
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 # Database URL
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./vistterstream.db")
 
-# Create engine
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+# Create engine with larger pool for background services
+_connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+engine = create_engine(
+    DATABASE_URL,
+    connect_args=_connect_args,
+    pool_size=20,
+    max_overflow=30,
+    pool_timeout=60,
+    pool_recycle=300,
+    pool_pre_ping=True,
+)
+
+# Log pool exhaustion warnings
+@event.listens_for(engine, "checkout")
+def _on_checkout(dbapi_conn, connection_rec, connection_proxy):
+    pool = engine.pool
+    pool_size = pool.size()
+    checked_out = pool.checkedout()
+    if checked_out > 10:
+        logger.warning(
+            "DB pool high usage: %d/%d checked out (overflow: %d)",
+            checked_out, pool_size, pool.overflow(),
+        )
 
 # Create session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
