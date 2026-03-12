@@ -30,12 +30,11 @@ engine = create_engine(
 @event.listens_for(engine, "checkout")
 def _on_checkout(dbapi_conn, connection_rec, connection_proxy):
     pool = engine.pool
-    pool_size = pool.size()
-    checked_out = pool.checkedout()
+    checked_out = getattr(pool, "checkedout", lambda: -1)()
     if checked_out > 10:
         logger.warning(
-            "DB pool high usage: %d/%d checked out (overflow: %d)",
-            checked_out, pool_size, pool.overflow(),
+            "DB pool high usage: %d checked out (overflow: %s)",
+            checked_out, getattr(pool, "overflow", lambda: "?")(),
         )
 
 # Create session
