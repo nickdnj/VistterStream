@@ -65,10 +65,43 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
                     client_secret=client_secret,
                     refresh_token=refresh_token,
                 )
+                broadcast_title = (
+                    "Monmouth Beach Live Cam \u2014 Shrewsbury River, NJ "
+                    "| Boating, Fishing, Weather & Tides (24/7)"
+                )
+                broadcast_desc = (
+                    "Welcome to the Monmouth Beach live cam overlooking the "
+                    "Shrewsbury River in New Jersey. This 24/7 stream shows "
+                    "real-time river conditions, boating activity, fishing "
+                    "conditions, weather, and tides \u2014 all updated "
+                    "continuously with live Tempest weather data.\n\n"
+                    "Great for:\n"
+                    "\u2022 Checking boating and fishing conditions\n"
+                    "\u2022 Seeing wind and tide before heading out\n"
+                    "\u2022 Watching Shrewsbury River activity\n"
+                    "\u2022 Monitoring Monmouth Beach weather in real time\n"
+                    "\u2022 Enjoying a scenic NJ waterfront livestream\n\n"
+                    "Live on-screen data includes:\n"
+                    "\u2022 Wind speed & direction (ideal for boating & paddling)\n"
+                    "\u2022 Temperature & humidity\n"
+                    "\u2022 Rain status & storm indicators\n"
+                    "\u2022 Barometric trends\n"
+                    "\u2022 Tide stage & short-term forecast overlays\n\n"
+                    "Weather data provided by Tempest Weather System, "
+                    "refreshed every few seconds.\n\n"
+                    "\U0001f527 Tech Behind the Stream (For Makers & Developers)\n\n"
+                    "This stream is built using:\n"
+                    "\u2022 VistterStream \u2014 an open-source live-streaming engine\n"
+                    "\u2022 TempestWeather \u2014 a dynamic overlay generator "
+                    "pulling real-time Tempest API data\n\n"
+                    "Source Code:\n"
+                    "\u2022 https://github.com/nickdnj/vistterstream\n"
+                    "\u2022 https://github.com/nickdnj/tempestweather"
+                )
                 result = create_broadcast(
                     credentials=credentials,
-                    title=f"{timeline.name} - Live",
-                    description="Live stream from VistterStream",
+                    title=broadcast_title,
+                    description=broadcast_desc,
                     privacy_status="public",
                     create_stream=True,
                     enable_dvr=False,
