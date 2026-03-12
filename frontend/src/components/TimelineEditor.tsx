@@ -137,6 +137,7 @@ const TimelineEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'youtube' | 'overlay'>('youtube');
   
   /**
    * YouTube Button Logic:
@@ -1700,12 +1701,27 @@ const TimelineEditor: React.FC = () => {
                         Share
                       </button>
                     )}
+
+                    {/* Toggle between YouTube embed and Overlay Editor while streaming */}
+                    {isRunning && hasYoutubeDestination && youtubeVideoId && (
+                      <button
+                        onClick={() => setPreviewMode(prev => prev === 'youtube' ? 'overlay' : 'youtube')}
+                        className={`px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap transition-colors ${
+                          previewMode === 'overlay'
+                            ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                            : 'bg-dark-600 hover:bg-dark-500 text-gray-300'
+                        }`}
+                        title={previewMode === 'youtube' ? 'Switch to Overlay Editor' : 'Switch to YouTube Live'}
+                      >
+                        {previewMode === 'youtube' ? '🎨 Editor' : '📺 Live'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Preview Panel: YouTube Live embed when streaming, Overlay Editor when idle */}
-              {isRunning && hasYoutubeDestination && youtubeVideoId ? (
+              {/* Preview Panel: YouTube Live embed or Overlay Editor (toggle when streaming) */}
+              {isRunning && hasYoutubeDestination && youtubeVideoId && previewMode === 'youtube' ? (
                 <div className="bg-dark-800 border-b border-dark-700">
                   <div className="max-w-4xl mx-auto p-4">
                     <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
