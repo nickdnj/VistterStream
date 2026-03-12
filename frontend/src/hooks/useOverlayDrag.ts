@@ -13,6 +13,7 @@ interface UseOverlayDragOptions {
   position: { x: number; y: number };
   size: { width: number; height: number };
   streamResolution: { width: number; height: number };
+  aspectRatio: number | null; // image natural width / height — locks resize when set
   onPositionChange: (x: number, y: number) => void;
   onSizeChange: (width: number, height: number) => void;
 }
@@ -22,6 +23,7 @@ export function useOverlayDrag({
   position,
   size,
   streamResolution,
+  aspectRatio,
   onPositionChange,
   onSizeChange,
 }: UseOverlayDragOptions) {
@@ -78,10 +80,16 @@ export function useOverlayDrag({
         } else {
           newW = Math.max(20, s.w - dxPx * scale);
         }
-        if (corner === 'se' || corner === 'sw') {
-          newH = Math.max(20, s.h + dyPx * scale);
+
+        if (aspectRatio && aspectRatio > 0) {
+          // Lock aspect ratio: derive height from width
+          newH = Math.max(20, newW / aspectRatio);
         } else {
-          newH = Math.max(20, s.h - dyPx * scale);
+          if (corner === 'se' || corner === 'sw') {
+            newH = Math.max(20, s.h + dyPx * scale);
+          } else {
+            newH = Math.max(20, s.h - dyPx * scale);
+          }
         }
 
         onSizeChange(Math.round(newW), Math.round(newH));
@@ -98,7 +106,7 @@ export function useOverlayDrag({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState, getContainerRect, streamResolution, onPositionChange, onSizeChange]);
+  }, [dragState, getContainerRect, streamResolution, aspectRatio, onPositionChange, onSizeChange]);
 
   return { dragState, handleDragStart, handleResizeStart };
 }

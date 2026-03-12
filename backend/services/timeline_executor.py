@@ -555,40 +555,6 @@ class TimelineExecutor:
                 src_w = int(res_parts[0]) if len(res_parts) == 2 else 1920
                 src_h = int(res_parts[1]) if len(res_parts) == 2 else 1080
 
-                # Compute object-contain dimensions to match frontend preview.
-                # The frontend renders overlays with CSS object-contain which
-                # preserves aspect ratio and centers the image in the bounding
-                # box.  FFmpeg scale=w:h stretches to fill, so we compute the
-                # correct dimensions here and adjust position to center.
-                if cue_width and cue_height:
-                    try:
-                        from PIL import Image as PILImage
-                        img = PILImage.open(image_path)
-                        img_w, img_h = img.size
-                        img.close()
-
-                        # object-contain: scale to fit within box, preserving aspect ratio
-                        scale_x = cue_width / img_w
-                        scale_y = cue_height / img_h
-                        contain_scale = min(scale_x, scale_y)
-                        render_w = int(img_w * contain_scale)
-                        render_h = int(img_h * contain_scale)
-
-                        # Center offset (in normalized coords)
-                        offset_x = ((cue_width - render_w) / 2) / src_w
-                        offset_y = ((cue_height - render_h) / 2) / src_h
-                        pos_x = pos_x + offset_x
-                        pos_y = pos_y + offset_y
-
-                        logger.info(
-                            f"  📐 object-contain: img={img_w}x{img_h} box={cue_width}x{cue_height} "
-                            f"→ render={render_w}x{render_h} offset=({offset_x:.4f},{offset_y:.4f})"
-                        )
-                        cue_width = render_w
-                        cue_height = render_h
-                    except Exception as e:
-                        logger.warning(f"Failed to compute object-contain dimensions: {e}")
-
                 timed_overlay = {
                     'path': image_path,
                     'norm_x': pos_x,

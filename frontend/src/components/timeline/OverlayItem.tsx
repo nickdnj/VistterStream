@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { useOverlayDrag } from '../../hooks/useOverlayDrag';
 import { getAssetImageUrl } from '../../utils/assetImageUrl';
 
@@ -43,11 +43,15 @@ const OverlayItem: React.FC<OverlayItemProps> = ({
   onPositionChange,
   onSizeChange,
 }) => {
+  const [imageAspectRatio, setImageAspectRatio] = useState<number | null>(null);
+  const hasAutoSized = useRef(false);
+
   const { dragState, handleDragStart, handleResizeStart } = useOverlayDrag({
     containerRef,
     position: { x: positionX, y: positionY },
     size: { width, height },
     streamResolution,
+    aspectRatio: imageAspectRatio,
     onPositionChange,
     onSizeChange,
   });
@@ -90,6 +94,21 @@ const OverlayItem: React.FC<OverlayItemProps> = ({
           className="w-full h-full object-contain pointer-events-none select-none"
           style={{ opacity }}
           draggable={false}
+          onLoad={(e) => {
+            const img = e.target as HTMLImageElement;
+            if (img.naturalWidth && img.naturalHeight) {
+              const ratio = img.naturalWidth / img.naturalHeight;
+              setImageAspectRatio(ratio);
+              // Auto-correct bounding box to match image aspect ratio on first load
+              if (!hasAutoSized.current) {
+                hasAutoSized.current = true;
+                const correctH = Math.round(width / ratio);
+                if (Math.abs(correctH - height) > 1) {
+                  onSizeChange(width, correctH);
+                }
+              }
+            }
+          }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
       ) : (
