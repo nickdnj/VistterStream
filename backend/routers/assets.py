@@ -26,6 +26,12 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)]
 )
 
+# Public router for endpoints that don't require authentication (e.g. img src tags)
+public_router = APIRouter(
+    prefix="/api/assets",
+    tags=["assets"],
+)
+
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR = Path("uploads/assets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -221,7 +227,7 @@ async def test_asset(asset_id: int, db: Session = Depends(get_db)):
     return {"message": "Test not implemented for this asset type"}
 
 
-@router.get("/{asset_id}/proxy", dependencies=[])
+@public_router.get("/{asset_id}/proxy")
 async def proxy_asset_image(asset_id: int, db: Session = Depends(get_db)):
     """Proxy an API image asset through the backend.
 

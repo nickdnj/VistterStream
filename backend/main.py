@@ -174,6 +174,7 @@ app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(streams.router, prefix="/api/streams", tags=["streams"])
 app.include_router(presets_router.router)  # PTZ Presets
 app.include_router(ptz_router.router, prefix="/api/cameras", tags=["ptz"])  # PTZ Movement
+app.include_router(assets.public_router)  # Asset image proxy (no auth, for img src tags)
 app.include_router(assets.router)  # Assets (overlays, graphics, API images)
 app.include_router(status.router, prefix="/api/status", tags=["status"])
 app.include_router(destinations.public_router)  # YouTube OAuth callback (no auth)
