@@ -49,9 +49,9 @@ class EncodingProfile:
     codec: str  # Will be set by hardware detector
     resolution: tuple[int, int] = (1920, 1080)
     framerate: int = 30
-    bitrate: str = "4500k"  # Conservative for reliability
+    bitrate: str = "2500k"  # Reduced for low-bandwidth sites
     keyframe_interval: int = 2  # seconds
-    buffer_size: str = "9000k"  # 2x bitrate
+    buffer_size: str = "5000k"  # 2x bitrate
     preset: str = "fast"
     profile: str = "main"
     level: str = "4.1"
@@ -72,10 +72,10 @@ class EncodingProfile:
             return cls(
                 codec=hw_capabilities.encoder,
                 resolution=(1920, 1080),
-                framerate=30,
-                bitrate="4500k",
+                framerate=15,
+                bitrate="2500k",
                 keyframe_interval=2,
-                buffer_size="9000k",
+                buffer_size="5000k",
                 preset="fast",
                 profile="main",
                 level="4.1"
