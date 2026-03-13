@@ -221,7 +221,7 @@ async def test_asset(asset_id: int, db: Session = Depends(get_db)):
     return {"message": "Test not implemented for this asset type"}
 
 
-@router.get("/{asset_id}/proxy")
+@router.get("/{asset_id}/proxy", dependencies=[])
 async def proxy_asset_image(asset_id: int, db: Session = Depends(get_db)):
     """Proxy an API image asset through the backend.
 
