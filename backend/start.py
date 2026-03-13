@@ -93,6 +93,36 @@ def ensure_preset_thumbnail_column() -> None:
         print(f"⚠️ Unable to update presets schema for thumbnails: {exc}")
 
 
+def ensure_timeline_broadcast_columns() -> None:
+    """Ensure the timelines table has the broadcast metadata columns."""
+    columns_to_add = [
+        ("broadcast_title", "TEXT"),
+        ("broadcast_description", "TEXT"),
+        ("broadcast_tags", "TEXT"),
+        ("broadcast_privacy", "TEXT DEFAULT 'public'"),
+        ("broadcast_category_id", "TEXT"),
+        ("broadcast_thumbnail_enabled", "BOOLEAN DEFAULT 1"),
+    ]
+
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("PRAGMA table_info(timelines)"))
+            existing_columns = {row[1] for row in result}
+
+            for column_name, column_type in columns_to_add:
+                if column_name in existing_columns:
+                    continue
+
+                try:
+                    sql = f"ALTER TABLE timelines ADD COLUMN {column_name} {column_type}"
+                    connection.execute(text(sql))
+                    print(f"✅ Added missing column '{column_name}' to timelines")
+                except Exception as exc:
+                    print(f"⚠️ Unable to add column '{column_name}' to timelines: {exc}")
+    except Exception as exc:
+        print(f"⚠️ Unable to update timelines broadcast schema: {exc}")
+
+
 def ensure_default_admin():
     """Create or reset the default admin user.
 
@@ -202,6 +232,7 @@ if __name__ == "__main__":
     ensure_preset_thumbnail_column()
     ensure_streaming_destination_channel_column()
     ensure_streaming_destination_oauth_columns()
+    ensure_timeline_broadcast_columns()
     ensure_default_admin()
 
     # Start the server

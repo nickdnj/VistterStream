@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from models.database import get_db
 from models.timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecution
 from pydantic import BaseModel
+from typing import Optional
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/timelines", tags=["timelines"], dependencies=[Depends(get_current_user)])
@@ -67,6 +68,12 @@ class TimelineCreate(BaseModel):
     resolution: str = "1920x1080"
     loop: bool = True
     tracks: List[TrackCreate] = []
+    broadcast_title: str = None
+    broadcast_description: str = None
+    broadcast_tags: str = None
+    broadcast_privacy: str = "public"
+    broadcast_category_id: str = None
+    broadcast_thumbnail_enabled: bool = True
 
 
 class TimelineUpdate(BaseModel):
@@ -78,7 +85,13 @@ class TimelineUpdate(BaseModel):
     loop: bool = None
     is_active: bool = None
     tracks: List[TrackCreate] = None
-    
+    broadcast_title: str = None
+    broadcast_description: str = None
+    broadcast_tags: str = None
+    broadcast_privacy: str = None
+    broadcast_category_id: str = None
+    broadcast_thumbnail_enabled: bool = None
+
     class Config:
         extra = "ignore"  # Ignore extra fields like id, created_at, updated_at
 
@@ -95,7 +108,13 @@ class TimelineResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     tracks: List[TrackResponse] = []
-    
+    broadcast_title: Optional[str] = None
+    broadcast_description: Optional[str] = None
+    broadcast_tags: Optional[str] = None
+    broadcast_privacy: str = "public"
+    broadcast_category_id: Optional[str] = None
+    broadcast_thumbnail_enabled: bool = True
+
     class Config:
         from_attributes = True
 
@@ -128,7 +147,13 @@ def create_timeline(timeline_data: TimelineCreate, db: Session = Depends(get_db)
             duration=timeline_data.duration,
             fps=timeline_data.fps,
             resolution=timeline_data.resolution,
-            loop=timeline_data.loop
+            loop=timeline_data.loop,
+            broadcast_title=timeline_data.broadcast_title,
+            broadcast_description=timeline_data.broadcast_description,
+            broadcast_tags=timeline_data.broadcast_tags,
+            broadcast_privacy=timeline_data.broadcast_privacy,
+            broadcast_category_id=timeline_data.broadcast_category_id,
+            broadcast_thumbnail_enabled=timeline_data.broadcast_thumbnail_enabled,
         )
         db.add(timeline)
         db.flush()  # Get timeline ID
@@ -190,7 +215,19 @@ def update_timeline(timeline_id: int, timeline_data: TimelineUpdate, db: Session
             timeline.loop = timeline_data.loop
         if timeline_data.is_active is not None:
             timeline.is_active = timeline_data.is_active
-        
+        if timeline_data.broadcast_title is not None:
+            timeline.broadcast_title = timeline_data.broadcast_title
+        if timeline_data.broadcast_description is not None:
+            timeline.broadcast_description = timeline_data.broadcast_description
+        if timeline_data.broadcast_tags is not None:
+            timeline.broadcast_tags = timeline_data.broadcast_tags
+        if timeline_data.broadcast_privacy is not None:
+            timeline.broadcast_privacy = timeline_data.broadcast_privacy
+        if timeline_data.broadcast_category_id is not None:
+            timeline.broadcast_category_id = timeline_data.broadcast_category_id
+        if timeline_data.broadcast_thumbnail_enabled is not None:
+            timeline.broadcast_thumbnail_enabled = timeline_data.broadcast_thumbnail_enabled
+
         # Update tracks and cues if provided
         if timeline_data.tracks is not None:
             # Delete cues first (explicit deletion to ensure no orphaned cues)
@@ -274,7 +311,13 @@ def duplicate_timeline(timeline_id: int, db: Session = Depends(get_db)):
         duration=original.duration,
         fps=original.fps,
         resolution=original.resolution,
-        loop=original.loop
+        loop=original.loop,
+        broadcast_title=original.broadcast_title,
+        broadcast_description=original.broadcast_description,
+        broadcast_tags=original.broadcast_tags,
+        broadcast_privacy=original.broadcast_privacy,
+        broadcast_category_id=original.broadcast_category_id,
+        broadcast_thumbnail_enabled=original.broadcast_thumbnail_enabled,
     )
     db.add(duplicate)
     db.flush()

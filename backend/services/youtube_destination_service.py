@@ -5,13 +5,16 @@ Handles OAuth authentication and broadcast/stream creation for YouTube Live
 streaming destinations. Reuses OAuth patterns from youtube_shorts_service.py.
 """
 
+import base64
 import logging
+import tempfile
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 
 logger = logging.getLogger(__name__)
@@ -142,6 +145,8 @@ def create_broadcast(
     frame_rate: str = "30fps",
     resolution: str = "1080p",
     enable_dvr: bool = True,
+    tags: Optional[List[str]] = None,
+    category_id: Optional[str] = None,
 ) -> Dict:
     """
     Create a YouTube live broadcast (and optionally a bound stream).
@@ -152,12 +157,18 @@ def create_broadcast(
     youtube = build("youtube", "v3", credentials=credentials)
 
     # --- Create the broadcast ---
+    snippet = {
+        "title": title,
+        "description": description,
+        "scheduledStartTime": (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat(),
+    }
+    if tags:
+        snippet["tags"] = tags
+    if category_id:
+        snippet["categoryId"] = category_id
+
     broadcast_body = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "scheduledStartTime": (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat(),
-        },
+        "snippet": snippet,
         "status": {
             "privacyStatus": privacy_status,
             "selfDeclaredMadeForKids": False,
@@ -254,3 +265,112 @@ def get_broadcast_status(credentials: Credentials, broadcast_id: str) -> Dict:
         "status": item["status"].get("recordingStatus", "unknown"),
         "life_cycle_status": item["status"].get("lifeCycleStatus", "unknown"),
     }
+
+
+def upload_thumbnail(credentials: Credentials, broadcast_id: str, image_bytes: bytes) -> bool:
+    """
+    Upload a thumbnail image for a YouTube broadcast/video.
+
+    Args:
+        credentials: OAuth credentials
+        broadcast_id: YouTube video/broadcast ID
+        image_bytes: JPEG image bytes
+
+    Returns:
+        True if upload succeeded, False otherwise
+    """
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp.write(image_bytes)
+            tmp_path = tmp.name
+
+        youtube = build("youtube", "v3", credentials=credentials)
+        media = MediaFileUpload(tmp_path, mimetype="image/jpeg")
+        youtube.thumbnails().set(videoId=broadcast_id, media_body=media).execute()
+        logger.info("Uploaded thumbnail for broadcast %s (%d bytes)", broadcast_id, len(image_bytes))
+        return True
+    except Exception as exc:
+        logger.warning("Thumbnail upload failed for broadcast %s: %s", broadcast_id, exc)
+        return False
+    finally:
+        if tmp_path:
+            import os
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+async def capture_and_upload_broadcast_thumbnail(
+    db, timeline, credentials: Credentials, broadcast_id: str
+) -> bool:
+    """
+    Capture a fresh camera snapshot from the timeline's first cue and upload
+    it as the YouTube broadcast thumbnail.
+
+    Best-effort — returns False on any failure without raising.
+    """
+    import asyncio
+    from services.camera_service import CameraService
+    from services.ptz_service import get_ptz_service
+    from models.database import Camera, Preset
+
+    # Find the first video track, then the first cue (by cue_order)
+    video_tracks = sorted(
+        [t for t in timeline.tracks if t.track_type == "video"],
+        key=lambda t: t.layer,
+    )
+    if not video_tracks:
+        logger.warning("No video tracks in timeline %s for thumbnail", timeline.id)
+        return False
+
+    first_cue = None
+    for track in video_tracks:
+        sorted_cues = sorted(track.cues, key=lambda c: c.cue_order)
+        if sorted_cues:
+            first_cue = sorted_cues[0]
+            break
+
+    if not first_cue or not first_cue.action_params:
+        logger.warning("No cues in timeline %s for thumbnail", timeline.id)
+        return False
+
+    camera_id = first_cue.action_params.get("camera_id")
+    preset_id = first_cue.action_params.get("preset_id")
+
+    if not camera_id:
+        logger.warning("First cue has no camera_id for thumbnail")
+        return False
+
+    # If a preset is specified, move the camera there first
+    if preset_id:
+        try:
+            preset = db.query(Preset).filter(Preset.id == preset_id).first()
+            camera = db.query(Camera).filter(Camera.id == camera_id).first()
+            if preset and camera:
+                from utils.crypto import decrypt
+                ptz_service = get_ptz_service()
+                pan = preset.pan if preset.pan is not None else 0.0
+                tilt = preset.tilt if preset.tilt is not None else 0.0
+                zoom = preset.zoom if preset.zoom is not None else 1.0
+                onvif_port = camera.onvif_port if hasattr(camera, 'onvif_port') and camera.onvif_port else 80
+                password = decrypt(camera.password) if camera.password else ""
+                await ptz_service.absolute_move(
+                    camera.ip_address, onvif_port,
+                    camera.username or "", password,
+                    pan, tilt, zoom,
+                )
+                await asyncio.sleep(2)  # Wait for camera to settle
+        except Exception as exc:
+            logger.warning("PTZ move for thumbnail failed (continuing): %s", exc)
+
+    # Capture snapshot
+    camera_svc = CameraService(db)
+    snapshot = await camera_svc.get_camera_snapshot(camera_id)
+    if not snapshot or not snapshot.get("image_data"):
+        logger.warning("No snapshot available from camera %s for thumbnail", camera_id)
+        return False
+
+    image_bytes = base64.b64decode(snapshot["image_data"])
+    return upload_thumbnail(credentials, broadcast_id, image_bytes)

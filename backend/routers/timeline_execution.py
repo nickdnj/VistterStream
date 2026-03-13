@@ -56,7 +56,9 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
     for dest in destinations:
         if dest.platform == "youtube_oauth" and dest.youtube_oauth_connected and dest.youtube_oauth_refresh_token_enc:
             try:
-                from services.youtube_destination_service import get_credentials, create_broadcast
+                from services.youtube_destination_service import (
+                    get_credentials, create_broadcast, capture_and_upload_broadcast_thumbnail,
+                )
                 from utils.crypto import decrypt
                 client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
                 refresh_token = decrypt(dest.youtube_oauth_refresh_token_enc)
@@ -65,46 +67,20 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
                     client_secret=client_secret,
                     refresh_token=refresh_token,
                 )
-                broadcast_title = (
-                    "Monmouth Beach Live Cam \u2014 Shrewsbury River, NJ "
-                    "| Boating, Fishing, Weather & Tides (24/7)"
-                )
-                broadcast_desc = (
-                    "Welcome to the Monmouth Beach live cam overlooking the "
-                    "Shrewsbury River in New Jersey. This 24/7 stream shows "
-                    "real-time river conditions, boating activity, fishing "
-                    "conditions, weather, and tides \u2014 all updated "
-                    "continuously with live Tempest weather data.\n\n"
-                    "Great for:\n"
-                    "\u2022 Checking boating and fishing conditions\n"
-                    "\u2022 Seeing wind and tide before heading out\n"
-                    "\u2022 Watching Shrewsbury River activity\n"
-                    "\u2022 Monitoring Monmouth Beach weather in real time\n"
-                    "\u2022 Enjoying a scenic NJ waterfront livestream\n\n"
-                    "Live on-screen data includes:\n"
-                    "\u2022 Wind speed & direction (ideal for boating & paddling)\n"
-                    "\u2022 Temperature & humidity\n"
-                    "\u2022 Rain status & storm indicators\n"
-                    "\u2022 Barometric trends\n"
-                    "\u2022 Tide stage & short-term forecast overlays\n\n"
-                    "Weather data provided by Tempest Weather System, "
-                    "refreshed every few seconds.\n\n"
-                    "\U0001f527 Tech Behind the Stream (For Makers & Developers)\n\n"
-                    "This stream is built using:\n"
-                    "\u2022 VistterStream \u2014 an open-source live-streaming engine\n"
-                    "\u2022 TempestWeather \u2014 a dynamic overlay generator "
-                    "pulling real-time Tempest API data\n\n"
-                    "Source Code:\n"
-                    "\u2022 https://github.com/nickdnj/vistterstream\n"
-                    "\u2022 https://github.com/nickdnj/tempestweather"
-                )
+                broadcast_title = timeline.broadcast_title or timeline.name
+                broadcast_desc = timeline.broadcast_description or ""
+                privacy_status = timeline.broadcast_privacy or "public"
+                tags = [t.strip() for t in (timeline.broadcast_tags or "").split(",") if t.strip()] or None
+                category_id = timeline.broadcast_category_id or None
                 result = create_broadcast(
                     credentials=credentials,
                     title=broadcast_title,
                     description=broadcast_desc,
-                    privacy_status="public",
+                    privacy_status=privacy_status,
                     create_stream=True,
                     enable_dvr=False,
+                    tags=tags,
+                    category_id=category_id,
                 )
                 dest.youtube_broadcast_id = result.get("broadcast_id")
                 dest.youtube_stream_id = result.get("stream_id")
@@ -115,6 +91,14 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
                 if result.get("watch_url"):
                     dest.youtube_watch_url = result["watch_url"]
                 logger.info("Auto-created YouTube broadcast %s for destination %s", result.get("broadcast_id"), dest.name)
+                # Upload thumbnail if enabled
+                if timeline.broadcast_thumbnail_enabled and result.get("broadcast_id"):
+                    try:
+                        await capture_and_upload_broadcast_thumbnail(
+                            db, timeline, credentials, result["broadcast_id"],
+                        )
+                    except Exception as thumb_err:
+                        logger.warning("Broadcast thumbnail upload failed (non-fatal): %s", thumb_err)
             except Exception as e:
                 logger.error("Failed to auto-create broadcast for %s: %s", dest.name, e)
                 raise HTTPException(status_code=500, detail=f"Failed to create YouTube broadcast for {dest.name}: {e}")

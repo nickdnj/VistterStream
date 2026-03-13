@@ -23,7 +23,15 @@ class Timeline(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
+
+    # Broadcast metadata (used when auto-creating YouTube broadcasts)
+    broadcast_title = Column(String)           # Falls back to timeline.name
+    broadcast_description = Column(String)     # Falls back to ""
+    broadcast_tags = Column(String)            # Comma-separated tags
+    broadcast_privacy = Column(String, default="public")  # public/unlisted/private
+    broadcast_category_id = Column(String)     # YouTube category ID (e.g. "19" = Travel)
+    broadcast_thumbnail_enabled = Column(Boolean, default=True)  # Auto-capture + upload thumbnail
+
     # Relationships
     tracks = relationship("TimelineTrack", back_populates="timeline", cascade="all, delete-orphan")
     executions = relationship("TimelineExecution", back_populates="timeline")

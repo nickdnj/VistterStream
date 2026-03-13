@@ -84,7 +84,29 @@ interface Timeline {
   loop: boolean;
   is_active?: boolean;
   tracks: Track[];
+  broadcast_title?: string;
+  broadcast_description?: string;
+  broadcast_tags?: string;
+  broadcast_privacy?: string;
+  broadcast_category_id?: string;
+  broadcast_thumbnail_enabled?: boolean;
 }
+
+const YOUTUBE_CATEGORIES = [
+  { id: '', label: '(Default)' },
+  { id: '1', label: 'Film & Animation' },
+  { id: '2', label: 'Autos & Vehicles' },
+  { id: '10', label: 'Music' },
+  { id: '15', label: 'Pets & Animals' },
+  { id: '17', label: 'Sports' },
+  { id: '19', label: 'Travel & Events' },
+  { id: '20', label: 'Gaming' },
+  { id: '22', label: 'People & Blogs' },
+  { id: '24', label: 'Entertainment' },
+  { id: '25', label: 'News & Politics' },
+  { id: '27', label: 'Education' },
+  { id: '28', label: 'Science & Technology' },
+];
 
 interface Destination {
   id: number;
@@ -136,6 +158,7 @@ const TimelineEditor: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [showNewTimelineModal, setShowNewTimelineModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [broadcastExpanded, setBroadcastExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -266,7 +289,9 @@ const TimelineEditor: React.FC = () => {
       layer: 0,
       is_enabled: true,
       cues: []
-    }]
+    }],
+    broadcast_title: '',
+    broadcast_description: '',
   });
 
   useEffect(() => {
@@ -1029,7 +1054,9 @@ const TimelineEditor: React.FC = () => {
           layer: 0,
           is_enabled: true,
           cues: []
-        }]
+        }],
+        broadcast_title: '',
+        broadcast_description: '',
       });
     } catch (error) {
       console.error('Failed to create timeline:', error);
@@ -1775,6 +1802,90 @@ const TimelineEditor: React.FC = () => {
                 </div>
               </div>
 
+              {/* Broadcast Settings (collapsible) */}
+              <div className="bg-dark-800 border-b border-dark-700">
+                <button
+                  onClick={() => setBroadcastExpanded(!broadcastExpanded)}
+                  className="w-full px-4 py-1.5 flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+                >
+                  {broadcastExpanded ? <ChevronDownIcon className="w-4 h-4" /> : <ChevronRightIcon className="w-4 h-4" />}
+                  Broadcast Settings
+                </button>
+                {broadcastExpanded && (
+                  <div className="px-4 pb-3 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Title</label>
+                        <input
+                          type="text"
+                          value={selectedTimeline.broadcast_title || ''}
+                          onChange={(e) => setSelectedTimeline({ ...selectedTimeline, broadcast_title: e.target.value })}
+                          placeholder={selectedTimeline.name}
+                          className="w-full px-2 py-1.5 bg-dark-700 border border-dark-600 rounded text-sm text-white placeholder-gray-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Tags (comma-separated)</label>
+                        <input
+                          type="text"
+                          value={selectedTimeline.broadcast_tags || ''}
+                          onChange={(e) => setSelectedTimeline({ ...selectedTimeline, broadcast_tags: e.target.value })}
+                          placeholder="live, webcam, weather"
+                          className="w-full px-2 py-1.5 bg-dark-700 border border-dark-600 rounded text-sm text-white placeholder-gray-500"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-1">Description</label>
+                      <textarea
+                        value={selectedTimeline.broadcast_description || ''}
+                        onChange={(e) => setSelectedTimeline({ ...selectedTimeline, broadcast_description: e.target.value })}
+                        placeholder="Broadcast description..."
+                        rows={4}
+                        className="w-full px-2 py-1.5 bg-dark-700 border border-dark-600 rounded text-sm text-white placeholder-gray-500 resize-y"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Privacy</label>
+                        <select
+                          value={selectedTimeline.broadcast_privacy || 'public'}
+                          onChange={(e) => setSelectedTimeline({ ...selectedTimeline, broadcast_privacy: e.target.value })}
+                          className="w-full px-2 py-1.5 bg-dark-700 border border-dark-600 rounded text-sm text-white"
+                        >
+                          <option value="public">Public</option>
+                          <option value="unlisted">Unlisted</option>
+                          <option value="private">Private</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Category</label>
+                        <select
+                          value={selectedTimeline.broadcast_category_id || ''}
+                          onChange={(e) => setSelectedTimeline({ ...selectedTimeline, broadcast_category_id: e.target.value })}
+                          className="w-full px-2 py-1.5 bg-dark-700 border border-dark-600 rounded text-sm text-white"
+                        >
+                          {YOUTUBE_CATEGORIES.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedTimeline.broadcast_thumbnail_enabled !== false}
+                            onChange={(e) => setSelectedTimeline({ ...selectedTimeline, broadcast_thumbnail_enabled: e.target.checked })}
+                            className="w-4 h-4"
+                          />
+                          Auto-generate thumbnail
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Preview Panel: YouTube Live embed or Overlay Editor (toggle when streaming) */}
               {isRunning && hasYoutubeDestination && youtubeVideoId && previewMode === 'youtube' ? (
                 <div className="bg-dark-800 border-b border-dark-700">
@@ -2126,6 +2237,32 @@ const TimelineEditor: React.FC = () => {
                   className="w-4 h-4"
                 />
                 <label className="text-sm text-gray-300">Loop timeline</label>
+              </div>
+
+              <div className="border-t border-dark-600 pt-3 mt-3">
+                <p className="text-xs text-gray-500 mb-2">Broadcast Metadata (optional)</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Broadcast Title</label>
+                    <input
+                      type="text"
+                      value={newTimeline.broadcast_title || ''}
+                      onChange={(e) => setNewTimeline({ ...newTimeline, broadcast_title: e.target.value })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                      placeholder="Defaults to timeline name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Broadcast Description</label>
+                    <textarea
+                      value={newTimeline.broadcast_description || ''}
+                      onChange={(e) => setNewTimeline({ ...newTimeline, broadcast_description: e.target.value })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white resize-y"
+                      placeholder="Description for YouTube broadcast..."
+                      rows={3}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
