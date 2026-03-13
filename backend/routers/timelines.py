@@ -68,29 +68,29 @@ class TimelineCreate(BaseModel):
     resolution: str = "1920x1080"
     loop: bool = True
     tracks: List[TrackCreate] = []
-    broadcast_title: str = None
-    broadcast_description: str = None
-    broadcast_tags: str = None
+    broadcast_title: Optional[str] = None
+    broadcast_description: Optional[str] = None
+    broadcast_tags: Optional[str] = None
     broadcast_privacy: str = "public"
-    broadcast_category_id: str = None
+    broadcast_category_id: Optional[str] = None
     broadcast_thumbnail_enabled: bool = True
 
 
 class TimelineUpdate(BaseModel):
-    name: str = None
-    description: str = None
-    duration: float = None
-    fps: int = None
-    resolution: str = None
-    loop: bool = None
-    is_active: bool = None
-    tracks: List[TrackCreate] = None
-    broadcast_title: str = None
-    broadcast_description: str = None
-    broadcast_tags: str = None
-    broadcast_privacy: str = None
-    broadcast_category_id: str = None
-    broadcast_thumbnail_enabled: bool = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    duration: Optional[float] = None
+    fps: Optional[int] = None
+    resolution: Optional[str] = None
+    loop: Optional[bool] = None
+    is_active: Optional[bool] = None
+    tracks: Optional[List[TrackCreate]] = None
+    broadcast_title: Optional[str] = None
+    broadcast_description: Optional[str] = None
+    broadcast_tags: Optional[str] = None
+    broadcast_privacy: Optional[str] = None
+    broadcast_category_id: Optional[str] = None
+    broadcast_thumbnail_enabled: Optional[bool] = None
 
     class Config:
         extra = "ignore"  # Ignore extra fields like id, created_at, updated_at
