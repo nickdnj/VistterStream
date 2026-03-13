@@ -235,6 +235,131 @@ class PTZService:
             position["Zoom"] = {"x": zoom}
         return position or None
     
+    async def continuous_move(
+        self,
+        address: str,
+        port: int,
+        username: str,
+        password: str,
+        pan_speed: float = 0.0,
+        tilt_speed: float = 0.0,
+        zoom_speed: float = 0.0,
+    ) -> bool:
+        """
+        Start continuous movement. Camera moves until stop_movement() is called.
+        Speed values range from -1.0 to 1.0.
+        """
+        if not self._onvif_available:
+            logger.warning("ONVIF not available, cannot perform continuous move")
+            return False
+
+        try:
+            camera = await self.get_onvif_camera(address, port, username, password)
+            loop = asyncio.get_event_loop()
+            ptz_service = camera.create_ptz_service()
+            media_service = camera.create_media_service()
+            profiles = await loop.run_in_executor(None, media_service.GetProfiles)
+            if not profiles:
+                logger.error("No media profiles found")
+                return False
+
+            media_profile = profiles[0]
+            request = ptz_service.create_type("ContinuousMove")
+            request.ProfileToken = media_profile.token
+            request.Velocity = {}
+            if pan_speed != 0.0 or tilt_speed != 0.0:
+                request.Velocity["PanTilt"] = {"x": pan_speed, "y": tilt_speed}
+            if zoom_speed != 0.0:
+                request.Velocity["Zoom"] = {"x": zoom_speed}
+
+            self._debug(
+                "ContinuousMove",
+                pan_speed=pan_speed,
+                tilt_speed=tilt_speed,
+                zoom_speed=zoom_speed,
+            )
+            await loop.run_in_executor(
+                None, partial(ptz_service.ContinuousMove, request)
+            )
+            return True
+        except Exception as e:
+            logger.error("ContinuousMove failed: %s", e)
+            return False
+
+    async def stop_movement(
+        self,
+        address: str,
+        port: int,
+        username: str,
+        password: str,
+    ) -> bool:
+        """Stop all PTZ movement."""
+        if not self._onvif_available:
+            return False
+
+        try:
+            camera = await self.get_onvif_camera(address, port, username, password)
+            loop = asyncio.get_event_loop()
+            ptz_service = camera.create_ptz_service()
+            media_service = camera.create_media_service()
+            profiles = await loop.run_in_executor(None, media_service.GetProfiles)
+            if not profiles:
+                return False
+
+            media_profile = profiles[0]
+            request = ptz_service.create_type("Stop")
+            request.ProfileToken = media_profile.token
+            request.PanTilt = True
+            request.Zoom = True
+
+            self._debug("Stop movement")
+            await loop.run_in_executor(None, partial(ptz_service.Stop, request))
+            return True
+        except Exception as e:
+            logger.error("Stop movement failed: %s", e)
+            return False
+
+    async def absolute_move(
+        self,
+        address: str,
+        port: int,
+        username: str,
+        password: str,
+        pan: Optional[float] = None,
+        tilt: Optional[float] = None,
+        zoom: Optional[float] = None,
+    ) -> bool:
+        """Move camera to an absolute position."""
+        if not self._onvif_available:
+            return False
+
+        position = self._build_absolute_position(pan, tilt, zoom)
+        if not position:
+            return False
+
+        try:
+            camera = await self.get_onvif_camera(address, port, username, password)
+            loop = asyncio.get_event_loop()
+            ptz_service = camera.create_ptz_service()
+            media_service = camera.create_media_service()
+            profiles = await loop.run_in_executor(None, media_service.GetProfiles)
+            if not profiles:
+                return False
+
+            media_profile = profiles[0]
+            request = ptz_service.create_type("AbsoluteMove")
+            request.ProfileToken = media_profile.token
+            request.Position = position
+
+            self._debug("AbsoluteMove", pan=pan, tilt=tilt, zoom=zoom)
+            await loop.run_in_executor(
+                None, partial(ptz_service.AbsoluteMove, request)
+            )
+            return True
+        except Exception as e:
+            logger.error("AbsoluteMove failed: %s", e)
+            return False
+
     async def move_to_preset(
         self,
         address: str,

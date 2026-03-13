@@ -16,6 +16,7 @@ from pathlib import Path
 # Import routers
 from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog, settings, reelforge
 from routers import presets as presets_router
+from routers import ptz as ptz_router
 
 # Import health monitor
 from services.camera_health_monitor import start_health_monitor, stop_health_monitor
@@ -172,6 +173,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(cameras.router, prefix="/api/cameras", tags=["cameras"])
 app.include_router(streams.router, prefix="/api/streams", tags=["streams"])
 app.include_router(presets_router.router)  # PTZ Presets
+app.include_router(ptz_router.router, prefix="/api/cameras", tags=["ptz"])  # PTZ Movement
 app.include_router(assets.router)  # Assets (overlays, graphics, API images)
 app.include_router(status.router, prefix="/api/status", tags=["status"])
 app.include_router(destinations.public_router)  # YouTube OAuth callback (no auth)

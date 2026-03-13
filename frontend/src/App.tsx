@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
-import PresetManagement from './components/PresetManagement';
 import TimelineEditor from './components/TimelineEditor';
 import StreamingDestinations from './components/StreamingDestinations';
 import Settings from './components/Settings';
@@ -29,7 +28,7 @@ function App() {
                     <Route path="/timelines" element={<TimelineEditor />} />
                     <Route path="/reelforge" element={<ReelForge />} />
                     <Route path="/destinations" element={<StreamingDestinations />} />
-                    <Route path="/presets" element={<PresetManagement />} />
+                    <Route path="/presets" element={<Navigate to="/settings" replace />} />
                     <Route path="/scheduler" element={<Navigate to="/settings" replace />} />
                     <Route path="/settings" element={<Settings />} />
                   </Routes>

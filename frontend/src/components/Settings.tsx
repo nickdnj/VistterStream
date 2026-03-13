@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
-import PresetManagement from './PresetManagement';
 import StreamingDestinations from './StreamingDestinations';
 import AssetManagement from './AssetManagement';
 import CameraManagement from './CameraManagement';
 import Scheduler from './Scheduler';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'presets' | 'assets' | 'destinations' | 'system';
+type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'assets' | 'destinations' | 'system';
 
 interface GeneralSettings {
   appliance_name: string;
@@ -220,7 +219,6 @@ const Settings: React.FC = () => {
     { id: 'account' as SettingsTab, name: 'Account', icon: '👤' },
     { id: 'cameras' as SettingsTab, name: 'Cameras', icon: '📷' },
     { id: 'scheduler' as SettingsTab, name: 'Scheduler', icon: '📅' },
-    { id: 'presets' as SettingsTab, name: 'PTZ Presets', icon: '🎯' },
     { id: 'assets' as SettingsTab, name: 'Assets', icon: '🎨' },
     { id: 'destinations' as SettingsTab, name: 'Destinations', icon: '📡' },
     { id: 'system' as SettingsTab, name: 'System', icon: '💻' },
@@ -503,12 +501,6 @@ const Settings: React.FC = () => {
         {activeTab === 'scheduler' && (
           <div>
             <Scheduler />
-          </div>
-        )}
-
-        {activeTab === 'presets' && (
-          <div>
-            <PresetManagement />
           </div>
         )}
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { cameraService, CameraWithStatus, CameraCreate } from '../services/cameraService';
+import PTZControlPanel from './PTZControlPanel';
 import {
   PlusIcon,
   PencilIcon,
@@ -9,6 +10,7 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   XCircleIcon,
+  ViewfinderCircleIcon,
 } from '@heroicons/react/24/outline';
 
 const CameraManagement: React.FC = () => {
@@ -21,6 +23,8 @@ const CameraManagement: React.FC = () => {
   const [streamingCamera, setStreamingCamera] = useState<CameraWithStatus | null>(null);
   const [snapshots, setSnapshots] = useState<{[key: number]: string}>({});
   const [liveSnapshot, setLiveSnapshot] = useState<string>('');
+  const [showPTZPanel, setShowPTZPanel] = useState(false);
+  const [ptzCamera, setPtzCamera] = useState<CameraWithStatus | null>(null);
 
   useEffect(() => {
     loadCameras();
@@ -94,6 +98,11 @@ const CameraManagement: React.FC = () => {
   const handleViewStream = (camera: CameraWithStatus) => {
     setStreamingCamera(camera);
     setShowStreamModal(true);
+  };
+
+  const handleOpenPTZ = (camera: CameraWithStatus) => {
+    setPtzCamera(camera);
+    setShowPTZPanel(true);
   };
 
   const handleAddCamera = async (cameraData: CameraCreate) => {
@@ -289,6 +298,16 @@ const CameraManagement: React.FC = () => {
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end space-x-2">
+                        {camera.type === 'ptz' && (
+                          <button
+                            onClick={() => handleOpenPTZ(camera)}
+                            disabled={camera.status !== 'online'}
+                            className="text-primary-600 hover:text-primary-500 disabled:opacity-50 disabled:text-gray-600"
+                            title={camera.status === 'online' ? 'PTZ Control' : 'Camera offline'}
+                          >
+                            <ViewfinderCircleIcon className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleViewStream(camera)}
                           disabled={camera.status !== 'online'}
@@ -335,6 +354,14 @@ const CameraManagement: React.FC = () => {
           camera={editingCamera}
           onClose={() => setEditingCamera(null)}
           onSave={(data) => handleUpdateCamera(editingCamera.id, data)}
+        />
+      )}
+
+      {/* PTZ Control Panel */}
+      {showPTZPanel && ptzCamera && (
+        <PTZControlPanel
+          camera={ptzCamera}
+          onClose={() => { setShowPTZPanel(false); setPtzCamera(null); }}
         />
       )}
 
