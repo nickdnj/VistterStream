@@ -4,6 +4,7 @@ x-backend-base: &backend-base
     dockerfile: Dockerfile
   extra_hosts:
     - "host.docker.internal:host-gateway"
+    - "vistter.local:host-gateway"
   env_file:
     - ../.env
   environment:
