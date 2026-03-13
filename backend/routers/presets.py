@@ -2,7 +2,11 @@
 PTZ Preset API endpoints
 """
 
+import asyncio
+import base64
 import logging
+import os
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,12 +15,51 @@ from sqlalchemy.orm import Session
 from models.database import Camera, Preset, get_db
 from models.schemas import Preset as PresetSchema
 from models.schemas import PresetCreate, PresetUpdate
+from services.camera_service import CameraService
 from services.ptz_service import get_ptz_service
 from utils.crypto import decrypt
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/presets", tags=["presets"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
+
+# Resolve uploads path (same logic as main.py)
+_uploads_dir_env = os.getenv("UPLOADS_DIR")
+_uploads_path = Path(_uploads_dir_env) if _uploads_dir_env else (Path(__file__).parent.parent / "uploads")
+
+
+async def _capture_thumbnail(camera_id: int, preset_id: int, db: Session) -> Optional[str]:
+    """Capture snapshot from camera, save as preset thumbnail. Returns path or None."""
+    try:
+        camera_svc = CameraService(db)
+        snapshot = await camera_svc.get_camera_snapshot(camera_id)
+        if not snapshot or not snapshot.get("image_data"):
+            logger.warning("No snapshot available for camera %s", camera_id)
+            return None
+
+        # Decode base64 image
+        image_bytes = base64.b64decode(snapshot["image_data"])
+
+        # Ensure presets subdirectory exists
+        presets_dir = _uploads_path / "presets"
+        presets_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write thumbnail file
+        thumb_path = presets_dir / f"{preset_id}.jpg"
+        thumb_path.write_bytes(image_bytes)
+
+        # Update preset record
+        rel_path = f"/uploads/presets/{preset_id}.jpg"
+        preset = db.query(Preset).filter(Preset.id == preset_id).first()
+        if preset:
+            preset.thumbnail_path = rel_path
+            db.commit()
+
+        logger.info("Saved thumbnail for preset %s -> %s (%d bytes)", preset_id, rel_path, len(image_bytes))
+        return rel_path
+    except Exception as exc:
+        logger.warning("Thumbnail capture failed for preset %s: %s", preset_id, exc)
+        return None
 
 
 def _mask_secret(value: Optional[str]) -> str:
@@ -154,6 +197,11 @@ async def update_preset(preset_id: int, preset_update: PresetUpdate, db: Session
         preset.zoom,
         preset.camera_preset_token,
     )
+
+    # Re-capture thumbnail if camera position changed
+    if needs_camera_update:
+        await _capture_thumbnail(preset.camera_id, preset.id, db)
+        db.refresh(preset)
 
     return preset
 
@@ -413,7 +461,55 @@ async def capture_current_position(camera_id: int, preset_name: str, db: Session
         preset.tilt,
         preset.zoom,
     )
+
+    # Capture thumbnail (camera is already at preset position)
+    await _capture_thumbnail(camera_id, preset.id, db)
+    db.refresh(preset)
+
     return {
         "message": f"Preset '{preset_name}' captured successfully",
         "preset": PresetSchema.from_orm(preset)
     }
+
+
+@router.post("/{preset_id}/refresh-thumbnail")
+async def refresh_thumbnail(preset_id: int, db: Session = Depends(get_db)):
+    """Move camera to preset position and capture a fresh thumbnail."""
+    preset = db.query(Preset).filter(Preset.id == preset_id).first()
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found")
+
+    camera = db.query(Camera).filter(Camera.id == preset.camera_id).first()
+    if not camera:
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    password = None
+    if camera.password_enc:
+        password = decrypt(camera.password_enc)
+    if not password:
+        raise HTTPException(status_code=400, detail="Camera credentials not configured")
+
+    # Move camera to preset position
+    ptz_service = get_ptz_service()
+    success = await ptz_service.move_to_preset(
+        address=camera.address,
+        port=camera.onvif_port,
+        username=camera.username,
+        password=password,
+        preset_token=preset.camera_preset_token or str(preset.id),
+        pan=preset.pan if preset.pan is not None else 0.0,
+        tilt=preset.tilt if preset.tilt is not None else 0.0,
+        zoom=preset.zoom if preset.zoom is not None else 1.0,
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to move camera to preset")
+
+    # Wait for camera to settle
+    await asyncio.sleep(2)
+
+    # Capture thumbnail
+    thumb_path = await _capture_thumbnail(camera.id, preset.id, db)
+    if not thumb_path:
+        raise HTTPException(status_code=500, detail="Failed to capture thumbnail")
+
+    return {"preset_id": preset.id, "thumbnail_path": thumb_path}

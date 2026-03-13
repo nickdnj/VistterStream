@@ -331,7 +331,13 @@ const PTZControlPanel: React.FC<PTZControlPanelProps> = ({ camera, onClose }) =>
                         movingToPreset === preset.id ? 'ring-2 ring-primary-500' : ''
                       }`}
                     >
-                      <span className="text-sm text-white truncate mr-2">{preset.name}</span>
+                      {preset.thumbnail_path ? (
+                        <img src={preset.thumbnail_path} alt={preset.name}
+                             className="w-10 h-7 rounded object-cover flex-shrink-0" />
+                      ) : (
+                        <span className="w-10 h-7 rounded bg-dark-600 flex items-center justify-center text-xs flex-shrink-0">🎯</span>
+                      )}
+                      <span className="text-sm text-white truncate mr-2 flex-1">{preset.name}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
                           onClick={() => handleGoTo(preset)}

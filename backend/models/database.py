@@ -148,6 +148,7 @@ class Preset(Base):
     tilt = Column(Float, default=0.0)
     zoom = Column(Float, default=1.0)
     camera_preset_token = Column(String)  # Token returned by camera for ONVIF control
+    thumbnail_path = Column(String)  # e.g. "/uploads/presets/42.jpg"
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     
     # Relationships

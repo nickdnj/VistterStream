@@ -9,6 +9,7 @@ export interface Preset {
   zoom: number;
   created_at: string;
   camera_preset_token?: string;
+  thumbnail_path?: string | null;
 }
 
 export interface PTZStatus {
@@ -63,6 +64,11 @@ export const ptzService = {
 
   async updatePreset(presetId: number, data: Partial<Pick<Preset, 'name' | 'pan' | 'tilt' | 'zoom'>>): Promise<Preset> {
     const response = await api.patch(`/presets/${presetId}`, data);
+    return response.data;
+  },
+
+  async refreshThumbnail(presetId: number): Promise<{ preset_id: number; thumbnail_path: string }> {
+    const response = await api.post(`/presets/${presetId}/refresh-thumbnail`);
     return response.data;
   },
 };

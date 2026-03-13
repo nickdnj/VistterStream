@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
+import { cameraService, CameraWithStatus } from '../services/cameraService';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import PTZControlPanel from './PTZControlPanel';
 import OverlayPreviewPanel, { CueKey, OverlayPositionUpdate, OverlayInfo } from './timeline/OverlayPreviewPanel';
 
 // UI Version for debugging deployment
@@ -21,6 +23,7 @@ interface Preset {
   tilt: number;
   zoom: number;
   created_at: string;
+  thumbnail_path?: string | null;
 }
 
 interface Asset {
@@ -216,6 +219,14 @@ const TimelineEditor: React.FC = () => {
     time: number;
   } | null>(null);
 
+  // Cue edit popover
+  const [selectedCue, setSelectedCue] = useState<{
+    trackIndex: number; cueIndex: number; anchorEl: HTMLElement;
+  } | null>(null);
+
+  // PTZ panel in timeline editor
+  const [ptzCamera, setPtzCamera] = useState<CameraWithStatus | null>(null);
+
   // Custom order state (persisted to localStorage)
   const [cameraOrder, setCameraOrder] = useState<number[]>([]);
   const [assetOrder, setAssetOrder] = useState<number[]>([]);
@@ -309,14 +320,21 @@ const TimelineEditor: React.FC = () => {
     if (timelineOrder.length) localStorage.setItem('timeline-timeline-order', JSON.stringify(timelineOrder));
   }, [timelineOrder]);
 
-  // Close context menus when clicking elsewhere
+  // Close context menus and popovers when clicking elsewhere
   useEffect(() => {
     const handleClick = () => {
       setContextMenu(null);
       setTimelineContextMenu(null);
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedCue(null);
+    };
     document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Sync Start/Stop button with backend status on refresh and selection changes
@@ -1462,16 +1480,37 @@ const TimelineEditor: React.FC = () => {
                             </div>
                           </div>
                           
-                          {isPTZ && cameraPresets.length > 0 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleCameraExpand(camera.id);
-                              }}
-                              className="text-gray-400 hover:text-white p-1"
-                            >
-                              {isExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
-                            </button>
+                          {isPTZ && (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    const cam = await cameraService.getCamera(camera.id);
+                                    setPtzCamera(cam);
+                                  } catch (err) {
+                                    console.error('Failed to load camera:', err);
+                                  }
+                                }}
+                                className="text-gray-400 hover:text-primary-400 p-1"
+                                title="Open PTZ Controls"
+                              >
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              </button>
+                              {cameraPresets.length > 0 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleCameraExpand(camera.id);
+                                  }}
+                                  className="text-gray-400 hover:text-white p-1"
+                                >
+                                  {isExpanded ? <ChevronDownIcon className="h-4 w-4" /> : <ChevronRightIcon className="h-4 w-4" />}
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
 
@@ -1491,8 +1530,13 @@ const TimelineEditor: React.FC = () => {
                                 }}
                                 className="flex items-center gap-2 px-2 py-1.5 bg-dark-800 hover:bg-dark-600 rounded cursor-move text-sm text-gray-300"
                               >
-                                <span>🎯</span>
-                                <span>{preset.name}</span>
+                                {preset.thumbnail_path ? (
+                                  <img src={preset.thumbnail_path} alt={preset.name}
+                                       className="w-10 h-7 rounded object-cover flex-shrink-0" />
+                                ) : (
+                                  <span className="w-10 h-7 rounded bg-dark-700 flex items-center justify-center text-xs flex-shrink-0">🎯</span>
+                                )}
+                                <span className="truncate">{preset.name}</span>
                               </div>
                             ))}
                           </div>
@@ -1901,10 +1945,12 @@ const TimelineEditor: React.FC = () => {
                           const asset = cue.action_params.asset_id ? getAssetById(cue.action_params.asset_id) : null;
                           const cueColor = getTrackColor(track.track_type);
 
+                          const hasThumbnail = preset?.thumbnail_path && !asset;
+
                           return (
                             <div
                               key={cueIndex}
-                              className={`absolute ${cueColor} text-white rounded border-2 border-white/20 hover:border-white/40 transition-all cursor-move select-none`}
+                              className={`absolute ${cueColor} text-white rounded border-2 border-white/20 hover:border-white/40 transition-all cursor-move select-none overflow-hidden`}
                               style={{
                                 left: `${cue.start_time * zoomLevel}px`,
                                 width: `${cue.duration * zoomLevel}px`,
@@ -1912,9 +1958,19 @@ const TimelineEditor: React.FC = () => {
                                 bottom: '4px',
                                 display: 'flex',
                                 alignItems: 'center',
-                                padding: '0 8px'
+                                padding: '0 8px',
+                                backgroundImage: hasThumbnail ? `url(${preset!.thumbnail_path})` : undefined,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
                               }}
                               onMouseDown={(e) => handleCueMouseDown(e, trackIndex, cueIndex)}
+                              onClick={(e) => {
+                                // Only open popover if not dragging (no significant mouse movement)
+                                if (!draggingCue && !resizingCue) {
+                                  e.stopPropagation();
+                                  setSelectedCue({ trackIndex, cueIndex, anchorEl: e.currentTarget as HTMLElement });
+                                }
+                              }}
                             >
                               {/* Left Resize Handle */}
                               <div
@@ -1925,8 +1981,13 @@ const TimelineEditor: React.FC = () => {
                                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/50 rounded-r"></div>
                               </div>
                               
+                              {/* Dark overlay for readability on thumbnail backgrounds */}
+                              {hasThumbnail && (
+                                <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+                              )}
+
                               {/* Cue Content */}
-                              <div className="flex-1 overflow-hidden">
+                              <div className="flex-1 overflow-hidden relative z-[1]">
                                 <div className="text-xs font-semibold truncate">
                                   {asset ? asset.name : (camera?.name || 'Camera')}
                                 </div>
@@ -2212,6 +2273,148 @@ const TimelineEditor: React.FC = () => {
             <span>▶️</span> Go to here
           </button>
         </div>
+      )}
+
+      {/* Cue Edit Popover */}
+      {selectedCue && selectedTimeline && (() => {
+        const track = selectedTimeline.tracks[selectedCue.trackIndex];
+        const cue = track?.cues[selectedCue.cueIndex];
+        if (!cue) return null;
+        const cueCamera = getCameraById(cue.action_params.camera_id || 0);
+        const cuePreset = cue.action_params.preset_id ? getPresetById(cue.action_params.preset_id) : null;
+        const cueAsset = cue.action_params.asset_id ? getAssetById(cue.action_params.asset_id) : null;
+        const cameraCuePresets = cue.action_params.camera_id ? getPresetsForCamera(cue.action_params.camera_id) : [];
+        const rect = selectedCue.anchorEl.getBoundingClientRect();
+
+        return (
+          <div
+            className="fixed z-50 bg-dark-800 border border-dark-600 rounded-xl shadow-2xl p-4 w-72"
+            style={{
+              left: Math.min(rect.left, window.innerWidth - 300),
+              top: Math.max(8, rect.top - 340),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Thumbnail */}
+            {cuePreset?.thumbnail_path ? (
+              <img src={cuePreset.thumbnail_path} alt={cuePreset.name}
+                   className="w-full h-32 rounded-lg object-cover mb-3" />
+            ) : (
+              <div className="w-full h-32 rounded-lg bg-dark-700 flex items-center justify-center mb-3 text-gray-500">
+                {cueAsset ? cueAsset.name : (cueCamera?.name || 'No preview')}
+              </div>
+            )}
+
+            {/* Camera + Preset name */}
+            <div className="mb-3">
+              <div className="text-sm font-semibold text-white">{cueCamera?.name || 'Camera'}</div>
+              {cuePreset && <div className="text-xs text-gray-400">Preset: {cuePreset.name}</div>}
+              {cueAsset && <div className="text-xs text-gray-400">Asset: {cueAsset.name}</div>}
+            </div>
+
+            {/* Duration editor */}
+            <div className="mb-3">
+              <label className="text-xs text-gray-400 block mb-1">Duration (seconds)</label>
+              <input
+                type="number"
+                min={1}
+                max={selectedTimeline.duration - cue.start_time}
+                value={cue.duration}
+                onChange={(e) => {
+                  const newDuration = Math.max(1, Math.min(Number(e.target.value), selectedTimeline.duration - cue.start_time));
+                  const updatedTimeline = {
+                    ...selectedTimeline,
+                    tracks: selectedTimeline.tracks.map((t, ti) =>
+                      ti === selectedCue.trackIndex
+                        ? { ...t, cues: t.cues.map((c, ci) => ci === selectedCue.cueIndex ? { ...c, duration: newDuration } : c) }
+                        : t
+                    )
+                  };
+                  setSelectedTimeline(updatedTimeline);
+                }}
+                className="w-full px-2 py-1.5 bg-dark-700 border border-dark-600 rounded text-white text-sm"
+              />
+            </div>
+
+            {/* Preset selector (only for camera cues with presets available) */}
+            {!cueAsset && cameraCuePresets.length > 0 && (
+              <div className="mb-3">
+                <label className="text-xs text-gray-400 block mb-1">Preset</label>
+                <select
+                  value={cue.action_params.preset_id || ''}
+                  onChange={(e) => {
+                    const newPresetId = e.target.value ? Number(e.target.value) : undefined;
+                    const updatedTimeline = {
+                      ...selectedTimeline,
+                      tracks: selectedTimeline.tracks.map((t, ti) =>
+                        ti === selectedCue.trackIndex
+                          ? { ...t, cues: t.cues.map((c, ci) => ci === selectedCue.cueIndex
+                              ? { ...c, action_params: { ...c.action_params, preset_id: newPresetId } }
+                              : c
+                            )}
+                          : t
+                      )
+                    };
+                    setSelectedTimeline(updatedTimeline);
+                  }}
+                  className="w-full px-2 py-1.5 bg-dark-700 border border-dark-600 rounded text-white text-sm"
+                >
+                  <option value="">No preset (camera default)</option>
+                  {cameraCuePresets.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              {cueCamera?.type === 'ptz' && (
+                <button
+                  onClick={async () => {
+                    try {
+                      const cam = await cameraService.getCamera(cueCamera.id);
+                      setPtzCamera(cam);
+                      setSelectedCue(null);
+                    } catch (err) {
+                      console.error('Failed to load camera:', err);
+                    }
+                  }}
+                  className="flex-1 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-medium rounded transition-colors"
+                >
+                  PTZ Controls
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  removeCue(selectedCue.trackIndex, selectedCue.cueIndex);
+                  setSelectedCue(null);
+                }}
+                className="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 text-white text-xs font-medium rounded transition-colors"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setSelectedCue(null)}
+                className="px-3 py-1.5 bg-dark-600 hover:bg-dark-500 text-gray-300 text-xs font-medium rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* PTZ Control Panel */}
+      {ptzCamera && (
+        <PTZControlPanel
+          camera={ptzCamera}
+          onClose={() => {
+            setPtzCamera(null);
+            // Reload presets to pick up new thumbnails
+            loadPresets();
+          }}
+        />
       )}
     </div>
   );

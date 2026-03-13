@@ -87,8 +87,9 @@ class Preset(PresetBase):
     id: int
     camera_id: int
     camera_preset_token: Optional[str] = None
+    thumbnail_path: Optional[str] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 

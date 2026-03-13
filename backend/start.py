@@ -81,6 +81,18 @@ def ensure_streaming_destination_oauth_columns() -> None:
         print(f"⚠️ Unable to update streaming_destinations OAuth schema: {exc}")
 
 
+def ensure_preset_thumbnail_column() -> None:
+    """Ensure the presets table has a thumbnail_path column."""
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("PRAGMA table_info(presets)"))
+            columns = [row[1] for row in result]
+            if "thumbnail_path" not in columns:
+                connection.execute(text("ALTER TABLE presets ADD COLUMN thumbnail_path TEXT"))
+    except Exception as exc:
+        print(f"⚠️ Unable to update presets schema for thumbnails: {exc}")
+
+
 def ensure_default_admin():
     """Create or reset the default admin user.
 
@@ -187,6 +199,7 @@ if __name__ == "__main__":
     # Create database tables
     create_tables()
     ensure_preset_token_column()
+    ensure_preset_thumbnail_column()
     ensure_streaming_destination_channel_column()
     ensure_streaming_destination_oauth_columns()
     ensure_default_admin()
