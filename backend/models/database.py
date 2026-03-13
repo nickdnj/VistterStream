@@ -2,6 +2,7 @@
 Database models and configuration
 """
 
+from contextlib import contextmanager
 from sqlalchemy import create_engine, event, Column, Integer, String, Float, DateTime, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -224,7 +225,16 @@ from .reelforge import ReelTemplate, ReelPost, ReelPublishTarget, ReelExport, Re
 def create_tables():
     Base.metadata.create_all(bind=engine)
 
-# Dependency to get database session
+# Context manager for background services (use: with get_session() as db: ...)
+@contextmanager
+def get_session():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Dependency to get database session (FastAPI routes)
 def get_db():
     db = SessionLocal()
     try:

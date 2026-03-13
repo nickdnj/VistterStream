@@ -706,11 +706,13 @@ class FFmpegProcessManager:
                     try:
                         from models.database import SessionLocal, Stream
                         db = SessionLocal()
-                        db_stream = db.query(Stream).filter(Stream.id == stream_id).first()
-                        if db_stream and db_stream.status == 'stopped':
-                            logger.info(f"Stream {stream_id} is marked as stopped in database, not restarting")
-                            should_restart = False
-                        db.close()
+                        try:
+                            db_stream = db.query(Stream).filter(Stream.id == stream_id).first()
+                            if db_stream and db_stream.status == 'stopped':
+                                logger.info(f"Stream {stream_id} is marked as stopped in database, not restarting")
+                                should_restart = False
+                        finally:
+                            db.close()
                     except Exception as e:
                         logger.error(f"Failed to check database status for stream {stream_id}: {e}")
                     
