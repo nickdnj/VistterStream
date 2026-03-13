@@ -45,9 +45,7 @@ class CameraRelay:
             '-rtsp_transport', 'tcp',
             '-i', self.rtsp_url,
             '-c:v', 'copy',  # Copy video (no re-encoding = LOW latency!)
-            '-c:a', 'aac',   # Re-encode audio to AAC
-            '-b:a', '128k',
-            '-ar', '44100',
+            '-an',           # Strip audio - eliminates DTS timestamp issues from camera
             '-f', 'flv',
             self.rtmp_url
         ]
