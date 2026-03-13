@@ -18,6 +18,7 @@ x-backend-base: &backend-base
     - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set in .env}
     - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
     - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-}
+    - TEMPEST_API_URL=${TEMPEST_API_URL:-http://host.docker.internal:8036}
   volumes:
     - vistter_data:/data
   # Expose GPU for hardware-accelerated encoding (Intel VA-API / QSV)
@@ -120,6 +121,33 @@ services:
     depends_on:
       - frontend
       - backend
+
+  # TempestWeather - weather overlay and data API for Tempest weather stations
+  # Requires network_mode: host for UDP broadcast reception (port 50222)
+  # Enable with: docker compose --profile weather -f docker/docker-compose.rpi.yml up -d
+  tempest-weather:
+    build:
+      context: ${TEMPEST_WEATHER_PATH:-../../TempestWeather}
+      dockerfile: Dockerfile
+    container_name: vistterstream-tempest-weather
+    profiles:
+      - weather
+    network_mode: host
+    env_file:
+      - ../.env
+    environment:
+      - FLASK_PORT=${TEMPEST_FLASK_PORT:-8036}
+      - TEMPEST_API_KEY=${TEMPEST_API_KEY:-}
+      - TEMPEST_STATION_ID=${TEMPEST_STATION_ID:-}
+      - TEMPEST_LOCATION_STATE=${TEMPEST_LOCATION_STATE:-}
+      - TZ=America/New_York
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${TEMPEST_FLASK_PORT:-8036}/')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   vistter_data:

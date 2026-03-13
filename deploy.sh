@@ -40,6 +40,13 @@ fi
 
 log "Using compose file: ${COMPOSE_FILE}"
 
+# Detect if weather profile was previously active
+COMPOSE_PROFILES=""
+if docker ps --format '{{.Names}}' | grep -q "vistterstream-tempest-weather"; then
+  COMPOSE_PROFILES="--profile weather"
+  log "Weather profile detected (tempest-weather running)"
+fi
+
 # Ensure .env exists (used by compose)
 if [[ ! -f .env ]]; then
   if [[ -f env.sample ]]; then
@@ -83,7 +90,7 @@ AFTER_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 if [[ "$BEFORE_COMMIT" == "$AFTER_COMMIT" ]]; then
   log "No changes detected (commit ${AFTER_COMMIT:0:8}). Nothing to rebuild."
   log "All containers are up to date."
-  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" $COMPOSE_PROFILES ps
   exit 0
 fi
 
@@ -95,7 +102,7 @@ CHANGED_FILES=$(git diff --name-only "${BEFORE_COMMIT}" "${AFTER_COMMIT}" 2>/dev
 
 if [[ -z "$CHANGED_FILES" ]]; then
   log "No file changes detected. All containers are up to date."
-  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" $COMPOSE_PROFILES ps
   exit 0
 fi
 
@@ -138,6 +145,9 @@ if echo "$CHANGED_FILES" | grep -qE '^docker/docker-compose'; then
   if grep -q "backend-host:" "$COMPOSE_FILE"; then
     SERVICES_TO_REBUILD+=("backend-host")
   fi
+  if [[ -n "$COMPOSE_PROFILES" ]]; then
+    SERVICES_TO_REBUILD+=("tempest-weather")
+  fi
 fi
 
 # Remove duplicates
@@ -146,7 +156,7 @@ SERVICES_TO_REBUILD=($(echo "${SERVICES_TO_REBUILD[@]}" | tr ' ' '\n' | sort -u 
 if [[ ${#SERVICES_TO_REBUILD[@]} -eq 0 ]]; then
   log "No service changes detected (changes in docs/scripts/tests only)."
   log "All containers are up to date."
-  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" $COMPOSE_PROFILES ps
   exit 0
 fi
 
@@ -179,14 +189,14 @@ fi
 # Stop only the services that need rebuilding
 log "Stopping affected services: ${SERVICES_TO_REBUILD[*]}"
 for service in "${SERVICES_TO_REBUILD[@]}"; do
-  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" stop "$service" 2>/dev/null || log "Service $service not running"
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" $COMPOSE_PROFILES stop "$service" 2>/dev/null || log "Service $service not running"
 done
 
 # Rebuild only the affected services
 log "Rebuilding affected services..."
 for service in "${SERVICES_TO_REBUILD[@]}"; do
   log "  → Building $service..."
-  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" build --no-cache "$service" || {
+  "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" $COMPOSE_PROFILES build --no-cache "$service" || {
     err "Failed to build $service"
     exit 1
   }
@@ -194,7 +204,7 @@ done
 
 # Start all services (this will restart rebuilt ones and ensure others are running)
 log "Starting services..."
-"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" up -d
+"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" $COMPOSE_PROFILES up -d
 
 # If requested, run migration inside backend container
 if [[ "${RUN_MIGRATION_IN_CONTAINER:-0}" -eq 1 && ${#MIGRATION_SCRIPTS[@]} -gt 0 ]]; then
@@ -222,7 +232,7 @@ fi
 
 # Show status
 log "Deployment complete. Current container status:"
-"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" ps
+"${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" $COMPOSE_PROFILES ps
 
 # Show summary of what was done
 log ""

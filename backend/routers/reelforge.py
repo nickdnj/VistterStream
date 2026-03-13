@@ -16,6 +16,7 @@ import asyncio
 import logging
 
 from models.database import get_db, SessionLocal, Camera, Preset, ReelForgeSettings
+from services.weather_data_service import DEFAULT_TEMPEST_URL
 from utils.crypto import encrypt, decrypt
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def get_settings(db: Session = Depends(get_db)):
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
         "default_template_id": settings.default_template_id,
-        "tempest_api_url": settings.tempest_api_url or "http://host.docker.internal:8085",
+        "tempest_api_url": settings.tempest_api_url or DEFAULT_TEMPEST_URL,
         "weather_enabled": settings.weather_enabled if settings.weather_enabled is not None else True,
         "has_api_key": bool(settings.openai_api_key_enc),
         "created_at": settings.created_at,
@@ -129,7 +130,7 @@ def update_settings(
         "temperature": settings.temperature,
         "max_tokens": settings.max_tokens,
         "default_template_id": settings.default_template_id,
-        "tempest_api_url": settings.tempest_api_url or "http://host.docker.internal:8085",
+        "tempest_api_url": settings.tempest_api_url or DEFAULT_TEMPEST_URL,
         "weather_enabled": settings.weather_enabled if settings.weather_enabled is not None else True,
         "has_api_key": bool(settings.openai_api_key_enc),
         "created_at": settings.created_at,
@@ -285,7 +286,7 @@ def test_weather_connection(db: Session = Depends(get_db)):
     """Test the TempestWeather connection"""
     settings = db.query(ReelForgeSettings).first()
     
-    api_url = "http://host.docker.internal:8085"
+    api_url = DEFAULT_TEMPEST_URL
     if settings and settings.tempest_api_url:
         api_url = settings.tempest_api_url
     

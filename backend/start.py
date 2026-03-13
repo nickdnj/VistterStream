@@ -123,6 +123,21 @@ def ensure_timeline_broadcast_columns() -> None:
         print(f"⚠️ Unable to update timelines broadcast schema: {exc}")
 
 
+def ensure_tempest_url_port_fix() -> None:
+    """Fix legacy 8085 port in tempest_api_url to 8036."""
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("PRAGMA table_info(reelforge_settings)"))
+            columns = {row[1] for row in result}
+            if "tempest_api_url" in columns:
+                connection.execute(text(
+                    "UPDATE reelforge_settings SET tempest_api_url = REPLACE(tempest_api_url, ':8085', ':8036') "
+                    "WHERE tempest_api_url LIKE '%:8085%'"
+                ))
+    except Exception as exc:
+        print(f"⚠️ Unable to fix tempest_api_url port: {exc}")
+
+
 def ensure_default_admin():
     """Create or reset the default admin user.
 
@@ -233,6 +248,7 @@ if __name__ == "__main__":
     ensure_streaming_destination_channel_column()
     ensure_streaming_destination_oauth_columns()
     ensure_timeline_broadcast_columns()
+    ensure_tempest_url_port_fix()
     ensure_default_admin()
 
     # Start the server

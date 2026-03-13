@@ -10,6 +10,7 @@ Data sources via TempestWeather:
 """
 
 import logging
+import os
 import httpx
 from datetime import datetime
 from typing import Dict, Optional
@@ -18,8 +19,8 @@ import base64
 
 logger = logging.getLogger(__name__)
 
-# Default TempestWeather URL (can be overridden in settings)
-DEFAULT_TEMPEST_URL = "http://host.docker.internal:8085"
+# Default TempestWeather URL (can be overridden in settings or TEMPEST_API_URL env var)
+DEFAULT_TEMPEST_URL = os.getenv("TEMPEST_API_URL", "http://host.docker.internal:8036")
 
 
 def get_tempest_api_url() -> str:
