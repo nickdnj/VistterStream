@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { cameraService, CameraWithStatus } from '../services/cameraService';
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon, DocumentDuplicateIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import PTZControlPanel from './PTZControlPanel';
 import OverlayPreviewPanel, { CueKey, OverlayPositionUpdate, OverlayInfo } from './timeline/OverlayPreviewPanel';
 
@@ -164,7 +164,9 @@ const TimelineEditor: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
   const [previewMode, setPreviewMode] = useState<'youtube' | 'overlay'>('youtube');
-  
+  const [showEditSettingsModal, setShowEditSettingsModal] = useState(false);
+  const [editingTimeline, setEditingTimeline] = useState<Timeline | null>(null);
+
   /**
    * YouTube Button Logic:
    * - Find the first SELECTED YouTube destination from selectedDestinations
@@ -894,6 +896,83 @@ const TimelineEditor: React.FC = () => {
     }
   };
 
+  const copyTimeline = async (timeline: Timeline) => {
+    try {
+      const copyData = {
+        name: `${timeline.name} (Copy)`,
+        description: timeline.description,
+        duration: timeline.duration,
+        fps: timeline.fps,
+        resolution: timeline.resolution,
+        loop: timeline.loop,
+        tracks: timeline.tracks.map(t => ({
+          track_type: t.track_type,
+          layer: t.layer,
+          is_enabled: t.is_enabled,
+          cues: t.cues.map(c => ({
+            cue_order: c.cue_order,
+            start_time: c.start_time,
+            duration: c.duration,
+            action_type: c.action_type,
+            action_params: c.action_params,
+            transition_type: c.transition_type,
+            transition_duration: c.transition_duration,
+          })),
+        })),
+        broadcast_title: timeline.broadcast_title || '',
+        broadcast_description: timeline.broadcast_description || '',
+        broadcast_tags: timeline.broadcast_tags,
+        broadcast_privacy: timeline.broadcast_privacy || 'public',
+        broadcast_category_id: timeline.broadcast_category_id,
+        broadcast_thumbnail_enabled: timeline.broadcast_thumbnail_enabled ?? true,
+      };
+      const response = await api.post('/timelines', copyData);
+      setTimelines([...timelines, response.data]);
+      setSelectedTimeline(response.data);
+    } catch (error: any) {
+      console.error('Failed to copy timeline:', error);
+      alert(`❌ Failed to copy timeline:\n${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    }
+  };
+
+  const openEditSettings = () => {
+    if (!selectedTimeline) return;
+    setEditingTimeline({ ...selectedTimeline });
+    setShowEditSettingsModal(true);
+  };
+
+  const updateTimelineSettings = async () => {
+    if (!editingTimeline || !editingTimeline.id) return;
+    setSaving(true);
+    try {
+      await api.put(`/timelines/${editingTimeline.id}`, {
+        name: editingTimeline.name,
+        description: editingTimeline.description,
+        duration: editingTimeline.duration,
+        fps: editingTimeline.fps,
+        resolution: editingTimeline.resolution,
+        loop: editingTimeline.loop,
+        broadcast_title: editingTimeline.broadcast_title,
+        broadcast_description: editingTimeline.broadcast_description,
+        broadcast_tags: editingTimeline.broadcast_tags,
+        broadcast_privacy: editingTimeline.broadcast_privacy,
+        broadcast_category_id: editingTimeline.broadcast_category_id,
+        broadcast_thumbnail_enabled: editingTimeline.broadcast_thumbnail_enabled,
+      });
+      setShowEditSettingsModal(false);
+      loadTimelines();
+      // Update selected timeline with new settings
+      if (selectedTimeline) {
+        setSelectedTimeline({ ...selectedTimeline, ...editingTimeline, tracks: selectedTimeline.tracks });
+      }
+    } catch (error: any) {
+      console.error('Failed to update settings:', error);
+      alert(`❌ Failed to update settings:\n${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startTimeline = async () => {
     if (!selectedTimeline || !selectedTimeline.id || selectedDestinations.length === 0) {
       alert('⚠️  Please select a timeline and at least one destination');
@@ -1423,7 +1502,15 @@ const TimelineEditor: React.FC = () => {
               >
                 {saving ? '💾 Saving...' : '💾 Save'}
               </button>
-              
+
+              <button
+                onClick={openEditSettings}
+                className="px-3 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white rounded-md transition-colors"
+                title="Timeline Settings"
+              >
+                <Cog6ToothIcon className="h-5 w-5" />
+              </button>
+
               <div className="flex items-center gap-2">
                 <select
                   multiple
@@ -1687,6 +1774,16 @@ const TimelineEditor: React.FC = () => {
                     className="flex-1 text-left text-gray-300 hover:text-white"
                   >
                     {timeline.name}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyTimeline(timeline);
+                    }}
+                    className="p-1 text-gray-400 hover:text-blue-400 transition-colors"
+                    title="Copy timeline"
+                  >
+                    <DocumentDuplicateIcon className="h-4 w-4" />
                   </button>
                   <button
                     onClick={(e) => {
@@ -2279,6 +2376,162 @@ const TimelineEditor: React.FC = () => {
                 className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Settings Modal */}
+      {showEditSettingsModal && editingTimeline && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-lg border border-dark-700 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-white mb-4">Timeline Settings</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
+                <input
+                  type="text"
+                  value={editingTimeline.name}
+                  onChange={(e) => setEditingTimeline({ ...editingTimeline, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Duration (seconds)</label>
+                <input
+                  type="number"
+                  value={editingTimeline.duration}
+                  onChange={(e) => setEditingTimeline({ ...editingTimeline, duration: Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Resolution</label>
+                  <select
+                    value={editingTimeline.resolution}
+                    onChange={(e) => setEditingTimeline({ ...editingTimeline, resolution: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                  >
+                    <option value="1920x1080">1920x1080</option>
+                    <option value="1280x720">1280x720</option>
+                    <option value="3840x2160">3840x2160</option>
+                  </select>
+                </div>
+
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">FPS</label>
+                  <select
+                    value={editingTimeline.fps}
+                    onChange={(e) => setEditingTimeline({ ...editingTimeline, fps: Number(e.target.value) })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                  >
+                    <option value={15}>15</option>
+                    <option value={24}>24</option>
+                    <option value={30}>30</option>
+                    <option value={60}>60</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={editingTimeline.loop}
+                  onChange={(e) => setEditingTimeline({ ...editingTimeline, loop: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <label className="text-sm text-gray-300">Loop timeline</label>
+              </div>
+
+              <div className="border-t border-dark-600 pt-3 mt-3">
+                <p className="text-sm font-medium text-gray-300 mb-3">Broadcast Metadata</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Broadcast Title</label>
+                    <input
+                      type="text"
+                      value={editingTimeline.broadcast_title || ''}
+                      onChange={(e) => setEditingTimeline({ ...editingTimeline, broadcast_title: e.target.value })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                      placeholder="Defaults to timeline name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Broadcast Description</label>
+                    <textarea
+                      value={editingTimeline.broadcast_description || ''}
+                      onChange={(e) => setEditingTimeline({ ...editingTimeline, broadcast_description: e.target.value })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white resize-y"
+                      rows={4}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={editingTimeline.broadcast_tags || ''}
+                      onChange={(e) => setEditingTimeline({ ...editingTimeline, broadcast_tags: e.target.value })}
+                      className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                      placeholder="tag1, tag2, tag3"
+                    />
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Privacy</label>
+                      <select
+                        value={editingTimeline.broadcast_privacy || 'public'}
+                        onChange={(e) => setEditingTimeline({ ...editingTimeline, broadcast_privacy: e.target.value })}
+                        className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                      >
+                        <option value="public">Public</option>
+                        <option value="unlisted">Unlisted</option>
+                        <option value="private">Private</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+                      <select
+                        value={editingTimeline.broadcast_category_id || ''}
+                        onChange={(e) => setEditingTimeline({ ...editingTimeline, broadcast_category_id: e.target.value || undefined })}
+                        className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white"
+                      >
+                        {YOUTUBE_CATEGORIES.map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={editingTimeline.broadcast_thumbnail_enabled ?? true}
+                      onChange={(e) => setEditingTimeline({ ...editingTimeline, broadcast_thumbnail_enabled: e.target.checked })}
+                      className="w-4 h-4"
+                    />
+                    <label className="text-sm text-gray-300">Auto-capture broadcast thumbnail</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowEditSettingsModal(false)}
+                className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={updateTimelineSettings}
+                disabled={saving || !editingTimeline.name}
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
               </button>
             </div>
           </div>
