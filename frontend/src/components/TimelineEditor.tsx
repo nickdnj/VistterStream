@@ -1211,12 +1211,23 @@ const TimelineEditor: React.FC = () => {
   }, [playheadTime, selectedTimeline]);
 
   // Compute current snapshot URL for overlay preview
+  // Prefer preset thumbnail (shows what camera sees at that position) over live snapshot
   const currentSnapshotUrl = useMemo(() => {
     const cues = getCurrentCues();
     const videoCue = cues.find(c => c.track.track_type === 'video');
-    const camId = videoCue?.cue.action_params.camera_id;
+    if (!videoCue) return null;
+
+    // If the cue has a preset with a thumbnail, use that
+    const presetId = videoCue.cue.action_params.preset_id;
+    if (presetId) {
+      const preset = getPresetById(presetId);
+      if (preset?.thumbnail_path) return preset.thumbnail_path;
+    }
+
+    // Fall back to live camera snapshot
+    const camId = videoCue.cue.action_params.camera_id;
     return camId ? cameraSnapshots[camId] ?? null : null;
-  }, [selectedTimeline, playheadTime, cameraSnapshots]);
+  }, [selectedTimeline, playheadTime, cameraSnapshots, presets]);
 
   // Compute overlay info for preview panel
   const currentOverlays: OverlayInfo[] = useMemo(() => {
