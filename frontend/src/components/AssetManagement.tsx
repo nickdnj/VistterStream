@@ -344,8 +344,8 @@ const AssetManagement: React.FC = () => {
               {/* Preview/Icon */}
               <div className="aspect-video bg-dark-700 flex items-center justify-center relative">
                 {asset.type === 'api_image' && asset.api_url ? (
-                  <img 
-                    src={asset.api_url} 
+                  <img
+                    src={`/api/assets/${asset.id}/proxy`}
                     alt={asset.name}
                     className="w-full h-full object-contain"
                     onError={(e) => {

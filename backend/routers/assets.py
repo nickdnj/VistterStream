@@ -4,7 +4,7 @@ Assets API Router - Manage overlay assets (images, graphics, dynamic API content
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timezone
@@ -219,3 +219,31 @@ async def test_asset(asset_id: int, db: Session = Depends(get_db)):
             }
 
     return {"message": "Test not implemented for this asset type"}
+
+
+@router.get("/{asset_id}/proxy")
+async def proxy_asset_image(asset_id: int, db: Session = Depends(get_db)):
+    """Proxy an API image asset through the backend.
+
+    This avoids mixed-content and DNS issues when the browser can't
+    reach the asset's api_url directly (e.g. Cloudflare Tunnel over HTTPS,
+    or host.docker.internal / vistter.local not resolvable from client).
+    """
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.is_active == True).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.type != "api_image" or not asset.api_url:
+        raise HTTPException(status_code=400, detail="Asset is not an API image")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(asset.api_url)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "image/png")
+            return Response(
+                content=response.content,
+                media_type=content_type,
+                headers={"Cache-Control": "public, max-age=30"},
+            )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch asset: {e}")
