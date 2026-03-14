@@ -587,7 +587,27 @@ class TimelineExecutor:
                     'asset_name': asset.name
                 }
 
-                # Add dimensions if specified
+                # Auto-size overlays that have no explicit dimensions.
+                # Without this, FFmpeg composites at the native image resolution
+                # which can be much larger than intended.
+                if not cue_width and not cue_height:
+                    try:
+                        from PIL import Image as PILImage
+                        img = PILImage.open(image_path)
+                        img_w, img_h = img.size
+                        img.close()
+                        ratio = img_w / img_h if img_h else 1
+                        cue_width = min(img_w, src_w)
+                        cue_height = round(cue_width / ratio)
+                        if cue_height > src_h:
+                            cue_height = src_h
+                            cue_width = round(cue_height * ratio)
+                        logger.info(
+                            f"  📐 Auto-sized '{asset.name}': native={img_w}x{img_h} → {cue_width}x{cue_height}"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-size overlay '{asset.name}': {e}")
+
                 if cue_width:
                     timed_overlay['width'] = cue_width
                 if cue_height:
