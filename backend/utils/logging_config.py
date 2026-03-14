@@ -27,6 +27,8 @@ _REDACT_PATTERNS = [
     (re.compile(r"(Bearer\s+)\S+", re.IGNORECASE), r"\1****"),
     # Fernet tokens (gAAAAA...)
     (re.compile(r"gAAAAA[A-Za-z0-9_-]{20,}"), "****"),
+    # RTMP/RTMPS stream keys: rtmp(s)://host/app/<stream_key>
+    (re.compile(r'(rtmps?://[^/]+/[^/]+/)([^\s"\']+)'), r"\1****"),
 ]
 
 

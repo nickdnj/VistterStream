@@ -20,6 +20,7 @@ from services.ffmpeg_manager import FFmpegProcessManager, EncodingProfile, Strea
 from services.ptz_service import get_ptz_service
 from utils.google_drive import parse_google_drawing_url
 from utils.crypto import decrypt
+from utils.rtsp import build_rtsp_url
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)  # Enable debug logging
@@ -178,7 +179,9 @@ class TimelineExecutor:
             start_position: If provided, skip segments before this time and start from here
         """
         db = SessionLocal()
-        
+        overlay_temp_files = []
+        timed_overlays = []
+
         try:
             # Load timeline
             timeline = db.query(Timeline).filter(Timeline.id == timeline_id).first()
@@ -1117,11 +1120,8 @@ class TimelineExecutor:
                 password = decrypt(camera.password_enc)
             except Exception:
                 pass
-                
-        if camera.username and password:
-            return f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
-        else:
-            return f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
+
+        return build_rtsp_url(camera.address, camera.port, camera.username, password, camera.stream_path)
 
 
 # Global instance

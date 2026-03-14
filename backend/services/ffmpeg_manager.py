@@ -288,65 +288,66 @@ class FFmpegProcessManager:
     async def restart_stream(self, stream_id: int) -> StreamProcess:
         """
         Restart a stream with exponential backoff.
-        
+
         Args:
             stream_id: Stream identifier
-        
+
         Returns:
             StreamProcess after restart
         """
-        if stream_id not in self.processes:
-            raise KeyError(f"Stream {stream_id} not found")
-        
-        stream_process = self.processes[stream_id]
-        
-        # Increment retry count
-        stream_process.retry_count += 1
-        
-        # Check max retries (10 per spec)
-        if stream_process.retry_count > 10:
-            logger.error(f"Stream {stream_id} exceeded max retries (10)")
-            stream_process.status = StreamStatus.ERROR
-            stream_process.last_error = "Max retries exceeded"
-            raise RuntimeError("Max retries exceeded")
-        
-        # Calculate backoff: 2s, 4s, 8s, 16s, 32s, 60s (max)
-        wait_time = min(2 ** stream_process.retry_count, 60)
-        
-        logger.info(f"Restarting stream {stream_id} in {wait_time}s (attempt {stream_process.retry_count}/10)")
-        stream_process.status = StreamStatus.RESTARTING
-        
-        await asyncio.sleep(wait_time)
-        
-        # Stop existing process
-        if stream_process.process:
-            await self._graceful_shutdown(stream_process.process, graceful=False)
-        
-        # Restart with same command
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *stream_process.command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            stream_process.process = process
-            stream_process.status = StreamStatus.RUNNING
-            stream_process.started_at = datetime.now(timezone.utc)
-            
-            # Restart monitoring
-            monitor_task = asyncio.create_task(self._monitor_process(stream_id))
-            self._monitoring_tasks[stream_id] = monitor_task
-            
-            logger.info(f"Stream {stream_id} restarted successfully")
-            
-            return stream_process
-            
-        except Exception as e:
-            stream_process.status = StreamStatus.ERROR
-            stream_process.last_error = str(e)
-            logger.error(f"Failed to restart stream {stream_id}: {e}")
-            raise
+        async with self._lock:
+            if stream_id not in self.processes:
+                raise KeyError(f"Stream {stream_id} not found")
+
+            stream_process = self.processes[stream_id]
+
+            # Increment retry count
+            stream_process.retry_count += 1
+
+            # Check max retries (10 per spec)
+            if stream_process.retry_count > 10:
+                logger.error(f"Stream {stream_id} exceeded max retries (10)")
+                stream_process.status = StreamStatus.ERROR
+                stream_process.last_error = "Max retries exceeded"
+                raise RuntimeError("Max retries exceeded")
+
+            # Calculate backoff: 2s, 4s, 8s, 16s, 32s, 60s (max)
+            wait_time = min(2 ** stream_process.retry_count, 60)
+
+            logger.info(f"Restarting stream {stream_id} in {wait_time}s (attempt {stream_process.retry_count}/10)")
+            stream_process.status = StreamStatus.RESTARTING
+
+            await asyncio.sleep(wait_time)
+
+            # Stop existing process
+            if stream_process.process:
+                await self._graceful_shutdown(stream_process.process, graceful=False)
+
+            # Restart with same command
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *stream_process.command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+
+                stream_process.process = process
+                stream_process.status = StreamStatus.RUNNING
+                stream_process.started_at = datetime.now(timezone.utc)
+
+                # Restart monitoring
+                monitor_task = asyncio.create_task(self._monitor_process(stream_id))
+                self._monitoring_tasks[stream_id] = monitor_task
+
+                logger.info(f"Stream {stream_id} restarted successfully")
+
+                return stream_process
+
+            except Exception as e:
+                stream_process.status = StreamStatus.ERROR
+                stream_process.last_error = str(e)
+                logger.error(f"Failed to restart stream {stream_id}: {e}")
+                raise
     
     async def get_stream_status(self, stream_id: int) -> Optional[StreamProcess]:
         """Get current status of a stream"""
@@ -376,14 +377,15 @@ class FFmpegProcessManager:
         """Shutdown all running streams"""
         logger.info("Shutting down all streams...")
         self._shutdown_event.set()
-        
-        # Stop all streams
-        tasks = []
-        for stream_id in list(self.processes.keys()):
-            tasks.append(self.stop_stream(stream_id, graceful=True))
-        
+
+        # Snapshot keys under lock to avoid dict-changed-during-iteration
+        async with self._lock:
+            stream_ids = list(self.processes.keys())
+
+        # Stop each stream individually (each call acquires the lock itself)
+        tasks = [self.stop_stream(sid, graceful=True) for sid in stream_ids]
         await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         logger.info("All streams shut down")
     
     # Private methods

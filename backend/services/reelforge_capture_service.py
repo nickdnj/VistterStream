@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from models.database import SessionLocal, Camera, Preset
 from models.reelforge import ReelCaptureQueue, ReelPost, ReelTemplate
 from utils.crypto import decrypt
+from utils.rtsp import build_rtsp_url
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -294,13 +295,10 @@ class ReelForgeCaptureService:
         if camera.password_enc:
             try:
                 password = decrypt(camera.password_enc)
-            except:
+            except Exception:
                 pass
-        
-        if camera.username and password:
-            return f"rtsp://{camera.username}:{password}@{camera.address}:{camera.port}{camera.stream_path}"
-        else:
-            return f"rtsp://{camera.address}:{camera.port}{camera.stream_path}"
+
+        return build_rtsp_url(camera.address, camera.port, camera.username, password, camera.stream_path)
     
     def get_status(self) -> dict:
         """Get capture service status"""

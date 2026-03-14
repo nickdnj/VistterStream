@@ -42,7 +42,7 @@ from services.rtmp_relay_service import get_rtmp_relay_service
 
 # Import watchdog manager
 from services.watchdog_manager import get_watchdog_manager
-from models.database import get_db
+from models.database import get_session
 
 # Lifespan context manager (replaces deprecated @app.on_event)
 @asynccontextmanager
@@ -66,8 +66,8 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Starting YouTube watchdog manager...")
         watchdog_manager = get_watchdog_manager()
-        db = next(get_db())
-        await watchdog_manager.start(db)
+        with get_session() as db:
+            await watchdog_manager.start(db)
         logger.info("Watchdog manager started")
     except Exception as e:
         logger.warning("Failed to start watchdog manager: %s", e)
@@ -75,8 +75,8 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Starting ReelForge capture scheduler...")
         from services.reelforge_capture_service import init_reelforge_capture_service
-        db = next(get_db())
-        await init_reelforge_capture_service(db)
+        with get_session() as db:
+            await init_reelforge_capture_service(db)
         logger.info("ReelForge capture scheduler started")
     except Exception as e:
         logger.warning("Failed to start ReelForge capture scheduler: %s", e)
