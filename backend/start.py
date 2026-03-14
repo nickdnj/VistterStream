@@ -132,10 +132,13 @@ def ensure_tempest_url_port_fix() -> None:
             result = connection.execute(text("PRAGMA table_info(reelforge_settings)"))
             columns = {row[1] for row in result}
             if "tempest_api_url" in columns:
-                connection.execute(text(
-                    "UPDATE reelforge_settings SET tempest_api_url = REPLACE(tempest_api_url, ':8085', ':8036') "
-                    "WHERE tempest_api_url LIKE '%:8085%'"
-                ))
+                connection.execute(
+                    text(
+                        "UPDATE reelforge_settings SET tempest_api_url = REPLACE(tempest_api_url, :old_port, :new_port) "
+                        "WHERE tempest_api_url LIKE :pattern"
+                    ),
+                    {"old_port": ":8085", "new_port": ":8036", "pattern": "%:8085%"},
+                )
     except Exception as exc:
         print(f"⚠️ Unable to fix tempest_api_url port: {exc}")
 
@@ -286,8 +289,21 @@ def run_alembic_migrations() -> None:
         alembic_cfg.set_main_option("script_location", str(backend_dir / "alembic"))
         # Use the same DATABASE_URL as the app
         alembic_cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
-        alembic_command.upgrade(alembic_cfg, "head")
-        print("✅ Alembic migrations applied")
+
+        # Check if this is a pre-existing database without Alembic version tracking.
+        # If so, stamp it at head so future migrations apply cleanly.
+        from alembic.runtime.migration import MigrationContext
+        with engine.connect() as conn:
+            ctx = MigrationContext.configure(conn)
+            current_rev = ctx.get_current_revision()
+
+        if current_rev is None:
+            # Existing database, no Alembic history — stamp at head
+            alembic_command.stamp(alembic_cfg, "head")
+            print("✅ Alembic: stamped existing database at head")
+        else:
+            alembic_command.upgrade(alembic_cfg, "head")
+            print("✅ Alembic migrations applied")
     except Exception as exc:
         print(f"⚠️ Alembic migration failed (falling back to legacy migrations): {exc}")
 
