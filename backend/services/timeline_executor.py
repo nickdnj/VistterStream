@@ -236,6 +236,26 @@ class TimelineExecutor:
                 loop_count += 1
                 logger.info(f"Timeline {timeline.name} - Loop {loop_count}")
 
+                # Refresh API overlay images at each loop boundary (after first loop)
+                if loop_count > 1 and timed_overlays:
+                    new_overlays, new_temp_files, refreshed = await self._refresh_overlay_images(
+                        timed_overlays, overlay_temp_files, db
+                    )
+                    if refreshed:
+                        timed_overlays = new_overlays
+                        overlay_temp_files = new_temp_files
+                        # Stop FFmpeg so it restarts with fresh overlay images
+                        if timeline_id in ffmpeg_manager.processes:
+                            logger.info(f"🔄 Overlays refreshed - restarting FFmpeg for fresh images")
+                            try:
+                                ffmpeg_manager.unregister_stream_died_callback(timeline_id)
+                                await ffmpeg_manager.stop_stream(timeline_id)
+                            except Exception as e:
+                                logger.warning(f"Error stopping FFmpeg for overlay refresh: {e}")
+                            # Reset camera tracking so first segment restarts FFmpeg
+                            last_camera_id = None
+                            last_preset_id = None
+
                 # Compute segment boundaries as union of all cue boundaries across enabled tracks
                 segments = self._compute_segments(timeline)
                 logger.debug(f"Computed {len(segments)} segments from track boundaries")
@@ -588,7 +608,71 @@ class TimelineExecutor:
         
         # Store temp files for cleanup (will be cleaned up when timeline stops)
         return timed_overlays, temp_files
-    
+
+    async def _refresh_overlay_images(
+        self,
+        timed_overlays: List[Dict],
+        old_temp_files: List[str],
+        db: Session
+    ) -> Tuple[List[Dict], List[str], bool]:
+        """
+        Re-download API overlay images at loop boundary for fresh weather/data overlays.
+
+        Returns:
+            (updated_overlays, new_temp_files, was_refreshed)
+        """
+        new_temp_files = []
+        refreshed = False
+
+        for overlay in timed_overlays:
+            asset_id = overlay.get('asset_id')
+            if not asset_id:
+                continue
+
+            asset = db.query(Asset).filter(Asset.id == asset_id).first()
+            if not asset or not asset.is_active:
+                continue
+
+            # Only refresh API images and Google Drawings (static images don't change)
+            if asset.type not in ('api_image', 'google_drawing'):
+                continue
+
+            old_path = overlay.get('path', '')
+            new_path = await self._download_asset_image(asset)
+            if not new_path:
+                logger.warning(f"⚠️  Failed to refresh overlay '{asset.name}', keeping old image")
+                continue
+
+            # Track new temp file for cleanup
+            if new_path.startswith('/tmp/') or new_path.startswith(tempfile.gettempdir()):
+                new_temp_files.append(new_path)
+
+            # Update the overlay entry with new path
+            overlay['path'] = new_path
+            refreshed = True
+
+            # Clean up the old temp file
+            if old_path and old_path != new_path:
+                if old_path.startswith('/tmp/') or old_path.startswith(tempfile.gettempdir()):
+                    try:
+                        os.unlink(old_path)
+                    except Exception:
+                        pass
+
+        if refreshed:
+            logger.info(f"🔄 Refreshed overlay images at loop boundary")
+
+            # Build updated temp files list: keep non-API temp files, add new ones
+            kept_temp_files = [
+                f for f in old_temp_files
+                if os.path.exists(f)
+            ]
+            # Merge: existing files still in use + newly downloaded
+            all_temp_files = list(set(kept_temp_files + new_temp_files))
+            return timed_overlays, all_temp_files, True
+
+        return timed_overlays, old_temp_files, False
+
     async def _execute_segment(
         self,
         timeline_id: int,
