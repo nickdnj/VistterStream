@@ -2,13 +2,15 @@
 Authentication API endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import jwt
 from jose.exceptions import JWTError
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 import bcrypt
 import logging
 import os
@@ -18,6 +20,7 @@ from models.schemas import UserCreate, User as UserSchema, Token, PasswordChange
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
@@ -94,7 +97,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 @router.post("/register", response_model=UserSchema)
-async def register_user(user: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register_user(request: Request, user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
     # Check if user already exists
     existing_user = get_user_by_username(db, user.username)
@@ -118,7 +122,8 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     return UserSchema.from_orm(db_user)
 
 @router.post("/login", response_model=Token)
-async def login_user(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("10/15minutes")
+async def login_user(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login user and return access token"""
     logger.info(f"Login attempt for username: '{form_data.username}'")
     user = authenticate_user(db, form_data.username, form_data.password)

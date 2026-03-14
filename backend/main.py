@@ -4,10 +4,13 @@ Main FastAPI application for camera management and streaming control
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import asyncio
 import uvicorn
 import os
@@ -114,16 +117,28 @@ async def lifespan(app: FastAPI):
     print("✅ All services stopped")
 
 
+# Rate limiter (keyed by client IP)
+limiter = Limiter(key_func=get_remote_address)
+
+# API docs: disable in production unless ENABLE_DOCS=true
+_enable_docs = os.getenv("ENABLE_DOCS", "").lower() in ("true", "1", "yes")
+_docs_url = "/api/docs" if _enable_docs else None
+_redoc_url = "/api/redoc" if _enable_docs else None
+
 # Create FastAPI app
 app = FastAPI(
     title="VistterStream API",
     description="Local streaming appliance for camera management and live streaming",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    docs_url=_docs_url,
+    redoc_url=_redoc_url,
     redirect_slashes=False,  # Prevent 307 redirects that break with nginx proxy
     lifespan=lifespan,
 )
+
+# Attach rate limiter to app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware for frontend communication
 # CORS configuration (configurable via env)

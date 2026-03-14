@@ -19,6 +19,8 @@ from routers.auth import get_user_by_username, get_password_hash
 from main import app
 import uvicorn
 from sqlalchemy import text
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 
 def ensure_preset_token_column() -> None:
     """Ensure the presets table has a camera_preset_token column."""
@@ -272,10 +274,34 @@ def ensure_destination_secrets_encrypted() -> None:
         print(f"⚠️ Could not encrypt destination secrets: {e}")
 
 
+def run_alembic_migrations() -> None:
+    """Run Alembic migrations to bring the database schema up to date.
+
+    On first run against an existing database (pre-Alembic), this stamps
+    the current revision so that future migrations apply cleanly.
+    """
+    try:
+        alembic_cfg = AlembicConfig(str(backend_dir / "alembic.ini"))
+        # Override the script location to be absolute
+        alembic_cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+        # Use the same DATABASE_URL as the app
+        alembic_cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+        alembic_command.upgrade(alembic_cfg, "head")
+        print("✅ Alembic migrations applied")
+    except Exception as exc:
+        print(f"⚠️ Alembic migration failed (falling back to legacy migrations): {exc}")
+
+
 if __name__ == "__main__":
     ensure_sqlite_database_seeded()
     # Create database tables
     create_tables()
+
+    # Run Alembic migrations (handles new columns/tables going forward)
+    run_alembic_migrations()
+
+    # Legacy ensure_* functions kept for backward compatibility — they are
+    # no-ops once the Alembic migration has already added the columns.
     ensure_preset_token_column()
     ensure_preset_thumbnail_column()
     ensure_streaming_destination_channel_column()

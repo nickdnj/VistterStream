@@ -40,6 +40,8 @@ class SeamlessTimelineExecutor:
         self._paused_timeline_id: Optional[int] = None
         self._paused_output_urls: Optional[list] = None
         self._paused_encoding_profile = None
+        # Lock to protect concurrent access to active_timelines and ffmpeg_processes
+        self._lock = asyncio.Lock()
     
     def is_running(self) -> bool:
         """Check if any timeline is currently running"""

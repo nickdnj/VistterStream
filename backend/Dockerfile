@@ -41,10 +41,15 @@ ENV DATABASE_URL=sqlite:////data/vistterstream.db \
     RTMP_RELAY_HOST=rtmp-relay \
     RTMP_RELAY_PORT=1935
 
-# Create data directories
-RUN mkdir -p /data/uploads
+# Create non-root user and data directories with correct ownership
+RUN groupadd --gid 1000 appuser \
+    && useradd --uid 1000 --gid appuser --shell /bin/bash appuser \
+    && mkdir -p /data/uploads \
+    && chown -R appuser:appuser /data /app
 
 EXPOSE 8000
+
+USER appuser
 
 # Healthcheck via API
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1

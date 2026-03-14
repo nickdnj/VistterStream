@@ -145,6 +145,8 @@ class FFmpegProcessManager:
         self._shutdown_event = asyncio.Event()
         # Callbacks for when stream dies unexpectedly
         self._on_stream_died_callbacks: Dict[int, Callable] = {}
+        # Lock to protect concurrent access to processes dict
+        self._lock = asyncio.Lock()
     
     async def initialize(self):
         """Initialize the manager and detect hardware"""
@@ -183,72 +185,73 @@ class FFmpegProcessManager:
         Raises:
             RuntimeError: If stream is already running or too many streams active
         """
-        # Check if already running
-        if stream_id in self.processes and self.processes[stream_id].status == StreamStatus.RUNNING:
-            raise RuntimeError(f"Stream {stream_id} is already running")
-        
-        # Check concurrent stream limit
-        active_streams = sum(1 for p in self.processes.values() if p.status == StreamStatus.RUNNING)
-        if active_streams >= self.hw_capabilities.max_concurrent_streams:
-            raise RuntimeError(
-                f"Maximum concurrent streams ({self.hw_capabilities.max_concurrent_streams}) reached"
+        async with self._lock:
+            # Check if already running
+            if stream_id in self.processes and self.processes[stream_id].status == StreamStatus.RUNNING:
+                raise RuntimeError(f"Stream {stream_id} is already running")
+
+            # Check concurrent stream limit
+            active_streams = sum(1 for p in self.processes.values() if p.status == StreamStatus.RUNNING)
+            if active_streams >= self.hw_capabilities.max_concurrent_streams:
+                raise RuntimeError(
+                    f"Maximum concurrent streams ({self.hw_capabilities.max_concurrent_streams}) reached"
+                )
+
+            # Use default profile if not provided
+            if profile is None:
+                profile = EncodingProfile.reliability_profile(self.hw_capabilities)
+
+            logger.info(f"Starting stream {stream_id} with {len(output_urls)} destinations")
+            if overlay_images:
+                logger.info(f"  🎨 With {len(overlay_images)} static overlay(s)")
+            if timed_overlays:
+                logger.info(f"  🎨 With {len(timed_overlays)} timed overlay(s) (dynamic switching enabled)")
+            # #region agent log
+            _dbg_ffmpeg("start_stream:190", "FFmpeg start_stream called", {"stream_id": stream_id, "timed_overlays_count": len(timed_overlays) if timed_overlays else 0, "timeline_duration": timeline_duration, "timeline_loop": timeline_loop, "overlay_paths_exist": [os.path.exists(o.get("path", "")) for o in (timed_overlays or [])]}, "B,E")
+            # #endregion
+
+            # Build FFmpeg command
+            command = self._build_ffmpeg_command(
+                input_url, output_urls, profile, overlay_images,
+                timed_overlays=timed_overlays,
+                timeline_duration=timeline_duration,
+                timeline_loop=timeline_loop
             )
-        
-        # Use default profile if not provided
-        if profile is None:
-            profile = EncodingProfile.reliability_profile(self.hw_capabilities)
-        
-        logger.info(f"Starting stream {stream_id} with {len(output_urls)} destinations")
-        if overlay_images:
-            logger.info(f"  🎨 With {len(overlay_images)} static overlay(s)")
-        if timed_overlays:
-            logger.info(f"  🎨 With {len(timed_overlays)} timed overlay(s) (dynamic switching enabled)")
-        # #region agent log
-        _dbg_ffmpeg("start_stream:190", "FFmpeg start_stream called", {"stream_id": stream_id, "timed_overlays_count": len(timed_overlays) if timed_overlays else 0, "timeline_duration": timeline_duration, "timeline_loop": timeline_loop, "overlay_paths_exist": [os.path.exists(o.get("path", "")) for o in (timed_overlays or [])]}, "B,E")
-        # #endregion
-        
-        # Build FFmpeg command
-        command = self._build_ffmpeg_command(
-            input_url, output_urls, profile, overlay_images,
-            timed_overlays=timed_overlays,
-            timeline_duration=timeline_duration,
-            timeline_loop=timeline_loop
-        )
-        
-        # Create stream process entry
-        stream_process = StreamProcess(
-            stream_id=stream_id,
-            status=StreamStatus.STARTING,
-            started_at=datetime.now(timezone.utc),
-            command=command,
-            output_urls=output_urls  # Store destination URLs
-        )
-        
-        try:
-            # Spawn FFmpeg process
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+
+            # Create stream process entry
+            stream_process = StreamProcess(
+                stream_id=stream_id,
+                status=StreamStatus.STARTING,
+                started_at=datetime.now(timezone.utc),
+                command=command,
+                output_urls=output_urls  # Store destination URLs
             )
-            
-            stream_process.process = process
-            stream_process.status = StreamStatus.RUNNING
-            self.processes[stream_id] = stream_process
-            
-            # Start monitoring task
-            monitor_task = asyncio.create_task(self._monitor_process(stream_id))
-            self._monitoring_tasks[stream_id] = monitor_task
-            
-            logger.info(f"Stream {stream_id} started successfully (PID: {process.pid})")
-            
-            return stream_process
-            
-        except Exception as e:
-            stream_process.status = StreamStatus.ERROR
-            stream_process.last_error = str(e)
-            logger.error(f"Failed to start stream {stream_id}: {e}")
-            raise
+
+            try:
+                # Spawn FFmpeg process
+                process = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+
+                stream_process.process = process
+                stream_process.status = StreamStatus.RUNNING
+                self.processes[stream_id] = stream_process
+
+                # Start monitoring task
+                monitor_task = asyncio.create_task(self._monitor_process(stream_id))
+                self._monitoring_tasks[stream_id] = monitor_task
+
+                logger.info(f"Stream {stream_id} started successfully (PID: {process.pid})")
+
+                return stream_process
+
+            except Exception as e:
+                stream_process.status = StreamStatus.ERROR
+                stream_process.last_error = str(e)
+                logger.error(f"Failed to start stream {stream_id}: {e}")
+                raise
     
     async def stop_stream(self, stream_id: int, graceful: bool = True) -> None:
         """
@@ -261,36 +264,37 @@ class FFmpegProcessManager:
         Raises:
             KeyError: If stream_id not found
         """
-        if stream_id not in self.processes:
-            raise KeyError(f"Stream {stream_id} not found")
-        
-        stream_process = self.processes[stream_id]
-        
-        if stream_process.status == StreamStatus.STOPPED:
-            logger.info(f"Stream {stream_id} is already stopped")
-            return
-        
-        logger.info(f"Stopping stream {stream_id}...")
-        
-        # Disable auto-restart before stopping
-        stream_process.should_auto_restart = False
-        
-        # Cancel monitoring task
-        if stream_id in self._monitoring_tasks:
-            self._monitoring_tasks[stream_id].cancel()
-            try:
-                await self._monitoring_tasks[stream_id]
-            except asyncio.CancelledError:
-                pass
-            del self._monitoring_tasks[stream_id]
-        
-        # Stop the process
-        if stream_process.process:
-            await self._graceful_shutdown(stream_process.process, graceful)
-        
-        stream_process.process = None  # Release process object for GC
-        stream_process.status = StreamStatus.STOPPED
-        logger.info(f"Stream {stream_id} stopped")
+        async with self._lock:
+            if stream_id not in self.processes:
+                raise KeyError(f"Stream {stream_id} not found")
+
+            stream_process = self.processes[stream_id]
+
+            if stream_process.status == StreamStatus.STOPPED:
+                logger.info(f"Stream {stream_id} is already stopped")
+                return
+
+            logger.info(f"Stopping stream {stream_id}...")
+
+            # Disable auto-restart before stopping
+            stream_process.should_auto_restart = False
+
+            # Cancel monitoring task
+            if stream_id in self._monitoring_tasks:
+                self._monitoring_tasks[stream_id].cancel()
+                try:
+                    await self._monitoring_tasks[stream_id]
+                except asyncio.CancelledError:
+                    pass
+                del self._monitoring_tasks[stream_id]
+
+            # Stop the process
+            if stream_process.process:
+                await self._graceful_shutdown(stream_process.process, graceful)
+
+            stream_process.process = None  # Release process object for GC
+            stream_process.status = StreamStatus.STOPPED
+            logger.info(f"Stream {stream_id} stopped")
     
     async def restart_stream(self, stream_id: int) -> StreamProcess:
         """
