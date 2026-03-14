@@ -16,15 +16,19 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./vistterstream.db")
 
 # Create engine with larger pool for background services
-_connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+_is_sqlite = "sqlite" in DATABASE_URL
+_connect_args = {"check_same_thread": False} if _is_sqlite else {}
+_pool_args = {} if _is_sqlite else {
+    "pool_size": 20,
+    "max_overflow": 30,
+    "pool_timeout": 60,
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
 engine = create_engine(
     DATABASE_URL,
     connect_args=_connect_args,
-    pool_size=20,
-    max_overflow=30,
-    pool_timeout=60,
-    pool_recycle=300,
-    pool_pre_ping=True,
+    **_pool_args,
 )
 
 # Log pool exhaustion warnings

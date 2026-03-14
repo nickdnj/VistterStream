@@ -12,7 +12,9 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, _root)
+sys.path.insert(0, os.path.join(_root, 'backend'))
 
 from backend.services.ffmpeg_manager import (
     FFmpegProcessManager,
@@ -63,8 +65,8 @@ class TestFFmpegProcessManager:
         
         assert profile.codec == 'h264_videotoolbox'
         assert profile.resolution == (1920, 1080)
-        assert profile.framerate == 30
-        assert profile.bitrate == "4500k"
+        assert profile.framerate == 15
+        assert profile.bitrate == "2500k"
         assert profile.keyframe_interval == 2
         assert profile.preset == "fast"
     

@@ -316,7 +316,8 @@ class StreamService:
         if not stream:
             return None
 
-        now = datetime.now(timezone.utc)
+        # Use naive UTC — SQLite strips timezone info from stored datetimes
+        now = datetime.utcnow()
         if stream.started_at:
             end_time = stream.stopped_at or now
             uptime_seconds = max(int((end_time - stream.started_at).total_seconds()), 0)

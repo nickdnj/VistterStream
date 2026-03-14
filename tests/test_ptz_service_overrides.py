@@ -146,9 +146,9 @@ async def test_move_to_preset_with_explicit_onvif_url(monkeypatch):
     fake_camera = service._camera_connections["192.168.12.59:8899"]
     assert fake_camera.xaddrs["http://www.onvif.org/ver20/ptz/wsdl"] == "http://192.168.12.59:8899/onvif/ptz"
 
-    assert fake_camera._goto_calls == [
-        {"profile_token": "MEDIA_TOKEN_1", "preset_token": "PRESET_TOKEN_5"}
-    ]
+    # When valid coordinates are provided (not -1.0), only AbsoluteMove is used
+    # GotoPreset is only a fallback if AbsoluteMove fails
+    assert fake_camera._goto_calls == []
     assert fake_camera._absolute_calls == [
         {
             "profile_token": "MEDIA_TOKEN_1",
@@ -158,7 +158,7 @@ async def test_move_to_preset_with_explicit_onvif_url(monkeypatch):
             },
         }
     ]
-    assert fake_camera._call_sequence == ["absolute", "goto"]
+    assert fake_camera._call_sequence == ["absolute"]
 
 
 @pytest.mark.anyio("asyncio")

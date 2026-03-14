@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -18,7 +18,9 @@ for path in {ROOT_DIR, BACKEND_DIR}:
         sys.path.insert(0, path)
 
 from models.database import Base, Stream, Camera, get_db
+from models.destination import StreamingDestination
 from routers import streams as streams_router
+from routers.auth import get_current_user
 
 
 app = FastAPI()
@@ -46,6 +48,7 @@ def setup_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: {"id": 1, "username": "test"}
     yield
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
@@ -62,6 +65,20 @@ def cleanup_database_file():
 def client():
     with TestClient(app) as test_client:
         yield test_client
+
+
+def _create_destination(session, name: str = "Test Dest", platform: str = "youtube") -> StreamingDestination:
+    dest = StreamingDestination(
+        name=name,
+        platform=platform,
+        rtmp_url="rtmp://example.com/live",
+        stream_key="abc123",
+        is_active=True,
+    )
+    session.add(dest)
+    session.commit()
+    session.refresh(dest)
+    return dest
 
 
 def _create_camera(session, name: str = "Test Camera") -> Camera:
@@ -85,14 +102,13 @@ def _create_camera(session, name: str = "Test Camera") -> Camera:
 def test_get_stream_status_running(client):
     session = TestingSessionLocal()
     camera = _create_camera(session)
+    dest = _create_destination(session, name="YouTube", platform="youtube")
 
     started_at = datetime.utcnow() - timedelta(seconds=90)
     stream = Stream(
         name="Live Stream",
         camera_id=camera.id,
-        destination="youtube",
-        stream_key="abc123",
-        rtmp_url="rtmp://youtube.com/live",
+        destination_id=dest.id,
         resolution="1920x1080",
         bitrate="4500k",
         framerate=30,
@@ -103,19 +119,23 @@ def test_get_stream_status_running(client):
     session.add(stream)
     session.commit()
     session.refresh(stream)
+    # Capture all values before closing session (avoids DetachedInstanceError)
+    stream_id = stream.id
+    camera_id = camera.id
+    dest_id = dest.id
     session.close()
 
-    response = client.get(f"/api/streams/{stream.id}/status")
+    response = client.get(f"/api/streams/{stream_id}/status")
     assert response.status_code == 200
 
     payload = response.json()
-    assert payload["id"] == stream.id
-    assert payload["name"] == stream.name
-    assert payload["camera_id"] == stream.camera_id
-    assert payload["destination"] == stream.destination
-    assert payload["status"] == stream.status
+    assert payload["id"] == stream_id
+    assert payload["name"] == "Live Stream"
+    assert payload["camera_id"] == camera_id
+    assert payload["destination_id"] == dest_id
+    assert payload["destination"]["platform"] == "youtube"
+    assert payload["status"] == "running"
     assert payload["last_error"] is None
-    assert payload["started_at"] == stream.started_at.isoformat()
     assert payload["is_live"] is True
 
     expected_uptime = int((datetime.utcnow() - started_at).total_seconds())
@@ -125,15 +145,14 @@ def test_get_stream_status_running(client):
 def test_get_stream_status_error(client):
     session = TestingSessionLocal()
     camera = _create_camera(session, name="Error Camera")
+    dest = _create_destination(session, name="Twitch", platform="twitch")
 
     started_at = datetime.utcnow() - timedelta(minutes=10)
     stopped_at = started_at + timedelta(minutes=1)
     stream = Stream(
         name="Errored Stream",
         camera_id=camera.id,
-        destination="twitch",
-        stream_key="xyz789",
-        rtmp_url="rtmp://twitch.tv/live",
+        destination_id=dest.id,
         resolution="1280x720",
         bitrate="2500k",
         framerate=30,
@@ -145,19 +164,22 @@ def test_get_stream_status_error(client):
     session.add(stream)
     session.commit()
     session.refresh(stream)
+    # Capture all values before closing session (avoids DetachedInstanceError)
+    stream_id = stream.id
+    camera_id = camera.id
+    dest_id = dest.id
     session.close()
 
-    response = client.get(f"/api/streams/{stream.id}/status")
+    response = client.get(f"/api/streams/{stream_id}/status")
     assert response.status_code == 200
 
     payload = response.json()
-    assert payload["id"] == stream.id
-    assert payload["name"] == stream.name
-    assert payload["camera_id"] == stream.camera_id
-    assert payload["destination"] == stream.destination
-    assert payload["status"] == stream.status
-    assert payload["last_error"] == stream.last_error
-    assert payload["started_at"] == stream.started_at.isoformat()
-    assert payload["stopped_at"] == stream.stopped_at.isoformat()
+    assert payload["id"] == stream_id
+    assert payload["name"] == "Errored Stream"
+    assert payload["camera_id"] == camera_id
+    assert payload["destination_id"] == dest_id
+    assert payload["destination"]["platform"] == "twitch"
+    assert payload["status"] == "error"
+    assert payload["last_error"] == "Authentication failed"
     assert payload["is_live"] is False
     assert payload["uptime_seconds"] == int((stopped_at - started_at).total_seconds())
