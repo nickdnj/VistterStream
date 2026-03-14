@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# Install system dependencies
+# Install system dependencies (including su-exec for privilege dropping)
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
        ffmpeg \
@@ -19,6 +19,7 @@ RUN apt-get update \
        libffi-dev \
        libssl-dev \
        pkg-config \
+       gosu \
        # VA-API libs for Intel GPU hardware encoding
        libva-drm2 \
        libva2 \
@@ -45,15 +46,14 @@ ENV DATABASE_URL=sqlite:////data/vistterstream.db \
 RUN groupadd --gid 1000 appuser \
     && useradd --uid 1000 --gid appuser --shell /bin/bash appuser \
     && mkdir -p /data/uploads \
-    && chown -R appuser:appuser /data /app
+    && chown -R appuser:appuser /data /app \
+    && chmod +x /app/backend/entrypoint.sh
 
 EXPOSE 8000
 
-USER appuser
+# Start as root, entrypoint fixes /data permissions then drops to appuser
+ENTRYPOINT ["/app/backend/entrypoint.sh"]
+CMD ["python", "start.py"]
 
 # Healthcheck via API
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 CMD curl -fsS http://127.0.0.1:8000/api/health || exit 1
-
-CMD ["python", "start.py"]
-
-
