@@ -99,12 +99,19 @@ const OverlayItem: React.FC<OverlayItemProps> = ({
             if (img.naturalWidth && img.naturalHeight) {
               const ratio = img.naturalWidth / img.naturalHeight;
               setImageAspectRatio(ratio);
-              // Auto-correct bounding box to match image aspect ratio on first load
+              // Auto-size overlay to natural image dimensions on first load
+              // (capped to stream resolution). This ensures large overlays like
+              // weather graphics render at a visible size instead of the 200px default.
               if (!hasAutoSized.current) {
                 hasAutoSized.current = true;
-                const correctH = Math.round(width / ratio);
-                if (Math.abs(correctH - height) > 1) {
-                  onSizeChange(width, correctH);
+                let newW = Math.min(img.naturalWidth, streamResolution.width);
+                let newH = Math.round(newW / ratio);
+                if (newH > streamResolution.height) {
+                  newH = streamResolution.height;
+                  newW = Math.round(newH * ratio);
+                }
+                if (Math.abs(newW - width) > 1 || Math.abs(newH - height) > 1) {
+                  onSizeChange(newW, newH);
                 }
               }
             }
