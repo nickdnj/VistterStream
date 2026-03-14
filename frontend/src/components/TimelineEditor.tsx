@@ -166,6 +166,7 @@ const TimelineEditor: React.FC = () => {
   const [previewMode, setPreviewMode] = useState<'youtube' | 'overlay'>('youtube');
   const [showEditSettingsModal, setShowEditSettingsModal] = useState(false);
   const [editingTimeline, setEditingTimeline] = useState<Timeline | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   /**
    * YouTube Button Logic:
@@ -1472,96 +1473,125 @@ const TimelineEditor: React.FC = () => {
   return (
     <div className="min-h-full flex flex-col bg-dark-900">
       {/* Top Bar */}
-      <div className="flex items-center justify-between px-6 py-2 bg-dark-800 border-b border-dark-700">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-white">🎬 Timeline Editor</h1>
-          <span className="text-xs text-gray-500 font-mono">{UI_VERSION}</span>
-          {selectedTimeline && (
-            <span className="text-gray-400">| {selectedTimeline.name} • {selectedTimeline.resolution} • {selectedTimeline.fps}fps {selectedTimeline.loop && '• Loop'}</span>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setShowNewTimelineModal(true)}
-            className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors"
-          >
-            + New Timeline
-          </button>
-          
-          {selectedTimeline && (
-            <>
-              <button
-                onClick={saveTimeline}
-                disabled={saving}
-                className={`px-4 py-2 rounded-md text-white font-medium transition-colors ${
-                  saving
-                    ? 'bg-gray-600 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                {saving ? '💾 Saving...' : '💾 Save'}
-              </button>
+      <div className="bg-dark-800 border-b border-dark-700">
+        {/* Row 1: Title + core actions */}
+        <div className="flex items-center justify-between px-3 sm:px-6 py-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            {/* Mobile sidebar toggle */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="md:hidden p-1.5 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors"
+              title="Toggle sidebar"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+            <h1 className="text-lg sm:text-2xl font-bold text-white whitespace-nowrap">Timeline Editor</h1>
+            <span className="text-xs text-gray-500 font-mono hidden sm:inline">{UI_VERSION}</span>
+            {selectedTimeline && (
+              <span className="text-gray-400 text-sm hidden lg:inline truncate">| {selectedTimeline.name} • {selectedTimeline.resolution} • {selectedTimeline.fps}fps {selectedTimeline.loop && '• Loop'}</span>
+            )}
+          </div>
 
-              <button
-                onClick={openEditSettings}
-                className="px-3 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white rounded-md transition-colors"
-                title="Timeline Settings"
-              >
-                <Cog6ToothIcon className="h-5 w-5" />
-              </button>
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button
+              onClick={() => setShowNewTimelineModal(true)}
+              className="px-2 sm:px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors text-sm"
+            >
+              <span className="sm:hidden">+</span>
+              <span className="hidden sm:inline">+ New Timeline</span>
+            </button>
 
-              <div className="flex items-center gap-2">
-                <select
-                  multiple
-                  value={selectedDestinations.map(String)}
-                  onChange={(e) => setSelectedDestinations(Array.from(e.target.selectedOptions, option => Number(option.value)))}
-                  className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm"
-                  style={{ minWidth: '200px', height: '42px' }}
+            {selectedTimeline && (
+              <>
+                <button
+                  onClick={saveTimeline}
+                  disabled={saving}
+                  className={`px-3 sm:px-4 py-2 rounded-md text-white font-medium transition-colors text-sm ${
+                    saving
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
-                  {destinations.map((dest) => (
-                    <option key={dest.id} value={dest.id}>
-                      {dest.platform === 'youtube' && '📺'}
-                      {dest.platform === 'facebook' && '👥'}
-                      {dest.platform === 'twitch' && '🟣'}
-                      {dest.platform === 'custom' && '🔗'}
-                      {' '}{dest.name}
-                    </option>
-                  ))}
-                </select>
-                
-                {!isRunning ? (
-                  <button
-                    onClick={startTimeline}
-                    disabled={starting || selectedDestinations.length === 0}
-                    className={`px-6 py-2 rounded-md font-semibold transition-colors ${
-                      starting || selectedDestinations.length === 0
-                        ? 'bg-gray-600 cursor-not-allowed text-gray-400'
-                        : 'bg-green-600 hover:bg-green-700 text-white'
-                    }`}
-                    title={selectedDestinations.length === 0 ? 'Select a destination first' : 'Start timeline playback'}
-                  >
-                    {starting ? '⏳ Starting...' : '▶️ Start'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={stopTimeline}
-                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold animate-pulse"
-                    title="Stop timeline playback"
-                  >
-                    ⏹️ Stop
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+
+                <button
+                  onClick={openEditSettings}
+                  className="px-2 sm:px-3 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 hover:text-white rounded-md transition-colors"
+                  title="Timeline Settings"
+                >
+                  <Cog6ToothIcon className="h-5 w-5" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* Row 2: Destination + Start/Stop (shown when timeline selected) */}
+        {selectedTimeline && (
+          <div className="flex items-center gap-2 px-3 sm:px-6 pb-2">
+            <select
+              multiple
+              value={selectedDestinations.map(String)}
+              onChange={(e) => setSelectedDestinations(Array.from(e.target.selectedOptions, option => Number(option.value)))}
+              className="flex-1 sm:flex-none px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm"
+              style={{ minWidth: '160px', maxWidth: '300px', height: '42px' }}
+            >
+              {destinations.map((dest) => (
+                <option key={dest.id} value={dest.id}>
+                  {dest.platform === 'youtube' && '📺'}
+                  {dest.platform === 'facebook' && '👥'}
+                  {dest.platform === 'twitch' && '🟣'}
+                  {dest.platform === 'custom' && '🔗'}
+                  {' '}{dest.name}
+                </option>
+              ))}
+            </select>
+
+            {!isRunning ? (
+              <button
+                onClick={startTimeline}
+                disabled={starting || selectedDestinations.length === 0}
+                className={`px-4 sm:px-6 py-2 rounded-md font-semibold transition-colors text-sm sm:text-base ${
+                  starting || selectedDestinations.length === 0
+                    ? 'bg-gray-600 cursor-not-allowed text-gray-400'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
+                title={selectedDestinations.length === 0 ? 'Select a destination first' : 'Start timeline playback'}
+              >
+                {starting ? 'Starting...' : 'Start'}
+              </button>
+            ) : (
+              <button
+                onClick={stopTimeline}
+                className="px-4 sm:px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-semibold animate-pulse text-sm sm:text-base"
+                title="Stop timeline playback"
+              >
+                Stop
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Mobile sidebar backdrop */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-30 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
         {/* Left Sidebar - Asset Palette */}
-        <div className="w-80 bg-dark-800 border-r border-dark-700 flex flex-col">
+        <div className={`
+          w-72 sm:w-80 bg-dark-800 border-r border-dark-700 flex flex-col flex-shrink-0
+          fixed md:relative inset-y-0 left-0 z-40 md:z-auto
+          transform transition-transform duration-200 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}>
           {/* Cameras Section */}
           <div className="border-b border-dark-700">
             <button
@@ -1770,7 +1800,7 @@ const TimelineEditor: React.FC = () => {
                   onContextMenu={(e) => timeline.id && handleContextMenu(e, 'timeline', timeline.id)}
                 >
                   <button
-                    onClick={() => setSelectedTimeline(timeline)}
+                    onClick={() => { setSelectedTimeline(timeline); setSidebarOpen(false); }}
                     className="flex-1 text-left text-gray-300 hover:text-white"
                   >
                     {timeline.name}
@@ -2015,63 +2045,65 @@ const TimelineEditor: React.FC = () => {
               ) : null}
 
               {/* Track Controls */}
-              <div className="flex items-center justify-between gap-2 px-4 py-1.5 bg-dark-800 border-b border-dark-700">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 text-xs font-medium">Add Track:</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 px-2 sm:px-4 py-1.5 bg-dark-800 border-b border-dark-700">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <span className="text-gray-400 text-xs font-medium hidden sm:inline">Add Track:</span>
                   <button
                     onClick={() => addTrack('video')}
                     className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
                   >
-                    🎥 Video
+                    <span className="sm:hidden">🎥</span>
+                    <span className="hidden sm:inline">🎥 Video</span>
                   </button>
                   <button
                     onClick={() => addTrack('overlay')}
                     className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded transition-colors"
                   >
-                    🎨 Overlay
+                    <span className="sm:hidden">🎨</span>
+                    <span className="hidden sm:inline">🎨 Overlay</span>
                   </button>
                   <button
                     onClick={() => addTrack('audio')}
                     className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
                   >
-                    🔊 Audio
+                    <span className="sm:hidden">🔊</span>
+                    <span className="hidden sm:inline">🔊 Audio</span>
                   </button>
                 </div>
 
                 {/* Timeline Info & Playback Controls */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 border-r border-dark-700 pr-3">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="flex items-center gap-1 sm:gap-2 border-r border-dark-700 pr-2 sm:pr-3">
                     <button
                       onClick={resetPlayhead}
-                      className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
+                      className="px-1.5 sm:px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
                       title="Reset to start"
                     >
                       ⏮️
                     </button>
-                    <span className="text-gray-300 text-sm font-mono">
+                    <span className="text-gray-300 text-xs sm:text-sm font-mono">
                       {formatTime(playheadTime)} / {formatTime(selectedTimeline.duration)}
                     </span>
                   </div>
 
                   {/* Zoom Controls */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 text-sm font-medium">Zoom:</span>
+                  <div className="flex items-center gap-1 sm:gap-2">
                     <button
                       onClick={handleZoomOut}
                       disabled={zoomLevel <= MIN_ZOOM}
                       className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Zoom out (Ctrl + -)"
+                      title="Zoom out"
                     >
                       −
                     </button>
-                    <span className="text-gray-300 text-sm font-mono w-16 text-center">
+                    <span className="text-gray-300 text-xs sm:text-sm font-mono w-10 sm:w-16 text-center">
                       {Math.round((zoomLevel / 40) * 100)}%
                     </span>
                     <button
                       onClick={handleZoomIn}
                       disabled={zoomLevel >= MAX_ZOOM}
                       className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Zoom in (Ctrl + +)"
+                      title="Zoom in"
                     >
                       +
                     </button>
@@ -2082,7 +2114,7 @@ const TimelineEditor: React.FC = () => {
               {/* Timeline Container */}
               <div className="flex-1 flex overflow-hidden">
                 {/* Track Labels */}
-                <div className="w-40 bg-dark-800 border-r border-dark-700 flex flex-col flex-shrink-0">
+                <div className="w-28 sm:w-40 bg-dark-800 border-r border-dark-700 flex flex-col flex-shrink-0">
                   <div className="h-6 border-b border-dark-700 flex items-center px-3 text-xs text-gray-400 font-semibold flex-shrink-0">
                     TRACKS
                   </div>
@@ -2260,10 +2292,16 @@ const TimelineEditor: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-400">
+            <div className="flex-1 flex items-center justify-center text-gray-400 p-4">
               <div className="text-center">
-                <p className="text-xl mb-2">No timeline selected</p>
-                <p className="text-sm">Select a timeline from the list or create a new one</p>
+                <p className="text-lg sm:text-xl mb-2">No timeline selected</p>
+                <p className="text-sm mb-4">Select a timeline from the list or create a new one</p>
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="md:hidden px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors text-sm"
+                >
+                  Open Timeline List
+                </button>
               </div>
             </div>
           )}
@@ -2272,8 +2310,8 @@ const TimelineEditor: React.FC = () => {
 
       {/* New Timeline Modal */}
       {showNewTimelineModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-md border border-dark-700">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 w-full max-w-md border border-dark-700 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-white mb-4">Create New Timeline</h2>
             
             <div className="space-y-4">
@@ -2384,8 +2422,8 @@ const TimelineEditor: React.FC = () => {
 
       {/* Edit Settings Modal */}
       {showEditSettingsModal && editingTimeline && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-lg border border-dark-700 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 w-full max-w-lg border border-dark-700 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-white mb-4">Timeline Settings</h2>
 
             <div className="space-y-4">
@@ -2540,8 +2578,8 @@ const TimelineEditor: React.FC = () => {
 
       {/* Share Modal */}
       {showShareModal && youtubeWatchUrl && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-md border border-dark-700">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 w-full max-w-md border border-dark-700">
             <h2 className="text-xl font-bold text-white mb-4">Share Stream</h2>
             
             {/* URL Display */}
