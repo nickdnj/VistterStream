@@ -239,6 +239,39 @@ def ensure_sqlite_database_seeded() -> None:
         print(f"⚠️ SQLite database bootstrap failed: {exc}")
 
 
+def ensure_destination_secrets_encrypted() -> None:
+    """Encrypt any plaintext stream_key and youtube_api_key values in streaming_destinations."""
+    from utils.crypto import encrypt
+
+    try:
+        db = SessionLocal()
+        rows = db.execute(
+            text("SELECT id, stream_key, youtube_api_key FROM streaming_destinations")
+        ).fetchall()
+        updated = 0
+        for row in rows:
+            dest_id, stream_key, api_key = row
+            updates = {}
+            # Check if stream_key is plaintext (not a Fernet token)
+            if stream_key and not stream_key.startswith("gAAAAA"):
+                updates["stream_key"] = encrypt(stream_key)
+            # Check if youtube_api_key is plaintext
+            if api_key and not api_key.startswith("gAAAAA"):
+                updates["youtube_api_key"] = encrypt(api_key)
+            if updates:
+                set_clause = ", ".join(f"{k} = :v_{k}" for k in updates)
+                params = {f"v_{k}": v for k, v in updates.items()}
+                params["id"] = dest_id
+                db.execute(text(f"UPDATE streaming_destinations SET {set_clause} WHERE id = :id"), params)
+                updated += 1
+        if updated:
+            db.commit()
+            print(f"🔒 Encrypted secrets for {updated} destination(s)")
+        db.close()
+    except Exception as e:
+        print(f"⚠️ Could not encrypt destination secrets: {e}")
+
+
 if __name__ == "__main__":
     ensure_sqlite_database_seeded()
     # Create database tables
@@ -249,6 +282,7 @@ if __name__ == "__main__":
     ensure_streaming_destination_oauth_columns()
     ensure_timeline_broadcast_columns()
     ensure_tempest_url_port_fix()
+    ensure_destination_secrets_encrypted()
     ensure_default_admin()
 
     # Start the server

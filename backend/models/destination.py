@@ -51,4 +51,6 @@ class StreamingDestination(Base):
     last_used = Column(DateTime)
 
     def get_full_rtmp_url(self) -> str:
-        return f"{self.rtmp_url}/{self.stream_key}"
+        from utils.crypto import decrypt
+        key = decrypt(self.stream_key) if self.stream_key else ""
+        return f"{self.rtmp_url}/{key}"

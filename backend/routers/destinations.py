@@ -143,6 +143,11 @@ def _get_dest_or_404(destination_id: int, db: Session) -> StreamingDestination:
 def _dest_to_response(dest: StreamingDestination) -> dict:
     """Convert a destination ORM object to a dict safe for DestinationResponse."""
     data = {c.name: getattr(dest, c.name) for c in dest.__table__.columns}
+    # Mask encrypted secrets — don't expose raw keys in API responses
+    if data.get("stream_key"):
+        data["stream_key"] = "••••••••"
+    if data.get("youtube_api_key"):
+        data["youtube_api_key"] = "••••••••"
     # Strip encrypted fields and add computed response fields
     data.pop("youtube_oauth_client_secret_enc", None)
     data.pop("youtube_oauth_refresh_token_enc", None)
@@ -186,7 +191,11 @@ def get_destination(destination_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=DestinationResponse)
 def create_destination(data: DestinationCreate, db: Session = Depends(get_db)):
     fields = data.model_dump(exclude={"youtube_oauth_client_secret"})
-    # Encrypt the OAuth client secret if provided
+    # Encrypt secrets before storage
+    if fields.get("stream_key"):
+        fields["stream_key"] = encrypt(fields["stream_key"])
+    if fields.get("youtube_api_key"):
+        fields["youtube_api_key"] = encrypt(fields["youtube_api_key"])
     secret = data.youtube_oauth_client_secret
     if secret:
         fields["youtube_oauth_client_secret_enc"] = encrypt(secret)
@@ -202,6 +211,15 @@ def update_destination(destination_id: int, data: DestinationUpdate, db: Session
     dest = _get_dest_or_404(destination_id, db)
     updates = data.model_dump(exclude_unset=True)
     # Handle OAuth secret encryption
+    # Encrypt secrets before storage (skip masked placeholder values from frontend)
+    if "stream_key" in updates and updates["stream_key"] and updates["stream_key"] != "••••••••":
+        updates["stream_key"] = encrypt(updates["stream_key"])
+    elif "stream_key" in updates and updates["stream_key"] == "••••••••":
+        del updates["stream_key"]  # Don't overwrite with mask
+    if "youtube_api_key" in updates and updates["youtube_api_key"] and updates["youtube_api_key"] != "••••••••":
+        updates["youtube_api_key"] = encrypt(updates["youtube_api_key"])
+    elif "youtube_api_key" in updates and updates["youtube_api_key"] == "••••••••":
+        del updates["youtube_api_key"]  # Don't overwrite with mask
     secret = updates.pop("youtube_oauth_client_secret", None)
     if secret is not None:
         dest.youtube_oauth_client_secret_enc = encrypt(secret) if secret else None
@@ -232,8 +250,14 @@ def mark_destination_used(destination_id: int, db: Session = Depends(get_db)):
 @router.get("/{destination_id}/watchdog-config", response_model=YouTubeWatchdogConfig)
 def get_watchdog_config(destination_id: int, db: Session = Depends(get_db)):
     dest = _get_dest_or_404(destination_id, db)
+    api_key = None
+    if dest.youtube_api_key:
+        try:
+            api_key = decrypt(dest.youtube_api_key)
+        except Exception:
+            api_key = dest.youtube_api_key  # fallback for legacy plaintext
     return YouTubeWatchdogConfig(
-        enable_watchdog=dest.enable_watchdog or False, youtube_api_key=dest.youtube_api_key,
+        enable_watchdog=dest.enable_watchdog or False, youtube_api_key=api_key,
         youtube_stream_id=dest.youtube_stream_id, youtube_broadcast_id=dest.youtube_broadcast_id,
         youtube_watch_url=dest.youtube_watch_url, watchdog_check_interval=dest.watchdog_check_interval or 30,
         watchdog_enable_frame_probe=dest.watchdog_enable_frame_probe or False,
@@ -246,7 +270,7 @@ def get_watchdog_config(destination_id: int, db: Session = Depends(get_db)):
 def update_watchdog_config(destination_id: int, config: YouTubeWatchdogConfig, db: Session = Depends(get_db)):
     dest = _get_dest_or_404(destination_id, db)
     dest.enable_watchdog = config.enable_watchdog
-    dest.youtube_api_key = config.youtube_api_key
+    dest.youtube_api_key = encrypt(config.youtube_api_key) if config.youtube_api_key else None
     dest.youtube_stream_id = config.youtube_stream_id
     dest.youtube_broadcast_id = config.youtube_broadcast_id
     dest.youtube_watch_url = config.youtube_watch_url
@@ -355,7 +379,7 @@ def youtube_create_broadcast(destination_id: int, body: CreateBroadcastRequest, 
     dest.youtube_broadcast_id = result.get("broadcast_id")
     dest.youtube_stream_id = result.get("stream_id")
     if result.get("stream_key"):
-        dest.stream_key = result["stream_key"]
+        dest.stream_key = encrypt(result["stream_key"])
     if result.get("rtmp_url"):
         dest.rtmp_url = result["rtmp_url"]
     if result.get("watch_url"):

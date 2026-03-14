@@ -16,6 +16,7 @@ from services.ffmpeg_manager import EncodingProfile
 from datetime import datetime, timezone
 import logging
 from routers.auth import get_current_user
+from utils.crypto import encrypt
 
 router = APIRouter(prefix="/api/timeline-execution", tags=["timeline-execution"], dependencies=[Depends(get_current_user)])
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
                 dest.youtube_broadcast_id = result.get("broadcast_id")
                 dest.youtube_stream_id = result.get("stream_id")
                 if result.get("stream_key"):
-                    dest.stream_key = result["stream_key"]
+                    dest.stream_key = encrypt(result["stream_key"])
                 if result.get("rtmp_url"):
                     dest.rtmp_url = result["rtmp_url"]
                 if result.get("watch_url"):
