@@ -2,6 +2,7 @@
 Assets API Router - Manage overlay assets (images, graphics, dynamic API content)
 """
 
+import ipaddress
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse, Response
@@ -13,12 +14,57 @@ import uuid
 import shutil
 import httpx
 from pathlib import Path
+from urllib.parse import urlparse
 
 from models.database import get_db, Asset
 from models.schemas import AssetCreate, AssetUpdate, Asset as AssetSchema
 from routers.auth import get_current_user
 
 logger = logging.getLogger(__name__)
+
+# SSRF-blocked networks (allow 192.168.0.0/16 and *.local for local services like TempestWeather)
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+]
+_BLOCKED_HOSTNAMES = {"host.docker.internal"}
+
+
+def _validate_url(url: str) -> bool:
+    """Validate that a URL is safe to fetch (blocks SSRF targets).
+
+    Allows http/https schemes. Blocks loopback, link-local, 10.x, and
+    host.docker.internal. Permits 192.168.x.x and *.local for local
+    network services (e.g. TempestWeather).
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+
+    if hostname.lower() in _BLOCKED_HOSTNAMES:
+        return False
+
+    try:
+        addr = ipaddress.ip_address(hostname)
+        for net in _BLOCKED_NETWORKS:
+            if addr in net:
+                return False
+    except ValueError:
+        # Not an IP literal — it's a hostname; blocked hostnames already checked above
+        pass
+
+    return True
+
 
 router = APIRouter(
     prefix="/api/assets",
@@ -202,6 +248,8 @@ async def test_asset(asset_id: int, db: Session = Depends(get_db)):
     if asset.type == "api_image":
         if not asset.api_url:
             raise HTTPException(status_code=400, detail="No API URL configured")
+        if not _validate_url(asset.api_url):
+            raise HTTPException(status_code=400, detail="Asset API URL is not allowed (blocked scheme or address)")
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -240,6 +288,8 @@ async def proxy_asset_image(asset_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Asset not found")
     if asset.type != "api_image" or not asset.api_url:
         raise HTTPException(status_code=400, detail="Asset is not an API image")
+    if not _validate_url(asset.api_url):
+        raise HTTPException(status_code=400, detail="Asset API URL is not allowed (blocked scheme or address)")
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

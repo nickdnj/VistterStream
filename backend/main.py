@@ -11,6 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response as StarletteResponse
 import asyncio
 import logging
 import uvicorn
@@ -184,6 +186,20 @@ app.add_middleware(
 
 # Audit logging for state-changing operations (POST/PUT/DELETE)
 app.add_middleware(AuditMiddleware)
+
+
+# Security headers middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: StarletteResponse = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-XSS-Protection"] = "0"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Mount uploads directory for serving uploaded assets
 # Allow overriding via environment variable to support Docker volume mounts

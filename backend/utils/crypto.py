@@ -4,7 +4,6 @@ Uses Fernet (AES-128-CBC + HMAC-SHA256) from the cryptography library.
 Requires ENCRYPTION_KEY environment variable to be set.
 """
 
-import base64
 import os
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -25,16 +24,8 @@ def encrypt(value: str) -> str:
 
 
 def decrypt(encrypted: str) -> str:
-    """Decrypt a Fernet-encrypted value back to plaintext.
-
-    Falls back to legacy base64 decoding if the value is not a valid
-    Fernet token (for backward compatibility during migration).
-    """
+    """Decrypt a Fernet-encrypted value back to plaintext."""
     try:
         return _fernet.decrypt(encrypted.encode()).decode()
     except InvalidToken:
-        # Legacy base64 value — decode it transparently
-        try:
-            return base64.b64decode(encrypted.encode()).decode()
-        except Exception:
-            raise ValueError("Unable to decrypt value: not a valid Fernet token or base64 string")
+        raise ValueError("Unable to decrypt value: not a valid Fernet token")

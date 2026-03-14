@@ -97,7 +97,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 @router.post("/register", response_model=UserSchema)
-@limiter.limit("5/minute")
+@limiter.limit("3/5minutes")
 async def register_user(request: Request, user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
     # Check if user already exists
@@ -122,7 +122,7 @@ async def register_user(request: Request, user: UserCreate, db: Session = Depend
     return UserSchema.from_orm(db_user)
 
 @router.post("/login", response_model=Token)
-@limiter.limit("10/15minutes")
+@limiter.limit("5/5minutes")
 async def login_user(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login user and return access token"""
     logger.info(f"Login attempt for username: '{form_data.username}'")

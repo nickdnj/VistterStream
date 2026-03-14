@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, field_validator
 import hashlib
 import hmac
+from html import escape as html_escape
 import logging
 import os
 import uuid
@@ -506,11 +507,12 @@ def youtube_oauth_callback(
 
 
 def _oauth_success_html(channel_name: str) -> str:
+    safe_name = html_escape(channel_name)
     return f"""
     <html>
     <body>
         <h1>YouTube Connected!</h1>
-        <p>Connected to channel: <strong>{channel_name}</strong></p>
+        <p>Connected to channel: <strong>{safe_name}</strong></p>
         <p>You can close this window.</p>
         <script>
             window.opener.postMessage('youtube-connected', '*');
@@ -522,11 +524,12 @@ def _oauth_success_html(channel_name: str) -> str:
 
 
 def _oauth_error_html(message: str) -> str:
+    safe_message = html_escape(message)
     return f"""
     <html>
     <body>
         <h1>Connection Failed</h1>
-        <p>{message}</p>
+        <p>{safe_message}</p>
         <script>
             window.opener.postMessage('youtube-error', '*');
         </script>
