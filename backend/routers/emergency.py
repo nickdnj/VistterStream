@@ -2,11 +2,13 @@
 Emergency controls API - Kill all streams, stop all processes
 """
 
-from fastapi import APIRouter, Depends
-import subprocess
-import signal
-import os
+import asyncio
 import logging
+import os
+import signal
+import subprocess
+
+from fastapi import APIRouter, Depends
 
 from services.timeline_executor import get_timeline_executor
 from routers.auth import get_current_user
@@ -60,7 +62,7 @@ async def kill_all_streams():
                         errors.append(f"Failed to kill PID {pid}: {e}")
             
             # Wait a moment, then SIGKILL any survivors
-            subprocess.run(['sleep', '2'])
+            await asyncio.sleep(2)
             result = subprocess.run(['pgrep', '-f', 'ffmpeg'], capture_output=True)
             if result.returncode == 0:
                 pids = result.stdout.decode().strip().split('\n')

@@ -102,7 +102,7 @@ async def start_timeline(request: StartTimelineRequest, db: Session = Depends(ge
                         logger.warning("Broadcast thumbnail upload failed (non-fatal): %s", thumb_err)
             except Exception as e:
                 logger.error("Failed to auto-create broadcast for %s: %s", dest.name, e)
-                raise HTTPException(status_code=500, detail=f"Failed to create YouTube broadcast for {dest.name}: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to create YouTube broadcast for {dest.name}")
 
     output_urls = [dest.get_full_rtmp_url() for dest in destinations]
     destination_names = [dest.name for dest in destinations]

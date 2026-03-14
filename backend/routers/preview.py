@@ -5,10 +5,14 @@ Manages local preview workflow: start preview, stop preview, go live
 See: docs/PreviewSystem-Specification.md Section 4.3
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
+
+logger = logging.getLogger(__name__)
 
 from models.database import get_db
 from models.timeline import Timeline
@@ -71,9 +75,11 @@ async def start_preview(request: StartPreviewRequest, db: Session = Depends(get_
     try:
         await router_service.start_preview(timeline_id=request.timeline_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Preview start validation error: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid preview configuration")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start preview: {str(e)}")
+        logger.error("Failed to start preview: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to start preview")
     
     # Return HLS URL for browser playback
     # MediaMTX serves HLS at http://localhost:8888/{path}/index.m3u8
@@ -103,7 +109,8 @@ async def stop_preview():
     try:
         await router_service.stop()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stop preview: {str(e)}")
+        logger.error("Failed to stop preview: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to stop preview")
     
     return {
         "message": "Preview stopped successfully",
@@ -148,9 +155,11 @@ async def go_live(request: GoLiveRequest, db: Session = Depends(get_db)):
     try:
         await router_service.go_live(destination_ids=request.destination_ids)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Go-live validation error: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid go-live configuration")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to go live: {str(e)}")
+        logger.error("Failed to go live: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to go live")
     
     return {
         "message": "Now streaming LIVE",
