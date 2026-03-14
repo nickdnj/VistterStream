@@ -143,37 +143,40 @@ class RTMPRelayService:
     def __init__(self):
         self.relays: Dict[int, CameraRelay] = {}
         self._shutdown_event = asyncio.Event()
+        self._lock = asyncio.Lock()
     
     async def start_camera_relay(self, camera_id: int, db: Session) -> bool:
         """Start relay for a specific camera"""
-        if camera_id in self.relays:
-            logger.info(f"Relay for camera {camera_id} already running")
+        async with self._lock:
+            if camera_id in self.relays:
+                logger.info(f"Relay for camera {camera_id} already running")
+                return True
+
+            # Get camera from database
+            camera = db.query(Camera).filter(Camera.id == camera_id).first()
+            if not camera:
+                logger.error(f"Camera {camera_id} not found")
+                return False
+
+            # Build RTSP URL
+            rtsp_url = self._build_rtsp_url(camera)
+
+            # Create and start relay
+            relay = CameraRelay(camera_id, camera.name, rtsp_url)
+            await relay.start()
+
+            self.relays[camera_id] = relay
             return True
-        
-        # Get camera from database
-        camera = db.query(Camera).filter(Camera.id == camera_id).first()
-        if not camera:
-            logger.error(f"Camera {camera_id} not found")
-            return False
-        
-        # Build RTSP URL
-        rtsp_url = self._build_rtsp_url(camera)
-        
-        # Create and start relay
-        relay = CameraRelay(camera_id, camera.name, rtsp_url)
-        await relay.start()
-        
-        self.relays[camera_id] = relay
-        return True
-    
+
     async def stop_camera_relay(self, camera_id: int):
         """Stop relay for a specific camera"""
-        if camera_id not in self.relays:
-            return
-        
-        relay = self.relays[camera_id]
-        await relay.stop()
-        del self.relays[camera_id]
+        async with self._lock:
+            if camera_id not in self.relays:
+                return
+
+            relay = self.relays[camera_id]
+            await relay.stop()
+            del self.relays[camera_id]
     
     async def start_all_cameras(self):
         """Start relays for ALL cameras in database"""
