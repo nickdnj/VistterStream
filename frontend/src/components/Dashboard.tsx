@@ -37,6 +37,7 @@ interface ActiveStreamInfo {
   timelineName: string;
   youtubeVideoId: string | null;
   destinationName: string | null;
+  destinationIds: number[];
 }
 
 const Dashboard: React.FC = () => {
@@ -45,6 +46,7 @@ const Dashboard: React.FC = () => {
   const [activeStreamInfo, setActiveStreamInfo] = useState<ActiveStreamInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [streamActionLoading, setStreamActionLoading] = useState<'stop' | 'restart' | null>(null);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -89,7 +91,8 @@ const Dashboard: React.FC = () => {
                 timelineId,
                 timelineName,
                 youtubeVideoId: youtubeDestination.youtube_broadcast_id || youtubeDestination.youtube_stream_id || null,
-                destinationName: youtubeDestination.name
+                destinationName: youtubeDestination.name,
+                destinationIds,
               });
             } else {
               // Active stream but no YouTube destination with video ID
@@ -97,7 +100,8 @@ const Dashboard: React.FC = () => {
                 timelineId,
                 timelineName,
                 youtubeVideoId: null,
-                destinationName: destinations.find((d: Destination) => destinationIds.includes(d.id))?.name || null
+                destinationName: destinations.find((d: Destination) => destinationIds.includes(d.id))?.name || null,
+                destinationIds,
               });
             }
           } else {
@@ -119,6 +123,7 @@ const Dashboard: React.FC = () => {
 
   const handleStopStream = async () => {
     if (!activeStreamInfo?.timelineId) return;
+    setShowStopConfirm(false);
     setStreamActionLoading('stop');
     try {
       await api.post(`/timeline-execution/stop/${activeStreamInfo.timelineId}`);
@@ -135,9 +140,15 @@ const Dashboard: React.FC = () => {
     if (!activeStreamInfo?.timelineId) return;
     setStreamActionLoading('restart');
     try {
-      await api.post(`/timeline-execution/stop/${activeStreamInfo.timelineId}`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await api.post('/timeline-execution/start', { timeline_id: activeStreamInfo.timelineId });
+      const timelineId = activeStreamInfo.timelineId;
+      const destinationIds = activeStreamInfo.destinationIds;
+      await api.post(`/timeline-execution/stop/${timelineId}`);
+      // Wait for FFmpeg processes to fully terminate
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await api.post('/timeline-execution/start', {
+        timeline_id: timelineId,
+        destination_ids: destinationIds,
+      });
     } catch (error) {
       console.error('Failed to restart stream:', error);
       alert('Failed to restart stream');
@@ -190,14 +201,14 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-        <p className="mt-2 text-gray-400">Monitor your streaming appliance status</p>
+    <div className="h-full overflow-y-auto p-3 sm:p-6">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white">Dashboard</h1>
+        <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-400">Monitor your streaming appliance status</p>
       </div>
 
       {/* Live Stream Embed */}
-      <div className="mb-8 max-w-4xl mx-auto">
+      <div className="mb-6 sm:mb-8 max-w-4xl mx-auto">
         {activeStreamInfo?.youtubeVideoId ? (
           <div className="bg-dark-800 rounded-lg border border-dark-700 overflow-hidden">
             <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
@@ -223,7 +234,7 @@ const Dashboard: React.FC = () => {
             {/* Stream Controls */}
             <div className="flex justify-center gap-3 p-4 bg-dark-900/50 border-t border-dark-700">
               <button
-                onClick={handleStopStream}
+                onClick={() => setShowStopConfirm(true)}
                 disabled={streamActionLoading !== null}
                 className="flex-1 max-w-[140px] px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
               >
@@ -264,7 +275,7 @@ const Dashboard: React.FC = () => {
             {/* Stream Controls */}
             <div className="flex justify-center gap-3 p-4 bg-dark-900/50 border-t border-dark-700">
               <button
-                onClick={handleStopStream}
+                onClick={() => setShowStopConfirm(true)}
                 disabled={streamActionLoading !== null}
                 className="flex-1 max-w-[140px] px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2"
               >
@@ -308,49 +319,49 @@ const Dashboard: React.FC = () => {
 
       {/* System Status Cards */}
       {systemStatus && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-4 mb-8">
-          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-7 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-primary-600 rounded-lg flex items-center justify-center">
                   <CameraIcon className="h-5 w-5 text-white" />
                 </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-400">Active Cameras</p>
-                <p className="text-2xl font-bold text-white">{systemStatus.active_cameras ?? 0}</p>
+              <div className="ml-3 sm:ml-4 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-400">Cameras</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{systemStatus.active_cameras ?? 0}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 border border-dark-700 col-span-2 sm:col-span-1">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${systemStatus.timeline_streaming ? 'bg-green-600' : 'bg-gray-600'}`}>
                   <PlayIcon className="h-5 w-5 text-white" />
                 </div>
               </div>
-              <div className="ml-4 flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-400">Timeline Streaming</p>
+              <div className="ml-3 sm:ml-4 flex-1 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-400">Timeline</p>
                 {systemStatus.timeline_streaming ? (
                   <div>
-                    <p className="text-lg font-bold text-white truncate" title={systemStatus.timeline_name}>
+                    <p className="text-base sm:text-lg font-bold text-white truncate" title={systemStatus.timeline_name}>
                       {systemStatus.timeline_name || 'Active'}
                     </p>
                     {systemStatus.timeline_destinations && systemStatus.timeline_destinations.length > 0 && (
                       <p className="text-xs text-gray-400 truncate" title={systemStatus.timeline_destinations.join(', ')}>
-                        → {systemStatus.timeline_destinations.join(', ')}
+                        {systemStatus.timeline_destinations.join(', ')}
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold text-white">Idle</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white">Idle</p>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-yellow-600 rounded-lg flex items-center justify-center">
@@ -359,14 +370,14 @@ const Dashboard: React.FC = () => {
                   </svg>
                 </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-400">CPU Usage</p>
-                <p className="text-2xl font-bold text-white">{(systemStatus.cpu_usage ?? 0).toFixed(1)}%</p>
+              <div className="ml-3 sm:ml-4 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-400">CPU</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{(systemStatus.cpu_usage ?? 0).toFixed(1)}%</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -375,14 +386,14 @@ const Dashboard: React.FC = () => {
                   </svg>
                 </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-400">Memory Usage</p>
-                <p className="text-2xl font-bold text-white">{(systemStatus.memory_usage ?? 0).toFixed(1)}%</p>
+              <div className="ml-3 sm:ml-4 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-400">Memory</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{(systemStatus.memory_usage ?? 0).toFixed(1)}%</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-cyan-600 rounded-lg flex items-center justify-center">
@@ -391,14 +402,14 @@ const Dashboard: React.FC = () => {
                   </svg>
                 </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-400">Network Usage</p>
-                <p className="text-2xl font-bold text-white">{(systemStatus.network_usage ?? 0).toFixed(1)}%</p>
+              <div className="ml-3 sm:ml-4 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-400">Network</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{(systemStatus.network_usage ?? 0).toFixed(1)}%</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-orange-600 rounded-lg flex items-center justify-center">
@@ -407,14 +418,14 @@ const Dashboard: React.FC = () => {
                   </svg>
                 </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-400">Disk Usage</p>
-                <p className="text-2xl font-bold text-white">{(systemStatus.disk_usage ?? 0).toFixed(1)}%</p>
+              <div className="ml-3 sm:ml-4 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-400">Disk</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{(systemStatus.disk_usage ?? 0).toFixed(1)}%</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+          <div className="bg-dark-800 rounded-lg p-4 sm:p-6 border border-dark-700">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-purple-600 rounded-lg flex items-center justify-center">
@@ -423,19 +434,47 @@ const Dashboard: React.FC = () => {
                   </svg>
                 </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-400">Uptime</p>
-                <p className="text-2xl font-bold text-white">{formatUptime(systemStatus.uptime ?? 0)}</p>
+              <div className="ml-3 sm:ml-4 min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-400">Uptime</p>
+                <p className="text-xl sm:text-2xl font-bold text-white">{formatUptime(systemStatus.uptime ?? 0)}</p>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* Stop Confirmation Dialog */}
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-2">Stop Stream?</h3>
+            <p className="text-sm text-gray-400 mb-6">
+              This will stop the current stream
+              {activeStreamInfo?.timelineName && <> ({activeStreamInfo.timelineName})</>}
+              {' '}and end the YouTube broadcast. This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowStopConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white bg-dark-700 hover:bg-dark-600 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStopStream}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+              >
+                Stop Stream
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cameras Section */}
-      <div className="mb-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-white">Cameras</h2>
+      <div className="mb-6 sm:mb-8">
+        <div className="mb-4 sm:mb-6">
+          <h2 className="text-lg sm:text-xl font-semibold text-white">Cameras</h2>
         </div>
 
         {cameras.length === 0 ? (
