@@ -13,11 +13,16 @@ from typing import Optional, List
 from models.database import get_db
 from models.timeline import Timeline
 from models.destination import StreamingDestination
+from routers.auth import get_current_user
 from services.stream_router import get_stream_router, PreviewMode
 from services.preview_server_health import PreviewServerHealth
 from services.timeline_executor import get_playback_position
 
-router = APIRouter(prefix="/api/preview", tags=["preview"])
+router = APIRouter(
+    prefix="/api/preview",
+    tags=["preview"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 class StartPreviewRequest(BaseModel):

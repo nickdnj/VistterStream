@@ -150,15 +150,15 @@ if not cors_origin_regex:
     # frontend served from the Pi (e.g. http://192.168.x.x:3000 or http://vistter.local:3000) can reach the
     # API without additional configuration. Also allow HTTPS origins from Cloudflare Tunnel domains.
     # This still keeps the regex scoped to HTTP/HTTPS origins and matches the common dev ports used by the project.
-    cors_origin_regex = r"https?://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3}|[a-zA-Z0-9-]+\\.local|.*\\.vistter\\.com)(?::\\d+)?"
+    cors_origin_regex = r"https?://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3}|[a-zA-Z0-9-]+\\.local|stream\\.vistter\\.com)(?::\\d+)?"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Mount uploads directory for serving uploaded assets
