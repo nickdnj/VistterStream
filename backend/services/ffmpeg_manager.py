@@ -288,6 +288,7 @@ class FFmpegProcessManager:
         if stream_process.process:
             await self._graceful_shutdown(stream_process.process, graceful)
         
+        stream_process.process = None  # Release process object for GC
         stream_process.status = StreamStatus.STOPPED
         logger.info(f"Stream {stream_id} stopped")
     
@@ -801,7 +802,7 @@ class FFmpegProcessManager:
     async def _graceful_shutdown(self, process: asyncio.subprocess.Process, graceful: bool = True):
         """
         Gracefully shutdown FFmpeg process.
-        
+
         Process:
         1. Send SIGTERM (if graceful)
         2. Wait up to 5 seconds
@@ -809,24 +810,24 @@ class FFmpegProcessManager:
         """
         if not process:
             return
-        
+
         try:
             if graceful:
                 # Try graceful shutdown first
                 process.terminate()  # SIGTERM
-                
+
                 try:
                     await asyncio.wait_for(process.wait(), timeout=5.0)
                     logger.debug(f"Process {process.pid} terminated gracefully")
                     return
                 except asyncio.TimeoutError:
                     logger.warning(f"Process {process.pid} did not respond to SIGTERM, sending SIGKILL")
-            
+
             # Force kill
             process.kill()  # SIGKILL
             await process.wait()
             logger.debug(f"Process {process.pid} killed")
-            
+
         except ProcessLookupError:
             # Process already dead
             pass

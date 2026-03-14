@@ -835,9 +835,11 @@ class TimelineExecutor:
                                 logger.warning(f"Timeout stopping old FFmpeg - forcing kill")
                                 try:
                                     if timeline_id in ffmpeg_manager.processes:
-                                        proc = ffmpeg_manager.processes[timeline_id].process
-                                        if proc:
-                                            proc.kill()
+                                        stream_proc_old = ffmpeg_manager.processes[timeline_id]
+                                        if stream_proc_old.process:
+                                            stream_proc_old.process.kill()
+                                            await stream_proc_old.process.wait()
+                                        stream_proc_old.process = None
                                 except Exception:
                                     pass
                             except KeyError:
