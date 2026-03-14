@@ -390,9 +390,9 @@ async def capture_and_upload_broadcast_thumbnail(
                 tilt = preset.tilt if preset.tilt is not None else 0.0
                 zoom = preset.zoom if preset.zoom is not None else 1.0
                 onvif_port = camera.onvif_port if hasattr(camera, 'onvif_port') and camera.onvif_port else 80
-                password = decrypt(camera.password) if camera.password else ""
+                password = decrypt(camera.password_enc) if camera.password_enc else ""
                 await ptz_service.absolute_move(
-                    camera.ip_address, onvif_port,
+                    camera.address, onvif_port,
                     camera.username or "", password,
                     pan, tilt, zoom,
                 )
