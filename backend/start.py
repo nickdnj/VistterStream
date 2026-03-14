@@ -82,7 +82,7 @@ def ensure_streaming_destination_oauth_columns() -> None:
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("Unable to add column '%s' to streaming_destinations: %s", column_name, exc)
     except Exception as exc:
-        print(f"⚠️ Unable to update streaming_destinations OAuth schema: {exc}")
+        logger.warning("Unable to update streaming_destinations OAuth schema: %s", exc)
 
 
 def ensure_preset_thumbnail_column() -> None:

@@ -4,6 +4,9 @@ Records user, action, timestamp, and IP for POST/PUT/DELETE requests.
 """
 
 import logging
+import os
+from jose import jwt as jose_jwt
+from jose.exceptions import JWTError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -55,12 +58,19 @@ def _classify_action(method: str, path: str) -> str:
 
 
 def _extract_user_from_request(request: Request):
-    """Try to extract user info from the request state (set by auth dependency)."""
-    # FastAPI auth dependencies set request.state.user after authentication
-    user = getattr(request.state, "user", None)
-    if user:
-        return getattr(user, "id", None), getattr(user, "username", None)
-    return None, None
+    """Extract user info from the JWT token in the Authorization header."""
+    username = None
+    user_id = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            secret = os.getenv("JWT_SECRET_KEY", "")
+            token = auth_header[7:]
+            payload = jose_jwt.decode(token, secret, algorithms=["HS256"])
+            username = payload.get("sub")
+        except (JWTError, Exception):
+            pass
+    return user_id, username
 
 
 class AuditMiddleware(BaseHTTPMiddleware):

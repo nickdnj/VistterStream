@@ -3,14 +3,18 @@ Tests for destination endpoints (/api/destinations/*).
 """
 
 from utils.crypto import encrypt
+from models.database import User
+from routers.auth import get_password_hash
 
 
-def _get_auth_header(client):
-    """Register + login a test user and return an Authorization header dict."""
-    client.post(
-        "/api/auth/register",
-        json={"username": "destuser", "password": "testpass123"},
+def _get_auth_header(client, db_session):
+    """Seed a test user and login to get an Authorization header dict."""
+    user = User(
+        username="destuser",
+        password_hash=get_password_hash("testpass123"),
     )
+    db_session.add(user)
+    db_session.commit()
     login_resp = client.post(
         "/api/auth/login",
         data={"username": "destuser", "password": "testpass123"},
@@ -40,8 +44,8 @@ def test_get_destinations_unauthenticated(client):
     assert resp.status_code == 401
 
 
-def test_create_and_list_destinations(client):
-    headers = _get_auth_header(client)
+def test_create_and_list_destinations(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_destination(client, headers)
     assert create_resp.status_code == 200
     dest = create_resp.json()
@@ -56,8 +60,8 @@ def test_create_and_list_destinations(client):
     assert len(list_resp.json()) == 1
 
 
-def test_get_destination_by_id(client):
-    headers = _get_auth_header(client)
+def test_get_destination_by_id(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_destination(client, headers)
     dest_id = create_resp.json()["id"]
 
@@ -66,8 +70,8 @@ def test_get_destination_by_id(client):
     assert resp.json()["id"] == dest_id
 
 
-def test_update_destination(client):
-    headers = _get_auth_header(client)
+def test_update_destination(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_destination(client, headers)
     dest_id = create_resp.json()["id"]
 
@@ -80,8 +84,8 @@ def test_update_destination(client):
     assert resp.json()["name"] == "Updated Name"
 
 
-def test_delete_destination(client):
-    headers = _get_auth_header(client)
+def test_delete_destination(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_destination(client, headers)
     dest_id = create_resp.json()["id"]
 
@@ -93,9 +97,9 @@ def test_delete_destination(client):
     assert resp.status_code == 404
 
 
-def test_update_with_mask_does_not_overwrite(client):
+def test_update_with_mask_does_not_overwrite(client, db_session):
     """Sending the masked placeholder should not overwrite the real key."""
-    headers = _get_auth_header(client)
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_destination(client, headers)
     dest_id = create_resp.json()["id"]
 
@@ -114,14 +118,14 @@ def test_update_with_mask_does_not_overwrite(client):
 # URL Validation Tests (Issue #39)
 # ------------------------------------------------------------------
 
-def test_reject_invalid_rtmp_scheme(client):
-    headers = _get_auth_header(client)
+def test_reject_invalid_rtmp_scheme(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = _create_destination(client, headers, rtmp_url="file:///etc/passwd")
     assert resp.status_code == 422
 
 
-def test_reject_invalid_youtube_watch_url(client):
-    headers = _get_auth_header(client)
+def test_reject_invalid_youtube_watch_url(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = _create_destination(
         client, headers,
         youtube_watch_url="javascript:alert(1)"
@@ -129,8 +133,8 @@ def test_reject_invalid_youtube_watch_url(client):
     assert resp.status_code == 422
 
 
-def test_accept_valid_rtmps_url(client):
-    headers = _get_auth_header(client)
+def test_accept_valid_rtmps_url(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = _create_destination(
         client, headers,
         rtmp_url="rtmps://live-api-s.facebook.com:443/rtmp",
@@ -138,8 +142,8 @@ def test_accept_valid_rtmps_url(client):
     assert resp.status_code == 200
 
 
-def test_accept_valid_youtube_watch_url(client):
-    headers = _get_auth_header(client)
+def test_accept_valid_youtube_watch_url(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = _create_destination(
         client, headers,
         youtube_watch_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -147,9 +151,9 @@ def test_accept_valid_youtube_watch_url(client):
     assert resp.status_code == 200
 
 
-def test_accept_empty_rtmp_url(client):
+def test_accept_empty_rtmp_url(client, db_session):
     """OAuth destinations can have empty rtmp_url."""
-    headers = _get_auth_header(client)
+    headers = _get_auth_header(client, db_session)
     resp = _create_destination(client, headers, platform="youtube_oauth", rtmp_url="")
     assert resp.status_code == 200
 
@@ -158,8 +162,8 @@ def test_accept_empty_rtmp_url(client):
 # Platform Presets
 # ------------------------------------------------------------------
 
-def test_get_platform_presets(client):
-    headers = _get_auth_header(client)
+def test_get_platform_presets(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = client.get("/api/destinations/presets", headers=headers)
     assert resp.status_code == 200
     presets = resp.json()

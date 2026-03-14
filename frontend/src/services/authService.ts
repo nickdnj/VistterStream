@@ -14,22 +14,20 @@ export interface User {
 
 export const authService = {
   async login(username: string, password: string): Promise<LoginResponse> {
-    console.log('AuthService: Starting login for username:', username);
     const formData = new URLSearchParams();
     formData.append('username', username);
     formData.append('password', password);
-    
-    console.log('AuthService: Making API call to /auth/login');
+
     try {
       const response = await api.post('/auth/login', formData, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
       });
-      console.log('AuthService: Login successful, response:', response.data);
+      console.log('AuthService: Login successful');
       return response.data;
     } catch (error) {
-      console.error('AuthService: Login failed with error:', error);
+      console.error('AuthService: Login failed');
       throw error;
     }
   },

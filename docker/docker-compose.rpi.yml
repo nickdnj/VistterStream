@@ -39,6 +39,11 @@ services:
       - "8000:8000"
     networks:
       - vistter-net
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '3.0'
 
   backend-host:
     <<: *backend-base
@@ -66,6 +71,11 @@ services:
     restart: unless-stopped
     networks:
       - vistter-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
 
   preview-server:
     image: bluenviron/mediamtx:latest
@@ -79,6 +89,11 @@ services:
     restart: unless-stopped
     networks:
       - vistter-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
 
   frontend:
     build:
@@ -96,6 +111,11 @@ services:
     restart: unless-stopped
     networks:
       - vistter-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
 
   # Cloudflare Tunnel - enables remote access without port forwarding
   # See docs/CLOUDFLARE_TUNNEL_SETUP.md for setup instructions
@@ -116,6 +136,11 @@ services:
     depends_on:
       - frontend
       - backend
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
 
   # TempestWeather - weather overlay and data API for Tempest weather stations
   # Requires network_mode: host for UDP broadcast reception (port 50222)
@@ -137,6 +162,11 @@ services:
       - TEMPEST_LOCATION_STATE=${TEMPEST_LOCATION_STATE:-}
       - TZ=America/New_York
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${TEMPEST_FLASK_PORT:-8036}/')"]
       interval: 30s

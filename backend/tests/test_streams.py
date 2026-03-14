@@ -2,17 +2,20 @@
 Tests for stream endpoints (/api/streams/*).
 """
 
-from models.database import Camera
+from models.database import Camera, User
 from models.destination import StreamingDestination
 from utils.crypto import encrypt
+from routers.auth import get_password_hash
 
 
-def _get_auth_header(client):
-    """Register + login a test user and return an Authorization header dict."""
-    client.post(
-        "/api/auth/register",
-        json={"username": "streamuser", "password": "testpass123"},
+def _get_auth_header(client, db_session):
+    """Seed a test user and login to get an Authorization header dict."""
+    user = User(
+        username="streamuser",
+        password_hash=get_password_hash("testpass123"),
     )
+    db_session.add(user)
+    db_session.commit()
     login_resp = client.post(
         "/api/auth/login",
         data={"username": "streamuser", "password": "testpass123"},
@@ -56,7 +59,7 @@ def test_get_streams_unauthenticated(client):
 
 
 def test_create_stream(client, db_session):
-    headers = _get_auth_header(client)
+    headers = _get_auth_header(client, db_session)
     cam_id, dest_id = _seed_camera_and_dest(db_session)
 
     resp = client.post(
@@ -78,7 +81,7 @@ def test_create_stream(client, db_session):
 
 
 def test_list_streams(client, db_session):
-    headers = _get_auth_header(client)
+    headers = _get_auth_header(client, db_session)
     cam_id, dest_id = _seed_camera_and_dest(db_session)
 
     client.post(
@@ -96,14 +99,14 @@ def test_list_streams(client, db_session):
     assert len(resp.json()) >= 1
 
 
-def test_get_stream_not_found(client):
-    headers = _get_auth_header(client)
+def test_get_stream_not_found(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = client.get("/api/streams/99999", headers=headers)
     assert resp.status_code == 404
 
 
 def test_delete_stream(client, db_session):
-    headers = _get_auth_header(client)
+    headers = _get_auth_header(client, db_session)
     cam_id, dest_id = _seed_camera_and_dest(db_session)
 
     create_resp = client.post(

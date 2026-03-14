@@ -112,6 +112,9 @@ def create_asset(asset_data: AssetCreate, db: Session = Depends(get_db)):
         if not asset_data.file_path:
             raise HTTPException(status_code=400, detail="file_path is required for this asset type")
 
+    if asset_data.api_url and not _validate_url(asset_data.api_url):
+        raise HTTPException(status_code=400, detail="Asset API URL is not allowed (blocked scheme or address)")
+
     asset = Asset(
         name=asset_data.name,
         type=asset_data.type,
@@ -140,8 +143,11 @@ def update_asset(asset_id: int, asset_data: AssetUpdate, db: Session = Depends(g
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
 
+    if asset_data.api_url and not _validate_url(asset_data.api_url):
+        raise HTTPException(status_code=400, detail="Asset API URL is not allowed (blocked scheme or address)")
+
     # Update fields
-    update_data = asset_data.dict(exclude_unset=True)
+    update_data = asset_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(asset, field, value)
 
@@ -236,7 +242,8 @@ async def upload_asset_file(
         # Clean up file on error
         if file_path.exists():
             os.unlink(file_path)
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        logger.error("Upload failed: %s", e)
+        raise HTTPException(status_code=500, detail="Upload failed")
 
 @router.post("/{asset_id}/test")
 async def test_asset(asset_id: int, db: Session = Depends(get_db)):
@@ -302,4 +309,5 @@ async def proxy_asset_image(asset_id: int, db: Session = Depends(get_db)):
                 headers={"Cache-Control": "public, max-age=30"},
             )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch asset: {e}")
+        logger.error("Failed to fetch asset: %s", e)
+        raise HTTPException(status_code=502, detail="Failed to fetch asset")

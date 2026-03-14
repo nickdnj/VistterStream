@@ -65,7 +65,7 @@ class StreamService:
         if not stream:
             return None
 
-        update_data = stream_update.dict(exclude_unset=True)
+        update_data = stream_update.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(stream, field, value)
 

@@ -173,7 +173,7 @@ if not cors_origin_regex:
     # frontend served from the Pi (e.g. http://192.168.x.x:3000 or http://vistter.local:3000) can reach the
     # API without additional configuration. Also allow HTTPS origins from Cloudflare Tunnel domains.
     # This still keeps the regex scoped to HTTP/HTTPS origins and matches the common dev ports used by the project.
-    cors_origin_regex = r"https?://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|\\d{1,3}(?:\\.\\d{1,3}){3}|[a-zA-Z0-9-]+\\.local|stream\\.vistter\\.com)(?::\\d+)?"
+    cors_origin_regex = r"https?://(localhost|127\\.0\\.0\\.1|0\\.0\\.0\\.0|(192\\.168\\.\\d{1,3}\\.\\d{1,3}|10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2[0-9]|3[01])\\.\\d{1,3}\\.\\d{1,3}|100\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})|[a-zA-Z0-9-]+\\.local|stream\\.vistter\\.com)(?::\\d+)?"
 
 app.add_middleware(
     CORSMiddleware,
@@ -196,6 +196,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-XSS-Protection"] = "0"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; frame-src https://www.youtube.com; connect-src 'self' ws: wss:"
         return response
 
 

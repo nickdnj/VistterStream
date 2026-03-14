@@ -3,12 +3,18 @@ Tests for asset endpoints (/api/assets/*).
 """
 
 
-def _get_auth_header(client):
-    """Register + login a test user and return an Authorization header dict."""
-    client.post(
-        "/api/auth/register",
-        json={"username": "assetuser", "password": "testpass123"},
+from models.database import User
+from routers.auth import get_password_hash
+
+
+def _get_auth_header(client, db_session):
+    """Seed a test user and login to get an Authorization header dict."""
+    user = User(
+        username="assetuser",
+        password_hash=get_password_hash("testpass123"),
     )
+    db_session.add(user)
+    db_session.commit()
     login_resp = client.post(
         "/api/auth/login",
         data={"username": "assetuser", "password": "testpass123"},
@@ -26,8 +32,8 @@ def test_get_assets_unauthenticated(client):
     assert resp.status_code == 401
 
 
-def test_create_api_image_asset(client):
-    headers = _get_auth_header(client)
+def test_create_api_image_asset(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = client.post(
         "/api/assets",
         json={
@@ -50,8 +56,8 @@ def test_create_api_image_asset(client):
     assert asset["api_url"] == "http://tempest.local:8036/api/overlay/conditions"
 
 
-def test_create_static_image_asset(client):
-    headers = _get_auth_header(client)
+def test_create_static_image_asset(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = client.post(
         "/api/assets",
         json={
@@ -67,8 +73,8 @@ def test_create_static_image_asset(client):
     assert resp.json()["type"] == "static_image"
 
 
-def test_create_api_image_without_url_fails(client):
-    headers = _get_auth_header(client)
+def test_create_api_image_without_url_fails(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = client.post(
         "/api/assets",
         json={
@@ -81,8 +87,8 @@ def test_create_api_image_without_url_fails(client):
     assert resp.status_code == 400
 
 
-def test_list_assets(client):
-    headers = _get_auth_header(client)
+def test_list_assets(client, db_session):
+    headers = _get_auth_header(client, db_session)
     # Create two assets
     client.post(
         "/api/assets",
@@ -100,8 +106,8 @@ def test_list_assets(client):
     assert len(resp.json()) == 2
 
 
-def test_update_asset(client):
-    headers = _get_auth_header(client)
+def test_update_asset(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = client.post(
         "/api/assets",
         json={"name": "Original", "type": "api_image", "api_url": "http://example.com/img"},
@@ -119,8 +125,8 @@ def test_update_asset(client):
     assert resp.json()["opacity"] == 0.5
 
 
-def test_delete_asset(client):
-    headers = _get_auth_header(client)
+def test_delete_asset(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = client.post(
         "/api/assets",
         json={"name": "To Delete", "type": "api_image", "api_url": "http://example.com/del"},

@@ -2,6 +2,8 @@
 Timeline management API endpoints
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -12,6 +14,8 @@ from models.timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecut
 from pydantic import BaseModel
 from typing import Optional
 from routers.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/timelines", tags=["timelines"], dependencies=[Depends(get_current_user)])
 
@@ -189,7 +193,8 @@ def create_timeline(timeline_data: TimelineCreate, db: Session = Depends(get_db)
         
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create timeline: {str(e)}")
+        logger.error("Failed to create timeline: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to create timeline")
 
 
 @router.put("/{timeline_id}", response_model=TimelineResponse)
@@ -274,7 +279,8 @@ def update_timeline(timeline_id: int, timeline_data: TimelineUpdate, db: Session
         
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update timeline: {str(e)}")
+        logger.error("Failed to update timeline: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to update timeline")
 
 
 @router.delete("/{timeline_id}")
@@ -294,7 +300,8 @@ def delete_timeline(timeline_id: int, db: Session = Depends(get_db)):
         return {"message": "Timeline deleted successfully"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete timeline: {str(e)}")
+        logger.error("Failed to delete timeline: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to delete timeline")
 
 
 @router.post("/{timeline_id}/duplicate", response_model=TimelineResponse)
@@ -393,5 +400,6 @@ def cleanup_orphaned_cues(db: Session = Depends(get_db)):
         
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to cleanup orphaned cues: {str(e)}")
+        logger.error("Failed to cleanup orphaned cues: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to cleanup orphaned cues")
 

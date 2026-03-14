@@ -3,12 +3,18 @@ Tests for timeline endpoints (/api/timelines/*).
 """
 
 
-def _get_auth_header(client):
-    """Register + login a test user and return an Authorization header dict."""
-    client.post(
-        "/api/auth/register",
-        json={"username": "tluser", "password": "testpass123"},
+from models.database import User
+from routers.auth import get_password_hash
+
+
+def _get_auth_header(client, db_session):
+    """Seed a test user and login to get an Authorization header dict."""
+    user = User(
+        username="tluser",
+        password_hash=get_password_hash("testpass123"),
     )
+    db_session.add(user)
+    db_session.commit()
     login_resp = client.post(
         "/api/auth/login",
         data={"username": "tluser", "password": "testpass123"},
@@ -41,8 +47,8 @@ def test_get_timelines_unauthenticated(client):
     assert resp.status_code == 401
 
 
-def test_create_and_list_timelines(client):
-    headers = _get_auth_header(client)
+def test_create_and_list_timelines(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_timeline(client, headers)
     assert create_resp.status_code == 200
     tl = create_resp.json()
@@ -55,8 +61,8 @@ def test_create_and_list_timelines(client):
     assert len(list_resp.json()) >= 1
 
 
-def test_get_timeline_by_id(client):
-    headers = _get_auth_header(client)
+def test_get_timeline_by_id(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_timeline(client, headers)
     tl_id = create_resp.json()["id"]
 
@@ -65,8 +71,8 @@ def test_get_timeline_by_id(client):
     assert resp.json()["id"] == tl_id
 
 
-def test_update_timeline(client):
-    headers = _get_auth_header(client)
+def test_update_timeline(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_timeline(client, headers)
     tl_id = create_resp.json()["id"]
 
@@ -79,8 +85,8 @@ def test_update_timeline(client):
     assert resp.json()["name"] == "Updated Timeline"
 
 
-def test_delete_timeline(client):
-    headers = _get_auth_header(client)
+def test_delete_timeline(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_timeline(client, headers)
     tl_id = create_resp.json()["id"]
 
@@ -91,8 +97,8 @@ def test_delete_timeline(client):
     assert resp.status_code == 404
 
 
-def test_timeline_not_found(client):
-    headers = _get_auth_header(client)
+def test_timeline_not_found(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = client.get("/api/timelines/99999", headers=headers)
     assert resp.status_code == 404
 
@@ -101,8 +107,8 @@ def test_timeline_not_found(client):
 # Timeline with Tracks and Cues
 # ------------------------------------------------------------------
 
-def test_create_timeline_with_tracks(client):
-    headers = _get_auth_header(client)
+def test_create_timeline_with_tracks(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = _create_timeline(
         client,
         headers,
@@ -141,8 +147,8 @@ def test_create_timeline_with_tracks(client):
 # Copy Timeline
 # ------------------------------------------------------------------
 
-def test_copy_timeline(client):
-    headers = _get_auth_header(client)
+def test_copy_timeline(client, db_session):
+    headers = _get_auth_header(client, db_session)
     create_resp = _create_timeline(
         client,
         headers,
@@ -177,8 +183,8 @@ def test_copy_timeline(client):
 # Broadcast Metadata
 # ------------------------------------------------------------------
 
-def test_timeline_broadcast_metadata(client):
-    headers = _get_auth_header(client)
+def test_timeline_broadcast_metadata(client, db_session):
+    headers = _get_auth_header(client, db_session)
     resp = _create_timeline(
         client,
         headers,

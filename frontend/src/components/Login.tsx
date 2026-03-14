@@ -18,7 +18,7 @@ const Login: React.FC = () => {
     setLoading(true);
     setError('');
 
-    console.log('Login form submitted with:', { username, password });
+    console.log('Login attempt');
 
     try {
       const success = await login(username, password);

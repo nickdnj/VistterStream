@@ -2,7 +2,7 @@
 Pydantic schemas for API request/response models
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime, timezone
 from enum import Enum
@@ -173,7 +173,16 @@ class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_complexity(cls, v):
+        if not any(c.isalpha() for c in v):
+            raise ValueError('Password must contain at least one letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one digit')
+        return v
 
 class UserLogin(UserBase):
     password: str
@@ -192,7 +201,16 @@ class Token(BaseModel):
 
 class PasswordChangeRequest(BaseModel):
     current_password: str = Field(..., min_length=1)
-    new_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_complexity(cls, v):
+        if not any(c.isalpha() for c in v):
+            raise ValueError('Password must contain at least one letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one digit')
+        return v
 
 
 # Status schemas

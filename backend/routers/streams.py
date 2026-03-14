@@ -2,6 +2,8 @@
 Streaming API endpoints
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Any
@@ -12,6 +14,8 @@ from models.destination import StreamingDestination
 from models.schemas import StreamCreate, StreamUpdate, Stream as StreamSchema, StreamStatus
 from services.stream_service import StreamService
 from routers.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -107,10 +111,8 @@ async def create_stream(stream_data: StreamCreate, db: Session = Depends(get_db)
         # Return enriched stream data
         return enrich_stream(stream_db, db)
     except Exception as e:
-        print(f"DEBUG: Error creating stream: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Error creating stream: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create stream")
 
 @router.put("/{stream_id}", response_model=StreamSchema)
 async def update_stream(stream_id: int, stream_update: StreamUpdate, db: Session = Depends(get_db)):

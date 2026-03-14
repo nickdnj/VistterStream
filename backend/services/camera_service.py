@@ -136,7 +136,7 @@ class CameraService:
         if not camera:
             return None
 
-        update_data = camera_update.dict(exclude_unset=True)
+        update_data = camera_update.model_dump(exclude_unset=True)
 
         # Handle password encryption
         if "password" in update_data and update_data["password"]:

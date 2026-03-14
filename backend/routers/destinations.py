@@ -13,6 +13,7 @@ import hmac
 from html import escape as html_escape
 import logging
 import os
+import time
 import uuid
 
 from models.database import get_db
@@ -201,7 +202,7 @@ def _generate_oauth_state(destination_id: int) -> str:
     """Generate an HMAC-signed OAuth state token encoding the destination ID."""
     secret = os.getenv("JWT_SECRET_KEY", "")
     nonce = uuid.uuid4().hex
-    payload = f"{destination_id}:{nonce}"
+    payload = f"{destination_id}:{nonce}:{int(time.time())}"
     sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return f"{payload}:{sig}"
 
@@ -210,12 +211,19 @@ def _verify_oauth_state(state: str) -> Optional[int]:
     """Verify an HMAC-signed OAuth state token and return the destination ID."""
     secret = os.getenv("JWT_SECRET_KEY", "")
     parts = state.split(":")
-    if len(parts) != 3:
+    if len(parts) != 4:
         return None
-    dest_id_str, nonce, sig = parts
-    expected = hmac.new(secret.encode(), f"{dest_id_str}:{nonce}".encode(), hashlib.sha256).hexdigest()
+    dest_id_str, nonce, timestamp_str, sig = parts
+    expected_payload = f"{dest_id_str}:{nonce}:{timestamp_str}"
+    expected = hmac.new(secret.encode(), expected_payload.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
         return None
+    try:
+        timestamp = int(timestamp_str)
+    except ValueError:
+        return None
+    if time.time() - timestamp > 600:
+        raise HTTPException(status_code=400, detail="OAuth state expired")
     try:
         return int(dest_id_str)
     except ValueError:
@@ -436,7 +444,7 @@ def youtube_create_broadcast(destination_id: int, body: CreateBroadcastRequest, 
         )
     except Exception as e:
         logger.error("Failed to create YouTube broadcast: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to create broadcast: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create broadcast")
 
     # Persist broadcast/stream details back to the destination
     dest.youtube_broadcast_id = result.get("broadcast_id")
@@ -515,7 +523,7 @@ def _oauth_success_html(channel_name: str) -> str:
         <p>Connected to channel: <strong>{safe_name}</strong></p>
         <p>You can close this window.</p>
         <script>
-            window.opener.postMessage('youtube-connected', '*');
+            window.opener.postMessage('youtube-connected', window.location.origin);
             setTimeout(() => window.close(), 2000);
         </script>
     </body>
@@ -531,7 +539,7 @@ def _oauth_error_html(message: str) -> str:
         <h1>Connection Failed</h1>
         <p>{safe_message}</p>
         <script>
-            window.opener.postMessage('youtube-error', '*');
+            window.opener.postMessage('youtube-error', window.location.origin);
         </script>
     </body>
     </html>

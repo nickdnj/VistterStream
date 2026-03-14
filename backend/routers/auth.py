@@ -62,17 +62,17 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     """Authenticate a user"""
     user = get_user_by_username(db, username)
     if not user:
-        logger.warning(f"Login attempt failed: user '{username}' not found")
+        logger.warning("Login attempt failed: user '%s' not found", username)
         return None
     if not user.is_active:
-        logger.warning(f"Login attempt failed: user '{username}' is inactive")
+        logger.warning("Login attempt failed: user '%s' is inactive", username)
         return None
     try:
         if not verify_password(password, user.password_hash):
-            logger.warning(f"Login attempt failed: incorrect password for user '{username}'")
+            logger.warning("Login attempt failed: incorrect password for user '%s'", username)
             return None
     except Exception as e:
-        logger.error(f"Password verification error for user '{username}': {e}")
+        logger.error("Password verification error for user '%s': %s", username, e)
         return None
     return user
 
@@ -98,8 +98,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 @router.post("/register", response_model=UserSchema)
 @limiter.limit("3/5minutes")
-async def register_user(request: Request, user: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
+async def register_user(request: Request, user: UserCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Register a new user (admin only)"""
+    if current_user.username != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can create accounts")
     # Check if user already exists
     existing_user = get_user_by_username(db, user.username)
     if existing_user:
@@ -125,17 +127,17 @@ async def register_user(request: Request, user: UserCreate, db: Session = Depend
 @limiter.limit("5/5minutes")
 async def login_user(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login user and return access token"""
-    logger.info(f"Login attempt for username: '{form_data.username}'")
+    logger.info("Login attempt for username: '%s'", form_data.username)
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
-        logger.warning(f"Login failed for username: '{form_data.username}'")
+        logger.warning("Login failed for username: '%s'", form_data.username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    logger.info(f"Login successful for user: '{user.username}' (id: {user.id}, active: {user.is_active})")
+    logger.info("Login successful for user: '%s' (id: %s, active: %s)", user.username, user.id, user.is_active)
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
