@@ -16,6 +16,7 @@ os.environ.setdefault(
     "K9c_x2B0Gvt-ArEZK3JM4FxjYBhDA7eRmG1Ph8ILyIA=",
 )
 os.environ.setdefault("DATABASE_URL", "sqlite:///")
+os.environ["RATELIMIT_ENABLED"] = "false"  # Disable rate limiting in tests
 
 import pytest
 from contextlib import asynccontextmanager
@@ -26,6 +27,14 @@ from fastapi.testclient import TestClient
 
 from models.database import Base, get_db
 from main import app
+
+# Disable rate limiting in tests — all requests come from "testclient" IP
+# which hits the per-IP limits very quickly.
+from routers import auth as _auth_module
+_auth_module.limiter.enabled = False
+
+# Import audit middleware for session patching (done per-test in db_session fixture)
+from middleware import audit as _audit_module
 
 
 # ---------------------------------------------------------------------------
@@ -60,12 +69,15 @@ def db_session():
     test starts with a clean database.
     """
     Base.metadata.create_all(bind=engine)
+    # Patch audit middleware to use test database
+    _audit_module._session_factory = TestingSessionLocal
     session = TestingSessionLocal()
     try:
         yield session
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
+        _audit_module._session_factory = TestingSessionLocal  # reset
 
 
 @pytest.fixture()

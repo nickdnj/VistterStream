@@ -7,8 +7,12 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+import hashlib
+import hmac
 import logging
+import os
+import uuid
 
 from models.database import get_db
 from models.destination import StreamingDestination
@@ -39,6 +43,10 @@ class YouTubeWatchdogConfig(BaseModel):
     watchdog_daily_reset_hour: int = 3
 
 
+_ALLOWED_RTMP_SCHEMES = ("rtmp://", "rtmps://")
+_ALLOWED_YOUTUBE_PREFIXES = ("https://www.youtube.com/", "https://youtube.com/")
+
+
 class DestinationCreate(BaseModel):
     name: str
     platform: str
@@ -59,6 +67,20 @@ class DestinationCreate(BaseModel):
     youtube_oauth_client_id: Optional[str] = None
     youtube_oauth_client_secret: Optional[str] = None
     youtube_oauth_redirect_uri: Optional[str] = None
+
+    @field_validator("rtmp_url")
+    @classmethod
+    def validate_rtmp_url(cls, v: str) -> str:
+        if v and not v.startswith(_ALLOWED_RTMP_SCHEMES):
+            raise ValueError("rtmp_url must start with rtmp:// or rtmps://")
+        return v
+
+    @field_validator("youtube_watch_url")
+    @classmethod
+    def validate_youtube_watch_url(cls, v: Optional[str]) -> Optional[str]:
+        if v and not v.startswith(_ALLOWED_YOUTUBE_PREFIXES):
+            raise ValueError("youtube_watch_url must start with https://www.youtube.com/ or https://youtube.com/")
+        return v
 
 
 class DestinationUpdate(BaseModel):
@@ -82,6 +104,20 @@ class DestinationUpdate(BaseModel):
     youtube_oauth_client_id: Optional[str] = None
     youtube_oauth_client_secret: Optional[str] = None
     youtube_oauth_redirect_uri: Optional[str] = None
+
+    @field_validator("rtmp_url")
+    @classmethod
+    def validate_rtmp_url(cls, v: Optional[str]) -> Optional[str]:
+        if v and not v.startswith(_ALLOWED_RTMP_SCHEMES):
+            raise ValueError("rtmp_url must start with rtmp:// or rtmps://")
+        return v
+
+    @field_validator("youtube_watch_url")
+    @classmethod
+    def validate_youtube_watch_url(cls, v: Optional[str]) -> Optional[str]:
+        if v and not v.startswith(_ALLOWED_YOUTUBE_PREFIXES):
+            raise ValueError("youtube_watch_url must start with https://www.youtube.com/ or https://youtube.com/")
+        return v
 
 
 class DestinationResponse(BaseModel):
@@ -158,6 +194,31 @@ def _dest_to_response(dest: StreamingDestination) -> dict:
     data.setdefault("youtube_oauth_channel_name", None)
     data.setdefault("youtube_oauth_token_expires_at", None)
     return data
+
+
+def _generate_oauth_state(destination_id: int) -> str:
+    """Generate an HMAC-signed OAuth state token encoding the destination ID."""
+    secret = os.getenv("JWT_SECRET_KEY", "")
+    nonce = uuid.uuid4().hex
+    payload = f"{destination_id}:{nonce}"
+    sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def _verify_oauth_state(state: str) -> Optional[int]:
+    """Verify an HMAC-signed OAuth state token and return the destination ID."""
+    secret = os.getenv("JWT_SECRET_KEY", "")
+    parts = state.split(":")
+    if len(parts) != 3:
+        return None
+    dest_id_str, nonce, sig = parts
+    expected = hmac.new(secret.encode(), f"{dest_id_str}:{nonce}".encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return None
+    try:
+        return int(dest_id_str)
+    except ValueError:
+        return None
 
 
 PLATFORM_PRESETS = {
@@ -299,11 +360,12 @@ def youtube_oauth_start(destination_id: int, body: OAuthStartRequest, db: Sessio
 
     client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
 
+    state_token = _generate_oauth_state(dest.id)
     auth_url, code_verifier = get_oauth_url(
         client_id=dest.youtube_oauth_client_id,
         client_secret=client_secret,
         redirect_uri=dest.youtube_oauth_redirect_uri,
-        state=str(dest.id),
+        state=state_token,
         prompt_consent=body.prompt_consent,
     )
 
@@ -407,10 +469,9 @@ def youtube_oauth_callback(
     if not state:
         return HTMLResponse(content=_oauth_error_html("Missing state parameter"), status_code=400)
 
-    try:
-        destination_id = int(state)
-    except ValueError:
-        return HTMLResponse(content=_oauth_error_html("Invalid state parameter"), status_code=400)
+    destination_id = _verify_oauth_state(state)
+    if destination_id is None:
+        return HTMLResponse(content=_oauth_error_html("Invalid or tampered state parameter"), status_code=400)
 
     dest = db.query(StreamingDestination).filter(StreamingDestination.id == destination_id).first()
     if not dest:

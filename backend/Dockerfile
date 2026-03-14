@@ -1,37 +1,61 @@
-# Raspberry Pi (ARM64) ready Dockerfile for VistterStream backend
+# Multi-stage build for VistterStream backend
+# Stage 1: Builder — install build deps and pip packages into a virtualenv
+# Stage 2: Runtime — copy venv, install only runtime libs
 
-FROM python:3.11-slim-bookworm
+# ── Stage 1: Builder ────────────────────────────────────────────────────────
+FROM python:3.11-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# Install system dependencies (including su-exec for privilege dropping)
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-       ffmpeg \
-       v4l-utils \
-       curl \
-       ca-certificates \
        build-essential \
        libxml2-dev \
        libxslt1-dev \
        libffi-dev \
        libssl-dev \
        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtualenv and install Python dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --upgrade pip \
+    && pip install -r /tmp/requirements.txt
+
+
+# ── Stage 2: Runtime ────────────────────────────────────────────────────────
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install only runtime dependencies (no build tools)
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       ffmpeg \
+       v4l-utils \
+       curl \
+       ca-certificates \
        gosu \
+       # Runtime libs needed by Python packages
+       libxml2 \
+       libxslt1.1 \
        # VA-API libs for Intel GPU hardware encoding
        libva-drm2 \
        libva2 \
        intel-media-va-driver \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app/backend
+# Copy virtualenv from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy requirements and install
-COPY requirements.txt /app/backend/requirements.txt
-RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+WORKDIR /app/backend
 
 # Copy application code
 COPY . /app/backend

@@ -225,6 +225,7 @@ from .timeline import Timeline, TimelineTrack, TimelineCue, TimelineExecution  #
 from .schedule import Schedule, ScheduleTimeline  # noqa: F401
 from .destination import StreamingDestination  # noqa: F401
 from .reelforge import ReelTemplate, ReelPost, ReelPublishTarget, ReelExport, ReelCaptureQueue  # noqa: F401
+from .audit import AuditLog  # noqa: F401
 
 # Create tables
 def create_tables():

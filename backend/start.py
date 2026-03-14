@@ -14,6 +14,12 @@ sys.path.insert(0, str(backend_dir))
 
 from sqlalchemy.engine import make_url
 
+from utils.logging_config import configure_logging
+configure_logging()
+
+import logging
+logger = logging.getLogger(__name__)
+
 from models.database import create_tables, SessionLocal, User, engine, DATABASE_URL
 from routers.auth import get_user_by_username, get_password_hash
 from main import app
@@ -31,7 +37,7 @@ def ensure_preset_token_column() -> None:
             if "camera_preset_token" not in columns:
                 connection.execute(text("ALTER TABLE presets ADD COLUMN camera_preset_token TEXT"))
     except Exception as exc:
-        print(f"⚠️ Unable to update presets schema: {exc}")
+        logger.warning("Unable to update presets schema: %s", exc)
 
 
 def ensure_streaming_destination_channel_column() -> None:
@@ -43,7 +49,7 @@ def ensure_streaming_destination_channel_column() -> None:
             if "channel_id" not in columns:
                 connection.execute(text("ALTER TABLE streaming_destinations ADD COLUMN channel_id TEXT"))
     except Exception as exc:
-        print(f"⚠️ Unable to update streaming_destinations schema: {exc}")
+        logger.warning("Unable to update streaming_destinations schema: %s", exc)
 
 
 def ensure_streaming_destination_oauth_columns() -> None:
@@ -72,13 +78,9 @@ def ensure_streaming_destination_oauth_columns() -> None:
                 try:
                     sql = f"ALTER TABLE streaming_destinations ADD COLUMN {column_name} {column_type}"
                     connection.execute(text(sql))
-                    print(
-                        f"✅ Added missing column '{column_name}' to streaming_destinations"
-                    )
+                    logger.info("Added missing column '%s' to streaming_destinations", column_name)
                 except Exception as exc:  # noqa: BLE001
-                    print(
-                        f"⚠️ Unable to add column '{column_name}' to streaming_destinations: {exc}"
-                    )
+                    logger.warning("Unable to add column '%s' to streaming_destinations: %s", column_name, exc)
     except Exception as exc:
         print(f"⚠️ Unable to update streaming_destinations OAuth schema: {exc}")
 
@@ -92,7 +94,7 @@ def ensure_preset_thumbnail_column() -> None:
             if "thumbnail_path" not in columns:
                 connection.execute(text("ALTER TABLE presets ADD COLUMN thumbnail_path TEXT"))
     except Exception as exc:
-        print(f"⚠️ Unable to update presets schema for thumbnails: {exc}")
+        logger.warning("Unable to update presets schema for thumbnails: %s", exc)
 
 
 def ensure_timeline_broadcast_columns() -> None:
@@ -118,11 +120,11 @@ def ensure_timeline_broadcast_columns() -> None:
                 try:
                     sql = f"ALTER TABLE timelines ADD COLUMN {column_name} {column_type}"
                     connection.execute(text(sql))
-                    print(f"✅ Added missing column '{column_name}' to timelines")
+                    logger.info("Added missing column '%s' to timelines", column_name)
                 except Exception as exc:
-                    print(f"⚠️ Unable to add column '{column_name}' to timelines: {exc}")
+                    logger.warning("Unable to add column '%s' to timelines: %s", column_name, exc)
     except Exception as exc:
-        print(f"⚠️ Unable to update timelines broadcast schema: {exc}")
+        logger.warning("Unable to update timelines broadcast schema: %s", exc)
 
 
 def ensure_tempest_url_port_fix() -> None:
@@ -140,7 +142,7 @@ def ensure_tempest_url_port_fix() -> None:
                     {"old_port": ":8085", "new_port": ":8036", "pattern": "%:8085%"},
                 )
     except Exception as exc:
-        print(f"⚠️ Unable to fix tempest_api_url port: {exc}")
+        logger.warning("Unable to fix tempest_api_url port: %s", exc)
 
 
 def ensure_default_admin():
@@ -163,25 +165,23 @@ def ensure_default_admin():
                 existing_user.password_hash = get_password_hash(password)
                 existing_user.is_active = True
                 db.commit()
-                print(f"✅ Reset password for admin user '{username}'")
+                logger.info("Reset password for admin user '%s'", username)
             # If no env var and user exists, leave it alone
         else:
             # No admin exists — create one
             if not password:
                 password = secrets.token_urlsafe(16)
-                print("=" * 60)
-                print(f"*** INITIAL ADMIN PASSWORD: {password} ***")
-                print("Change this immediately via Settings > Change Password")
-                print("=" * 60)
+                logger.warning("=" * 60)
+                logger.warning("*** INITIAL ADMIN PASSWORD: %s ***", password)
+                logger.warning("Change this immediately via Settings > Change Password")
+                logger.warning("=" * 60)
             admin_user = User(username=username, password_hash=get_password_hash(password))
             db.add(admin_user)
             db.commit()
-            print(f"✅ Created admin user '{username}'")
+            logger.info("Created admin user '%s'", username)
     except Exception as exc:
         db.rollback()
-        print(f"❌ Failed to create/reset default admin user: {exc}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Failed to create/reset default admin user: %s", exc, exc_info=True)
     finally:
         db.close()
 
@@ -233,15 +233,12 @@ def ensure_sqlite_database_seeded() -> None:
                     continue
                 if legacy_path.exists() and legacy_path.is_file():
                     shutil.copy2(legacy_path, target_path)
-                    print(
-                        "📦 Copied existing SQLite database from"
-                        f" {legacy_path} to {target_path}"
-                    )
+                    logger.info("Copied existing SQLite database from %s to %s", legacy_path, target_path)
                     return
             except Exception as exc:  # noqa: BLE001
-                print(f"⚠️ Unable to copy legacy database from {legacy_path}: {exc}")
+                logger.warning("Unable to copy legacy database from %s: %s", legacy_path, exc)
     except Exception as exc:  # noqa: BLE001
-        print(f"⚠️ SQLite database bootstrap failed: {exc}")
+        logger.warning("SQLite database bootstrap failed: %s", exc)
 
 
 def ensure_destination_secrets_encrypted() -> None:
@@ -271,10 +268,10 @@ def ensure_destination_secrets_encrypted() -> None:
                 updated += 1
         if updated:
             db.commit()
-            print(f"🔒 Encrypted secrets for {updated} destination(s)")
+            logger.info("Encrypted secrets for %d destination(s)", updated)
         db.close()
     except Exception as e:
-        print(f"⚠️ Could not encrypt destination secrets: {e}")
+        logger.warning("Could not encrypt destination secrets: %s", e)
 
 
 def run_alembic_migrations() -> None:
@@ -300,12 +297,12 @@ def run_alembic_migrations() -> None:
         if current_rev is None:
             # Existing database, no Alembic history — stamp at head
             alembic_command.stamp(alembic_cfg, "head")
-            print("✅ Alembic: stamped existing database at head")
+            logger.info("Alembic: stamped existing database at head")
         else:
             alembic_command.upgrade(alembic_cfg, "head")
-            print("✅ Alembic migrations applied")
+            logger.info("Alembic migrations applied")
     except Exception as exc:
-        print(f"⚠️ Alembic migration failed (falling back to legacy migrations): {exc}")
+        logger.warning("Alembic migration failed (falling back to legacy migrations): %s", exc)
 
 
 if __name__ == "__main__":
@@ -333,5 +330,7 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=False,  # Disabled reload to avoid import issues
-        log_level="info"
+        log_level="info",
+        timeout_keep_alive=5,  # Close idle keep-alive connections after 5s (Slowloris mitigation)
+        limit_max_requests=10000,  # Restart worker after 10k requests (leak prevention)
     )
