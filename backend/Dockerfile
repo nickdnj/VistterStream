@@ -43,8 +43,11 @@ ENV DATABASE_URL=sqlite:////data/vistterstream.db \
     RTMP_RELAY_PORT=1935
 
 # Create non-root user and data directories with correct ownership
-RUN groupadd --gid 1000 appuser \
-    && useradd --uid 1000 --gid appuser --shell /bin/bash appuser \
+# GID 993 matches the host render group for /dev/dri/renderD128 (VA-API)
+RUN groupadd --gid 993 render 2>/dev/null || true \
+    && groupadd --gid 1000 appuser \
+    && useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser \
+    && usermod -aG render appuser \
     && mkdir -p /data/uploads \
     && chown -R appuser:appuser /data /app \
     && chmod +x /app/backend/entrypoint.sh
