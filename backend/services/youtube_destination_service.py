@@ -176,7 +176,7 @@ def create_broadcast(
         "contentDetails": {
             "enableDvr": enable_dvr,
             "enableAutoStart": True,
-            "enableAutoStop": True,
+            "enableAutoStop": False,
         },
     }
 
@@ -265,6 +265,41 @@ def get_broadcast_status(credentials: Credentials, broadcast_id: str) -> Dict:
         "status": item["status"].get("recordingStatus", "unknown"),
         "life_cycle_status": item["status"].get("lifeCycleStatus", "unknown"),
     }
+
+
+def end_broadcast(credentials: Credentials, broadcast_id: str, post_privacy: str = "unlisted") -> bool:
+    """
+    Transition a YouTube broadcast to 'complete' status, ending the live stream.
+    After ending, changes the recording's privacy to *post_privacy* (default: unlisted).
+
+    Returns True if the transition succeeded, False otherwise.
+    """
+    youtube = build("youtube", "v3", credentials=credentials)
+    try:
+        youtube.liveBroadcasts().transition(
+            broadcastStatus="complete",
+            id=broadcast_id,
+            part="id,status",
+        ).execute()
+        logger.info("Ended YouTube broadcast %s", broadcast_id)
+    except Exception as exc:
+        logger.warning("Failed to end broadcast %s: %s", broadcast_id, exc)
+        return False
+
+    # Change the recording's privacy (broadcast_id == video_id for live broadcasts)
+    try:
+        youtube.videos().update(
+            part="status",
+            body={
+                "id": broadcast_id,
+                "status": {"privacyStatus": post_privacy},
+            },
+        ).execute()
+        logger.info("Set broadcast %s privacy to %s", broadcast_id, post_privacy)
+    except Exception as exc:
+        logger.warning("Failed to set privacy for %s: %s", broadcast_id, exc)
+
+    return True
 
 
 def upload_thumbnail(credentials: Credentials, broadcast_id: str, image_bytes: bytes) -> bool:

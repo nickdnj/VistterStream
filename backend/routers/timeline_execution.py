@@ -168,6 +168,20 @@ async def stop_timeline(timeline_id: int, db: Session = Depends(get_db)):
         ).all()
     for dest in dests:
         if dest.platform == "youtube_oauth" and dest.youtube_broadcast_id:
+            # End the broadcast on YouTube before clearing local state
+            try:
+                from services.youtube_destination_service import get_credentials, end_broadcast
+                from utils.crypto import decrypt
+                client_secret = decrypt(dest.youtube_oauth_client_secret_enc)
+                refresh_token = decrypt(dest.youtube_oauth_refresh_token_enc)
+                credentials = get_credentials(
+                    client_id=dest.youtube_oauth_client_id,
+                    client_secret=client_secret,
+                    refresh_token=refresh_token,
+                )
+                end_broadcast(credentials, dest.youtube_broadcast_id)
+            except Exception as e:
+                logger.warning("Failed to end broadcast %s for %s: %s", dest.youtube_broadcast_id, dest.name, e)
             logger.info("Clearing broadcast %s for destination %s after stop", dest.youtube_broadcast_id, dest.name)
             dest.youtube_broadcast_id = None
             dest.youtube_stream_id = None
