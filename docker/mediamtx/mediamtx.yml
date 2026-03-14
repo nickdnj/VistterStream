@@ -10,7 +10,7 @@ rtmpAddress: :1935
 
 # HLS configuration
 hlsAddress: :8888
-hlsAllowOrigin: "*"
+hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: yes
 hlsSegmentCount: 10
 hlsSegmentDuration: 1s
