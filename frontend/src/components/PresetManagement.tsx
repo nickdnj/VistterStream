@@ -441,7 +441,7 @@ const PresetManagement: React.FC = () => {
 
       {showCaptureModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-hidden">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-md max-h-[90vh] flex flex-col">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-md flex flex-col" style={{ maxHeight: '90vh' }}>
             <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <h3 className="text-xl font-bold text-white">Capture Preset</h3>
               <button
@@ -543,7 +543,7 @@ const PresetManagement: React.FC = () => {
 
       {editorState && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-hidden">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg flex flex-col" style={{ maxHeight: '90vh' }}>
             <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-white">Edit PTZ Coordinates</h3>
