@@ -233,13 +233,13 @@ const Settings: React.FC = () => {
 
       {/* Tabs */}
       <div className="border-b border-dark-700 mb-6">
-        <nav className="flex space-x-8" aria-label="Settings tabs">
+        <nav className="flex space-x-4 sm:space-x-8 overflow-x-auto pb-1 -mb-1 scrollbar-thin" aria-label="Settings tabs">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`
-                py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap
                 ${activeTab === tab.id
                   ? 'border-primary-500 text-primary-500'
                   : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'

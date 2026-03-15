@@ -496,7 +496,7 @@ const StreamingDestinations: React.FC = () => {
                     </button>
                     <button
                       onClick={() => refreshOAuthStatus(dest.id!)}
-                      className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
+                      className="bg-dark-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
                     >
                       Refresh Status
                     </button>
@@ -511,7 +511,7 @@ const StreamingDestinations: React.FC = () => {
                         </button>
                         <button
                           onClick={() => disconnectOAuth(dest.id!)}
-                          className="bg-gray-800 hover:bg-gray-700 text-gray-200 px-4 py-2 rounded-md text-sm"
+                          className="bg-gray-800 hover:bg-dark-700 text-gray-200 px-4 py-2 rounded-md text-sm"
                         >
                           Disconnect
                         </button>
@@ -581,7 +581,7 @@ const StreamingDestinations: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setEditingDestination(dest)}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                className="flex-1 bg-dark-700 hover:bg-gray-600 text-white px-4 py-2 rounded"
               >
                 Edit
               </button>
@@ -612,13 +612,23 @@ const StreamingDestinations: React.FC = () => {
 
       {/* Add/Edit Modal */}
       {(showAddModal || editingDestination) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
-            <h2 className="text-2xl font-bold text-white mb-6">
-              {editingDestination ? 'Edit Destination' : 'Add Streaming Destination'}
-            </h2>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+              <h2 className="text-xl font-bold text-white">
+                {editingDestination ? 'Edit Destination' : 'Add Streaming Destination'}
+              </h2>
+              <button
+                onClick={() => { setShowAddModal(false); setEditingDestination(null); }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-            <div className="space-y-4">
+            <div className="p-6 space-y-4">
               {/* Platform Selection */}
               <div>
                 <label className="block text-gray-300 mb-2">Platform</label>
@@ -635,7 +645,7 @@ const StreamingDestinations: React.FC = () => {
                       handlePlatformChange(e.target.value);
                     }
                   }}
-                  className="w-full bg-gray-700 text-white px-4 py-2 rounded"
+                  className="w-full bg-dark-700 text-white px-4 py-2 rounded"
                 >
                   <option value="youtube">YouTube Live</option>
                   <option value="youtube_oauth">YouTube Live OAuth</option>
@@ -658,7 +668,7 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, name: e.target.value });
                     }
                   }}
-                  className="w-full bg-gray-700 text-white px-4 py-2 rounded"
+                  className="w-full bg-dark-700 text-white px-4 py-2 rounded"
                   placeholder="My YouTube Channel"
                 />
               </div>
@@ -676,7 +686,7 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, rtmp_url: e.target.value });
                     }
                   }}
-                  className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                  className="w-full bg-dark-700 text-white px-4 py-2 rounded font-mono text-sm"
                   placeholder="rtmp://a.rtmp.youtube.com/live2"
                 />
               </div>
@@ -694,7 +704,7 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, stream_key: e.target.value });
                     }
                   }}
-                  className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                  className="w-full bg-dark-700 text-white px-4 py-2 rounded font-mono text-sm"
                   placeholder="xxxx-xxxx-xxxx-xxxx"
                 />
               </div>
@@ -711,7 +721,7 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, channel_id: e.target.value });
                     }
                   }}
-                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isAnyYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
+                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isAnyYoutubeForm ? 'bg-dark-700 text-white' : 'bg-dark-700/60 text-gray-400'}`}
                   placeholder="UCxxxxxxxxxxxxxxxx"
                   disabled={!isAnyYoutubeForm}
                 />
@@ -733,7 +743,7 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, youtube_stream_id: e.target.value });
                     }
                   }}
-                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isAnyYoutubeForm ? 'bg-gray-700 text-white' : 'bg-gray-700/60 text-gray-400'}`}
+                  className={`w-full px-4 py-2 rounded font-mono text-sm ${isAnyYoutubeForm ? 'bg-dark-700 text-white' : 'bg-dark-700/60 text-gray-400'}`}
                   placeholder="s6qs14YByEQ (from YouTube Studio livestream URL)"
                   disabled={!isAnyYoutubeForm}
                 />
@@ -756,7 +766,7 @@ const StreamingDestinations: React.FC = () => {
                         setNewDestination({ ...newDestination, youtube_broadcast_id: e.target.value });
                       }
                     }}
-                    className="w-full px-4 py-2 rounded font-mono text-sm bg-gray-700 text-white"
+                    className="w-full px-4 py-2 rounded font-mono text-sm bg-dark-700 text-white"
                     placeholder="ab12cd34ef56gh78"
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -794,7 +804,7 @@ const StreamingDestinations: React.FC = () => {
                           setNewDestination({ ...newDestination, youtube_oauth_client_id: e.target.value });
                         }
                       }}
-                      className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                      className="w-full bg-dark-700 text-white px-4 py-2 rounded font-mono text-sm"
                       placeholder="xxxxxx.apps.googleusercontent.com"
                     />
                   </div>
@@ -812,7 +822,7 @@ const StreamingDestinations: React.FC = () => {
                           setNewDestination({ ...newDestination, youtube_oauth_client_secret: e.target.value });
                         }
                       }}
-                      className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                      className="w-full bg-dark-700 text-white px-4 py-2 rounded font-mono text-sm"
                       placeholder="GOCSPX-..."
                     />
                   </div>
@@ -830,7 +840,7 @@ const StreamingDestinations: React.FC = () => {
                             setNewDestination({ ...newDestination, youtube_oauth_redirect_uri: e.target.value });
                           }
                         }}
-                        className="flex-1 bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                        className="flex-1 bg-dark-700 text-white px-4 py-2 rounded font-mono text-sm"
                         placeholder="https://your-domain/api/destinations/youtube/oauth/callback"
                       />
                       <button
@@ -843,7 +853,7 @@ const StreamingDestinations: React.FC = () => {
                             setNewDestination({ ...newDestination, youtube_oauth_redirect_uri: defaultUri });
                           }
                         }}
-                        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs whitespace-nowrap"
+                        className="bg-dark-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs whitespace-nowrap"
                       >
                         Use Default
                       </button>
@@ -901,7 +911,7 @@ const StreamingDestinations: React.FC = () => {
                               setNewDestination({ ...newDestination, youtube_api_key: e.target.value });
                             }
                           }}
-                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                          className="w-full bg-dark-700 text-white px-4 py-2 rounded font-mono text-sm"
                           placeholder="AIza..."
                         />
                         <p className="text-xs text-gray-500 mt-1">
@@ -924,7 +934,7 @@ const StreamingDestinations: React.FC = () => {
                               setNewDestination({ ...newDestination, watchdog_check_interval: val });
                             }
                           }}
-                          className="w-full bg-gray-700 text-white px-4 py-2 rounded"
+                          className="w-full bg-dark-700 text-white px-4 py-2 rounded"
                         />
                         <p className="text-xs text-gray-500 mt-1">How often to check stream health (default: 30s)</p>
                       </div>
@@ -985,7 +995,7 @@ const StreamingDestinations: React.FC = () => {
                                   setNewDestination({ ...newDestination, watchdog_daily_reset_hour: val });
                                 }
                               }}
-                              className="w-full bg-gray-700 text-white px-4 py-2 rounded"
+                              className="w-full bg-dark-700 text-white px-4 py-2 rounded"
                             />
                             <p className="text-xs text-gray-500">
                               Choose a low-traffic hour (UTC) for proactive YouTube event transitions.
@@ -1009,7 +1019,7 @@ const StreamingDestinations: React.FC = () => {
                               setNewDestination({ ...newDestination, youtube_watch_url: e.target.value });
                             }
                           }}
-                          className="w-full bg-gray-700 text-white px-4 py-2 rounded font-mono text-sm"
+                          className="w-full bg-dark-700 text-white px-4 py-2 rounded font-mono text-sm"
                           placeholder="https://youtube.com/channel/UCxxxxx/live"
                         />
                         <p className="text-xs text-gray-500 mt-1">
@@ -1034,28 +1044,28 @@ const StreamingDestinations: React.FC = () => {
                       setNewDestination({ ...newDestination, description: e.target.value });
                     }
                   }}
-                  className="w-full bg-gray-700 text-white px-4 py-2 rounded h-20"
+                  className="w-full bg-dark-700 text-white px-4 py-2 rounded h-20"
                   placeholder="Main streaming channel for events"
                 />
               </div>
             </div>
 
             {/* Actions */}
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={editingDestination ? updateDestination : createDestination}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-              >
-                {editingDestination ? 'Update' : 'Create'}
-              </button>
+            <div className="flex gap-3 pt-4 border-t border-dark-700">
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setEditingDestination(null);
                 }}
-                className="flex-1 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+                className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors font-medium"
               >
                 Cancel
+              </button>
+              <button
+                onClick={editingDestination ? updateDestination : createDestination}
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors font-medium"
+              >
+                {editingDestination ? 'Update' : 'Create'}
               </button>
             </div>
           </div>

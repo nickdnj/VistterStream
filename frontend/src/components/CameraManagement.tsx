@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   XCircleIcon,
+  XMarkIcon,
   ViewfinderCircleIcon,
 } from '@heroicons/react/24/outline';
 
@@ -367,79 +368,66 @@ const CameraManagement: React.FC = () => {
 
       {/* Stream Viewing Modal */}
       {showStreamModal && streamingCamera && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={() => setShowStreamModal(false)} />
-            
-            <div className="inline-block align-bottom bg-dark-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
-              <div className="bg-dark-900 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg leading-6 font-medium text-white">
-                    Live Stream: {streamingCamera.name}
-                  </h3>
-                  <button
-                    onClick={() => setShowStreamModal(false)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <XCircleIcon className="h-6 w-6" />
-                  </button>
-                </div>
-                
-                <div className="bg-black rounded-lg">
-                  {streamingCamera.status === 'online' ? (
-                    <div>
-                      {liveSnapshot ? (
-                        <div className="relative">
-                          <img
-                            src={liveSnapshot}
-                            alt={`${streamingCamera.name} live stream`}
-                            className="w-full h-auto rounded"
-                          />
-                          <div className="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded flex items-center">
-                            <span className="animate-pulse mr-1">●</span> LIVE
-                          </div>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+              <h3 className="text-xl font-bold text-white">
+                Live Stream: {streamingCamera.name}
+              </h3>
+              <button
+                onClick={() => setShowStreamModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="bg-black rounded-lg">
+                {streamingCamera.status === 'online' ? (
+                  <div>
+                    {liveSnapshot ? (
+                      <div className="relative">
+                        <img
+                          src={liveSnapshot}
+                          alt={`${streamingCamera.name} live stream`}
+                          className="w-full h-auto rounded"
+                        />
+                        <div className="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded flex items-center">
+                          <span className="animate-pulse mr-1">●</span> LIVE
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-96">
-                          <div className="text-center">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-                            <p className="text-gray-400">Loading stream...</p>
-                          </div>
-                        </div>
-                      )}
-                      <div className="bg-dark-800 p-4 mt-2 rounded">
-                        <details>
-                          <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-300">
-                            RTSP Stream URL (for external players)
-                          </summary>
-                          <div className="mt-2 bg-dark-700 rounded p-3 text-xs font-mono text-primary-400 break-all">
-                            rtsp://{streamingCamera.username}:***@{streamingCamera.address}:{streamingCamera.port}{streamingCamera.stream_path}
-                          </div>
-                          <p className="text-gray-500 text-xs mt-1">
-                            Copy this URL to VLC or another RTSP player for full quality stream
-                          </p>
-                        </details>
                       </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-96">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                          <p className="text-gray-400">Loading stream...</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="bg-dark-800 p-4 mt-2 rounded">
+                      <details>
+                        <summary className="text-sm text-gray-400 cursor-pointer hover:text-gray-300">
+                          RTSP Stream URL (for external players)
+                        </summary>
+                        <div className="mt-2 bg-dark-700 rounded p-3 text-xs font-mono text-primary-400 break-all">
+                          rtsp://{streamingCamera.username}:***@{streamingCamera.address}:{streamingCamera.port}{streamingCamera.stream_path}
+                        </div>
+                        <p className="text-gray-500 text-xs mt-1">
+                          Copy this URL to VLC or another RTSP player for full quality stream
+                        </p>
+                      </details>
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <XCircleIcon className="h-16 w-16 text-red-400 mx-auto mb-4" />
-                      <h4 className="text-white text-lg mb-2">Camera Offline</h4>
-                      <p className="text-gray-400">
-                        This camera is currently offline and cannot stream.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="bg-dark-800 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  onClick={() => setShowStreamModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-dark-700 text-base font-medium text-gray-300 hover:bg-dark-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:w-auto sm:text-sm"
-                >
-                  Close
-                </button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <XCircleIcon className="h-16 w-16 text-red-400 mx-auto mb-4" />
+                    <h4 className="text-white text-lg mb-2">Camera Offline</h4>
+                    <p className="text-gray-400">
+                      This camera is currently offline and cannot stream.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -493,147 +481,144 @@ const AddCameraModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-dark-900 bg-opacity-75 transition-opacity" onClick={onClose}></div>
-        
-        <div className="inline-block align-bottom bg-dark-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-          <form onSubmit={handleSubmit}>
-            <div className="bg-dark-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-              <h3 className="text-lg font-medium text-white mb-4">Add New Camera</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="Camera Name"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value as 'stationary' | 'ptz' })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="stationary">Stationary</option>
-                      <option value="ptz">PTZ</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Protocol</label>
-                    <select
-                      value={formData.protocol}
-                      onChange={(e) => setFormData({ ...formData, protocol: e.target.value as 'rtsp' | 'rtmp' })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="rtsp">RTSP</option>
-                      <option value="rtmp">RTMP</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="192.168.1.100"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
-                    <input
-                      type="text"
-                      value={formData.username || ''}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      placeholder="admin"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                    <input
-                      type="password"
-                      value={formData.password || ''}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      placeholder="password"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Port</label>
-                    <input
-                      type="number"
-                      value={formData.port}
-                      onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Stream Path</label>
-                    <input
-                      type="text"
-                      value={formData.stream_path}
-                      onChange={(e) => setFormData({ ...formData, stream_path: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Snapshot URL (Optional)</label>
-                  <input
-                    type="text"
-                    value={formData.snapshot_url || ''}
-                    onChange={(e) => handleSnapshotUrlChange(e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-                      snapshotUrlError ? 'border-red-500' : 'border-gray-600'
-                    }`}
-                    placeholder="http://192.168.1.100/snapshot.jpg"
-                  />
-                  {snapshotUrlError && (
-                    <p className="mt-1 text-sm text-red-400">{snapshotUrlError}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-dark-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-              <button
-                type="submit"
-                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Add Camera
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-dark-800 text-base font-medium text-gray-300 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+          <h3 className="text-xl font-bold text-white">Add New Camera</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <XMarkIcon className="h-6 w-6" />
+          </button>
         </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="Camera Name"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value as 'stationary' | 'ptz' })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="stationary">Stationary</option>
+                <option value="ptz">PTZ</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Protocol</label>
+              <select
+                value={formData.protocol}
+                onChange={(e) => setFormData({ ...formData, protocol: e.target.value as 'rtsp' | 'rtmp' })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="rtsp">RTSP</option>
+                <option value="rtmp">RTMP</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
+            <input
+              type="text"
+              required
+              value={formData.address}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="192.168.1.100"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
+              <input
+                type="text"
+                value={formData.username || ''}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="admin"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+              <input
+                type="password"
+                value={formData.password || ''}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="password"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Port</label>
+              <input
+                type="number"
+                value={formData.port}
+                onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stream Path</label>
+              <input
+                type="text"
+                value={formData.stream_path}
+                onChange={(e) => setFormData({ ...formData, stream_path: e.target.value })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Snapshot URL (Optional)</label>
+            <input
+              type="text"
+              value={formData.snapshot_url || ''}
+              onChange={(e) => handleSnapshotUrlChange(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                snapshotUrlError ? 'border-red-500' : 'border-dark-600'
+              }`}
+              placeholder="http://192.168.1.100/snapshot.jpg"
+            />
+            {snapshotUrlError && (
+              <p className="mt-1 text-sm text-red-400">{snapshotUrlError}</p>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-dark-700">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors font-medium"
+            >
+              Add Camera
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -683,143 +668,140 @@ const EditCameraModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-dark-900 bg-opacity-75 transition-opacity" onClick={onClose}></div>
-        
-        <div className="inline-block align-bottom bg-dark-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-          <form onSubmit={handleSubmit}>
-            <div className="bg-dark-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-              <h3 className="text-lg font-medium text-white mb-4">Edit Camera</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
-                    <select
-                      value={formData.type || 'stationary'}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value as 'stationary' | 'ptz' })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="stationary">Stationary</option>
-                      <option value="ptz">PTZ</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Protocol</label>
-                    <select
-                      value={formData.protocol || 'rtsp'}
-                      onChange={(e) => setFormData({ ...formData, protocol: e.target.value as 'rtsp' | 'rtmp' })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    >
-                      <option value="rtsp">RTSP</option>
-                      <option value="rtmp">RTMP</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.address || ''}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
-                    <input
-                      type="text"
-                      value={formData.username || ''}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                    <input
-                      type="password"
-                      value={formData.password || ''}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      placeholder="Leave blank to keep current"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Port</label>
-                    <input
-                      type="number"
-                      value={formData.port || 554}
-                      onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Stream Path</label>
-                    <input
-                      type="text"
-                      value={formData.stream_path || ''}
-                      onChange={(e) => setFormData({ ...formData, stream_path: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Snapshot URL (Optional)</label>
-                  <input
-                    type="text"
-                    value={formData.snapshot_url || ''}
-                    onChange={(e) => handleSnapshotUrlChange(e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
-                      snapshotUrlError ? 'border-red-500' : 'border-gray-600'
-                    }`}
-                  />
-                  {snapshotUrlError && (
-                    <p className="mt-1 text-sm text-red-400">{snapshotUrlError}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-dark-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-              <button
-                type="submit"
-                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Save Changes
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-dark-800 text-base font-medium text-gray-300 hover:bg-dark-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+          <h3 className="text-xl font-bold text-white">Edit Camera</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <XMarkIcon className="h-6 w-6" />
+          </button>
         </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
+            <input
+              type="text"
+              required
+              value={formData.name || ''}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+              <select
+                value={formData.type || 'stationary'}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value as 'stationary' | 'ptz' })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="stationary">Stationary</option>
+                <option value="ptz">PTZ</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Protocol</label>
+              <select
+                value={formData.protocol || 'rtsp'}
+                onChange={(e) => setFormData({ ...formData, protocol: e.target.value as 'rtsp' | 'rtmp' })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              >
+                <option value="rtsp">RTSP</option>
+                <option value="rtmp">RTMP</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Address</label>
+            <input
+              type="text"
+              required
+              value={formData.address || ''}
+              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
+              <input
+                type="text"
+                value={formData.username || ''}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+              <input
+                type="password"
+                value={formData.password || ''}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="Leave blank to keep current"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Port</label>
+              <input
+                type="number"
+                value={formData.port || 554}
+                onChange={(e) => setFormData({ ...formData, port: parseInt(e.target.value) })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Stream Path</label>
+              <input
+                type="text"
+                value={formData.stream_path || ''}
+                onChange={(e) => setFormData({ ...formData, stream_path: e.target.value })}
+                className="w-full px-3 py-2 border border-dark-600 rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Snapshot URL (Optional)</label>
+            <input
+              type="text"
+              value={formData.snapshot_url || ''}
+              onChange={(e) => handleSnapshotUrlChange(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-md bg-dark-700 text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 ${
+                snapshotUrlError ? 'border-red-500' : 'border-dark-600'
+              }`}
+            />
+            {snapshotUrlError && (
+              <p className="mt-1 text-sm text-red-400">{snapshotUrlError}</p>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4 border-t border-dark-700">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md transition-colors font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md transition-colors font-medium"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
