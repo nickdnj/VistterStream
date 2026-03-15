@@ -1050,8 +1050,6 @@ const StreamingDestinations: React.FC = () => {
               </div>
             </div>
 
-            </div>
-
             {/* Actions - fixed footer */}
             <div className="flex gap-3 px-6 py-4 border-t border-dark-700 shrink-0">
               <button
@@ -1070,6 +1068,7 @@ const StreamingDestinations: React.FC = () => {
                 {editingDestination ? 'Update' : 'Create'}
               </button>
             </div>
+          </div>
         </div>
       )}
     </div>
