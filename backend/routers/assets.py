@@ -92,7 +92,9 @@ public_router = APIRouter(
 )
 
 # Create uploads directory if it doesn't exist
-UPLOAD_DIR = Path("uploads/assets")
+# Respect UPLOADS_DIR env var for Docker volume mounts (e.g. /data/uploads)
+_uploads_base = os.getenv("UPLOADS_DIR")
+UPLOAD_DIR = Path(_uploads_base) / "assets" if _uploads_base else Path("uploads/assets")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.get("", response_model=List[AssetSchema])
