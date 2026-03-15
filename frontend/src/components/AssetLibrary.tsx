@@ -87,6 +87,9 @@ const AssetLibrary: React.FC = () => {
     description: '',
   });
   const [saving, setSaving] = useState(false);
+  const [replaceFile, setReplaceFile] = useState<File | null>(null);
+  const [replacePreview, setReplacePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Debounce search input
   useEffect(() => {
@@ -157,18 +160,44 @@ const AssetLibrary: React.FC = () => {
       opacity: asset.opacity,
       description: asset.description || '',
     });
+    setReplaceFile(null);
+    setReplacePreview(null);
     setEditOpen(true);
   };
 
   const closeEdit = () => {
     setEditOpen(false);
     setEditAsset(null);
+    setReplaceFile(null);
+    setReplacePreview(null);
+  };
+
+  const handleReplaceFileSelect = (file: File) => {
+    setReplaceFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setReplacePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
   };
 
   const handleSaveEdit = async () => {
     if (!editAsset) return;
     setSaving(true);
     try {
+      let newFilePath: string | undefined;
+
+      // Upload replacement file if selected
+      if (replaceFile) {
+        setUploading(true);
+        const uploadData = new FormData();
+        uploadData.append('file', replaceFile);
+        uploadData.append('asset_type', editAsset.type);
+        const uploadResp = await api.post('/assets/upload', uploadData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        newFilePath = uploadResp.data.file_path;
+        setUploading(false);
+      }
+
       const payload: Record<string, any> = {
         name: editForm.name,
         position_x: editForm.position_x,
@@ -178,6 +207,9 @@ const AssetLibrary: React.FC = () => {
         width: editForm.width,
         height: editForm.height,
       };
+      if (newFilePath) {
+        payload.file_path = newFilePath;
+      }
       if (editAsset.type === 'api_image') {
         payload.api_url = editForm.api_url || null;
         payload.api_refresh_interval = editForm.api_refresh_interval;
@@ -189,6 +221,7 @@ const AssetLibrary: React.FC = () => {
       alert(err.response?.data?.detail || 'Failed to update asset');
     } finally {
       setSaving(false);
+      setUploading(false);
     }
   };
 
@@ -382,15 +415,56 @@ const AssetLibrary: React.FC = () => {
               disabled={saving || !editForm.name.trim()}
               className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {saving ? 'Saving...' : 'Save Changes'}
+              {uploading ? 'Uploading...' : saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         }
       >
         {editAsset && (
           <div className="space-y-5">
-            {/* Preview */}
-            {(() => {
+            {/* Preview + Replace Image */}
+            {(editAsset.type === 'static_image' || editAsset.type === 'video' || editAsset.type === 'canvas_composite') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  {editAsset.type === 'video' ? 'Video File' : 'Image'}
+                </label>
+                {/* Show current or replacement preview */}
+                <div className="bg-dark-900 border border-dark-700 rounded-lg overflow-hidden mb-2">
+                  {replacePreview ? (
+                    <img src={replacePreview} alt="New image" className="w-full object-contain max-h-40" />
+                  ) : (() => {
+                    const url = getAssetImageUrl(editAsset);
+                    return url ? (
+                      <img src={url} alt={editAsset.name} className="w-full object-contain max-h-40" />
+                    ) : (
+                      <div className="flex items-center justify-center h-24 text-gray-600 text-sm">No preview</div>
+                    );
+                  })()}
+                </div>
+                {/* Replace button */}
+                <label className="flex items-center justify-center gap-2 px-3 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg text-sm cursor-pointer transition-colors border border-dark-600 border-dashed">
+                  <PlusIcon className="h-4 w-4" />
+                  {replaceFile ? replaceFile.name : 'Replace Image...'}
+                  <input
+                    type="file"
+                    accept={editAsset.type === 'video' ? 'video/*' : 'image/*'}
+                    onChange={(e) => { if (e.target.files?.[0]) handleReplaceFileSelect(e.target.files[0]); }}
+                    className="hidden"
+                  />
+                </label>
+                {replaceFile && (
+                  <button
+                    onClick={() => { setReplaceFile(null); setReplacePreview(null); }}
+                    className="mt-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    Cancel replacement
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Preview for non-replaceable types (api_image, google_drawing) */}
+            {editAsset.type !== 'static_image' && editAsset.type !== 'video' && editAsset.type !== 'canvas_composite' && (() => {
               const url = getAssetImageUrl(editAsset);
               return url ? (
                 <div className="bg-dark-900 border border-dark-700 rounded-lg overflow-hidden">
