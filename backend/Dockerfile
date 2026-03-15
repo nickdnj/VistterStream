@@ -49,6 +49,9 @@ RUN apt-get update \
        libva-drm2 \
        libva2 \
        intel-media-va-driver \
+       # Fonts for Pillow text rendering (Asset Studio canvas export)
+       fonts-liberation \
+       fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtualenv from builder
@@ -72,7 +75,7 @@ RUN groupadd --gid 993 render 2>/dev/null || true \
     && groupadd --gid 1000 appuser \
     && useradd --uid 1000 --gid appuser --shell /bin/bash --create-home appuser \
     && usermod -aG render appuser \
-    && mkdir -p /data/uploads \
+    && mkdir -p /data/uploads /data/fonts \
     && chown -R appuser:appuser /data /app \
     && chmod +x /app/backend/entrypoint.sh
 

@@ -99,10 +99,21 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 def get_assets(
     skip: int = 0,
     limit: int = 100,
+    type: str | None = None,
+    search: str | None = None,
     db: Session = Depends(get_db)
 ):
-    """Get all active assets"""
-    assets = db.query(Asset).filter(Asset.is_active == True).offset(skip).limit(limit).all()
+    """Get all active assets, optionally filtered by type and/or search term."""
+    query = db.query(Asset).filter(Asset.is_active == True)
+    if type:
+        # 'template' is a virtual filter: match assets with a template_instance_id
+        if type == "template":
+            query = query.filter(Asset.template_instance_id.isnot(None))
+        else:
+            query = query.filter(Asset.type == type)
+    if search:
+        query = query.filter(Asset.name.ilike(f"%{search}%"))
+    assets = query.offset(skip).limit(limit).all()
     return assets
 
 @router.get("/{asset_id}", response_model=AssetSchema)

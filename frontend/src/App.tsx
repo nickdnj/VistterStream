@@ -8,6 +8,7 @@ import StreamingDestinations from './components/StreamingDestinations';
 import Settings from './components/Settings';
 import ReelForge from './components/ReelForge';
 import AssetStudio from './components/AssetStudio';
+import CanvasEditorPage from './components/canvas/CanvasEditorPage';
 import SpikeCanvasRoute from './components/spike/SpikeCanvasRoute';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -36,6 +37,8 @@ function App() {
                     <Route path="/assets" element={<AssetStudio />} />
                     <Route path="/assets/templates" element={<AssetStudio />} />
                     <Route path="/assets/editor" element={<AssetStudio />} />
+                    <Route path="/assets/editor/new" element={<CanvasEditorPage />} />
+                    <Route path="/assets/editor/:id" element={<CanvasEditorPage />} />
                     <Route path="/assets/analytics" element={<AssetStudio />} />
                     <Route path="/spike-canvas" element={<SpikeCanvasRoute />} />
                   </Routes>
