@@ -441,8 +441,8 @@ const PresetManagement: React.FC = () => {
 
       {showCaptureModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <h3 className="text-xl font-bold text-white">Capture Preset</h3>
               <button
                 onClick={() => { setShowCaptureModal(false); setPresetName(''); setLiveStatus({ available: false }); setStatusError(null); }}
@@ -455,7 +455,7 @@ const PresetManagement: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Camera
@@ -510,31 +510,32 @@ const PresetManagement: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-dark-700">
-                <button
-                  onClick={() => {
-                    setShowCaptureModal(false);
-                    setPresetName('');
-                    setLiveStatus({ available: false });
-                    setStatusError(null);
-                  }}
-                  className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
-                  disabled={capturing}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCapturePreset}
-                  disabled={capturing || !presetName.trim()}
-                  className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                    capturing || !presetName.trim()
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-primary-600 hover:bg-primary-700 text-white'
-                  }`}
-                >
-                  {capturing ? 'Capturing...' : 'Capture'}
-                </button>
-              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-dark-700 shrink-0">
+              <button
+                onClick={() => {
+                  setShowCaptureModal(false);
+                  setPresetName('');
+                  setLiveStatus({ available: false });
+                  setStatusError(null);
+                }}
+                className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
+                disabled={capturing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCapturePreset}
+                disabled={capturing || !presetName.trim()}
+                className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+                  capturing || !presetName.trim()
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-primary-600 hover:bg-primary-700 text-white'
+                }`}
+              >
+                {capturing ? 'Capturing...' : 'Capture'}
+              </button>
             </div>
           </div>
         </div>
@@ -542,8 +543,8 @@ const PresetManagement: React.FC = () => {
 
       {editorState && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-white">Edit PTZ Coordinates</h3>
                 <span className="text-sm text-gray-400">
@@ -561,7 +562,7 @@ const PresetManagement: React.FC = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="overflow-y-auto flex-1 p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="flex flex-col text-sm text-gray-300">
                   <span className="mb-1 uppercase tracking-wide text-xs text-gray-500">Pan</span>
@@ -636,26 +637,27 @@ const PresetManagement: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-4 border-t border-dark-700">
-                <button
-                  onClick={closeEditor}
-                  disabled={editorSaving}
-                  className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEditorSave}
-                  disabled={editorSaving}
-                  className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                    editorSaving
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-primary-600 hover:bg-primary-700 text-white'
-                  }`}
-                >
-                  {editorSaving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-dark-700 shrink-0">
+              <button
+                onClick={closeEditor}
+                disabled={editorSaving}
+                className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditorSave}
+                disabled={editorSaving}
+                className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+                  editorSaving
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-primary-600 hover:bg-primary-700 text-white'
+                }`}
+              >
+                {editorSaving ? 'Saving...' : 'Save'}
+              </button>
             </div>
           </div>
         </div>

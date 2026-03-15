@@ -466,8 +466,8 @@ const AssetManagement: React.FC = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <h3 className="text-xl font-bold text-white">
                 {selectedAsset ? 'Edit Asset' : 'Add New Asset'}
               </h3>
@@ -479,7 +479,8 @@ const AssetManagement: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="overflow-y-auto flex-1 p-6 space-y-6">
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -825,8 +826,10 @@ const AssetManagement: React.FC = () => {
                 </div>
               )}
 
-              {/* Buttons */}
-              <div className="flex gap-3 pt-4 border-t border-dark-700">
+              </div>
+
+              {/* Buttons - fixed footer */}
+              <div className="flex gap-3 px-6 py-4 border-t border-dark-700 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
