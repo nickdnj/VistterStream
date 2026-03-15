@@ -5,6 +5,8 @@ System status API endpoints
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 import asyncio
+import platform
+import subprocess
 import psutil
 import time
 import logging
@@ -14,7 +16,7 @@ from typing import Optional
 from models.database import get_db, Camera, Stream, User
 from models.timeline import Timeline
 from models.destination import StreamingDestination
-from models.schemas import SystemStatus, CameraStatus
+from models.schemas import SystemStatus, SystemInfo, CameraStatus
 from services.timeline_executor import get_timeline_executor
 from routers.auth import get_current_user
 
@@ -99,6 +101,51 @@ async def get_system_status(db: Session = Depends(get_db), current_user: User = 
         timeline_name=timeline_name,
         timeline_destinations=timeline_destinations
     )
+
+def _detect_ffmpeg_version() -> str:
+    """Detect FFmpeg version by running ffmpeg -version"""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        # First line looks like: "ffmpeg version 7.1.1 Copyright ..."
+        first_line = result.stdout.strip().split("\n")[0]
+        # Extract version string after "ffmpeg version "
+        if "ffmpeg version" in first_line:
+            return first_line.split("ffmpeg version")[1].strip().split()[0]
+        return first_line
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+        logger.warning(f"Failed to detect FFmpeg version: {e}")
+        return "unknown"
+
+
+# Cache system info since it doesn't change at runtime
+_cached_system_info: Optional[SystemInfo] = None
+
+
+@router.get("/system/info", response_model=SystemInfo)
+async def get_system_info():
+    """Get static system information (no auth required)"""
+    global _cached_system_info
+
+    if _cached_system_info is None:
+        from main import app as fastapi_app
+
+        ffmpeg_version = await asyncio.to_thread(_detect_ffmpeg_version)
+
+        _cached_system_info = SystemInfo(
+            version=fastapi_app.version,
+            platform=f"{platform.system()} {platform.machine()}",
+            database="SQLite",
+            ffmpeg_version=ffmpeg_version,
+            python_version=platform.python_version(),
+        )
+
+    return _cached_system_info
+
 
 @router.get("/cameras", response_model=list[CameraStatus])
 async def get_cameras_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

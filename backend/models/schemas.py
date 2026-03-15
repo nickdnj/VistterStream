@@ -227,6 +227,14 @@ class SystemStatus(BaseModel):
     timeline_name: Optional[str] = None
     timeline_destinations: Optional[list[str]] = None
 
+class SystemInfo(BaseModel):
+    """Static system information (version, platform, dependencies)"""
+    version: str
+    platform: str
+    database: str
+    ffmpeg_version: str
+    python_version: str
+
 class CameraStatus(BaseModel):
     camera_id: int
     name: str

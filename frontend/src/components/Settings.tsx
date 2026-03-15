@@ -29,6 +29,23 @@ const Settings: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   
+  // System info state
+  const [systemInfo, setSystemInfo] = useState<{
+    version: string;
+    platform: string;
+    database: string;
+    ffmpeg_version: string;
+    python_version: string;
+  } | null>(null);
+  const [systemMetrics, setSystemMetrics] = useState<{
+    cpu_usage: number;
+    memory_usage: number;
+    disk_usage: number;
+    uptime: number;
+  } | null>(null);
+  const [systemLoading, setSystemLoading] = useState(false);
+  const [systemError, setSystemError] = useState<string | null>(null);
+
   // General settings state
   const [generalSettings, setGeneralSettings] = useState<GeneralSettings>({
     appliance_name: 'VistterStream Appliance',
@@ -56,6 +73,65 @@ const Settings: React.FC = () => {
     loadGeneralSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load system info when system tab is active
+  useEffect(() => {
+    if (activeTab !== 'system') return;
+
+    let cancelled = false;
+
+    const loadSystemData = async () => {
+      setSystemLoading(true);
+      setSystemError(null);
+
+      try {
+        const [infoRes, metricsRes] = await Promise.all([
+          api.get('/status/system/info'),
+          api.get('/status/system'),
+        ]);
+
+        if (cancelled) return;
+
+        setSystemInfo(infoRes.data);
+        setSystemMetrics({
+          cpu_usage: metricsRes.data.cpu_usage,
+          memory_usage: metricsRes.data.memory_usage,
+          disk_usage: metricsRes.data.disk_usage,
+          uptime: metricsRes.data.uptime,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Failed to load system info:', err);
+        setSystemError('Failed to load system information.');
+      } finally {
+        if (!cancelled) setSystemLoading(false);
+      }
+    };
+
+    loadSystemData();
+
+    // Refresh metrics every 30 seconds while tab is active
+    const interval = setInterval(async () => {
+      try {
+        const metricsRes = await api.get('/status/system');
+        if (!cancelled) {
+          setSystemMetrics({
+            cpu_usage: metricsRes.data.cpu_usage,
+            memory_usage: metricsRes.data.memory_usage,
+            disk_usage: metricsRes.data.disk_usage,
+            uptime: metricsRes.data.uptime,
+          });
+        }
+      } catch {
+        // Silently ignore refresh errors
+      }
+    }, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeTab]);
 
   const loadGeneralSettings = async () => {
     setGeneralSettingsLoading(true);
@@ -521,25 +597,117 @@ const Settings: React.FC = () => {
             {/* System Information */}
             <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
               <h2 className="text-xl font-semibold text-white mb-4">System Information</h2>
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between py-2 border-b border-dark-700">
-                  <span className="text-gray-400">Version:</span>
-                  <span className="text-white font-mono">1.0.0-beta</span>
+
+              {systemError && (
+                <div className="rounded-md p-4 mb-4 border bg-red-900/20 border-red-500/40 text-red-300 text-sm">
+                  {systemError}
                 </div>
-                <div className="flex justify-between py-2 border-b border-dark-700">
-                  <span className="text-gray-400">Platform:</span>
-                  <span className="text-white font-mono">macOS</span>
+              )}
+
+              {systemLoading && !systemInfo ? (
+                <div className="text-gray-400 text-center py-8">Loading system information...</div>
+              ) : systemInfo ? (
+                <div className="space-y-4 text-sm">
+                  <div className="flex justify-between py-2 border-b border-dark-700">
+                    <span className="text-gray-400">Version:</span>
+                    <span className="text-white font-mono">{systemInfo.version}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-dark-700">
+                    <span className="text-gray-400">Platform:</span>
+                    <span className="text-white font-mono">{systemInfo.platform}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-dark-700">
+                    <span className="text-gray-400">Database:</span>
+                    <span className="text-white font-mono">{systemInfo.database}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-dark-700">
+                    <span className="text-gray-400">FFmpeg:</span>
+                    <span className="text-white font-mono">{systemInfo.ffmpeg_version}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-dark-700">
+                    <span className="text-gray-400">Python:</span>
+                    <span className="text-white font-mono">{systemInfo.python_version}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between py-2 border-b border-dark-700">
-                  <span className="text-gray-400">Database:</span>
-                  <span className="text-white font-mono">SQLite</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-dark-700">
-                  <span className="text-gray-400">FFmpeg:</span>
-                  <span className="text-white font-mono">7.1.1</span>
+              ) : null}
+            </div>
+
+            {/* Live System Metrics */}
+            {systemMetrics && (
+              <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
+                <h2 className="text-xl font-semibold text-white mb-4">System Metrics</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* CPU */}
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-400">CPU Usage</span>
+                      <span className="text-white font-mono">{systemMetrics.cpu_usage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-dark-600 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${
+                          systemMetrics.cpu_usage > 90 ? 'bg-red-500' :
+                          systemMetrics.cpu_usage > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(systemMetrics.cpu_usage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Memory */}
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-400">Memory Usage</span>
+                      <span className="text-white font-mono">{systemMetrics.memory_usage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-dark-600 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${
+                          systemMetrics.memory_usage > 90 ? 'bg-red-500' :
+                          systemMetrics.memory_usage > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(systemMetrics.memory_usage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Disk */}
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-400">Disk Usage</span>
+                      <span className="text-white font-mono">{systemMetrics.disk_usage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-dark-600 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full ${
+                          systemMetrics.disk_usage > 90 ? 'bg-red-500' :
+                          systemMetrics.disk_usage > 70 ? 'bg-yellow-500' : 'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(systemMetrics.disk_usage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Uptime */}
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-400">Uptime</span>
+                      <span className="text-white font-mono">
+                        {(() => {
+                          const s = Math.floor(systemMetrics.uptime);
+                          const days = Math.floor(s / 86400);
+                          const hours = Math.floor((s % 86400) / 3600);
+                          const minutes = Math.floor((s % 3600) / 60);
+                          if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+                          if (hours > 0) return `${hours}h ${minutes}m`;
+                          return `${minutes}m`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Emergency Controls */}
             <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">

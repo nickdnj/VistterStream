@@ -448,7 +448,7 @@ const StreamingDestinations: React.FC = () => {
       {/* Destinations Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {destinations.map((dest) => (
-          <div key={dest.id} className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div key={dest.id} className="bg-dark-800 rounded-lg p-6 border border-dark-700">
             {/* Platform Badge */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -469,7 +469,7 @@ const StreamingDestinations: React.FC = () => {
             <p className="text-gray-400 text-sm mb-4">{dest.description}</p>
 
             {dest.platform === 'youtube_oauth' && (
-              <div className="mt-4 p-4 bg-gray-900 border border-gray-700 rounded-lg">
+              <div className="mt-4 p-4 bg-dark-900 border border-dark-700 rounded-lg">
                 <div className="flex flex-col gap-3">
                   <div>
                     <p className="text-sm font-semibold text-gray-200">YouTube OAuth</p>
@@ -496,7 +496,7 @@ const StreamingDestinations: React.FC = () => {
                     </button>
                     <button
                       onClick={() => refreshOAuthStatus(dest.id!)}
-                      className="bg-dark-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md text-sm"
+                      className="bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded-md text-sm"
                     >
                       Refresh Status
                     </button>
@@ -511,14 +511,14 @@ const StreamingDestinations: React.FC = () => {
                         </button>
                         <button
                           onClick={() => disconnectOAuth(dest.id!)}
-                          className="bg-gray-800 hover:bg-dark-700 text-gray-200 px-4 py-2 rounded-md text-sm"
+                          className="bg-dark-700 hover:bg-dark-600 text-gray-200 px-4 py-2 rounded-md text-sm"
                         >
                           Disconnect
                         </button>
                       </>
                     )}
                   </div>
-                  <div className="bg-gray-950 border border-gray-700 rounded p-3">
+                  <div className="bg-dark-900 border border-dark-700 rounded p-3">
                     <p className="text-xs text-gray-400 mb-2">
                       <strong>How it works:</strong>
                     </p>
@@ -540,7 +540,7 @@ const StreamingDestinations: React.FC = () => {
             {/* RTMP URL */}
             <div className="mb-3">
               <div className="text-gray-500 text-xs mb-1">RTMP Server</div>
-              <div className="bg-gray-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
+              <div className="bg-dark-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
                 {dest.rtmp_url}
               </div>
             </div>
@@ -548,7 +548,7 @@ const StreamingDestinations: React.FC = () => {
             {(['youtube', 'youtube_oauth'].includes(dest.platform) || dest.channel_id) && (
               <div className="mb-3">
                 <div className="text-gray-500 text-xs mb-1">Channel ID</div>
-                <div className="bg-gray-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
+                <div className="bg-dark-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
                   {dest.channel_id || 'Not set'}
                 </div>
               </div>
@@ -565,7 +565,7 @@ const StreamingDestinations: React.FC = () => {
                   {showStreamKey[dest.id!] ? 'Hide' : 'Show'}
                 </button>
               </div>
-              <div className="bg-gray-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
+              <div className="bg-dark-900 px-3 py-2 rounded text-gray-300 text-sm font-mono break-all">
                 {showStreamKey[dest.id!] ? dest.stream_key : '••••••••••••••••'}
               </div>
             </div>
@@ -581,7 +581,7 @@ const StreamingDestinations: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setEditingDestination(dest)}
-                className="flex-1 bg-dark-700 hover:bg-gray-600 text-white px-4 py-2 rounded"
+                className="flex-1 bg-dark-700 hover:bg-dark-600 text-white px-4 py-2 rounded"
               >
                 Edit
               </button>
@@ -596,7 +596,7 @@ const StreamingDestinations: React.FC = () => {
         ))}
 
         {destinations.length === 0 && (
-          <div className="col-span-full bg-gray-800 rounded-lg p-12 text-center border-2 border-dashed border-gray-700">
+          <div className="col-span-full bg-dark-800 rounded-lg p-12 text-center border-2 border-dashed border-dark-700">
             <div className="text-6xl mb-4">📡</div>
             <h3 className="text-xl font-bold text-white mb-2">No Streaming Destinations</h3>
             <p className="text-gray-400 mb-4">Add your first destination to get started</p>
@@ -776,7 +776,7 @@ const StreamingDestinations: React.FC = () => {
               )}
 
               {isYoutubeOAuthForm && (
-                <div className="border border-gray-700 rounded-lg p-4 bg-gray-950 space-y-4">
+                <div className="border border-dark-700 rounded-lg p-4 bg-dark-900 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-md font-semibold text-white">YouTube OAuth Credentials</h3>
                   </div>
@@ -853,7 +853,7 @@ const StreamingDestinations: React.FC = () => {
                             setNewDestination({ ...newDestination, youtube_oauth_redirect_uri: defaultUri });
                           }
                         }}
-                        className="bg-dark-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-xs whitespace-nowrap"
+                        className="bg-dark-700 hover:bg-dark-600 text-white px-3 py-2 rounded text-xs whitespace-nowrap"
                       >
                         Use Default
                       </button>
@@ -867,7 +867,7 @@ const StreamingDestinations: React.FC = () => {
 
               {/* Stream Watchdog Section - Only for OAuth */}
               {isYoutubeOAuthForm && (
-                <div className="border-t border-gray-700 pt-4 mt-4">
+                <div className="border-t border-dark-700 pt-4 mt-4">
                   <h3 className="text-lg font-semibold text-white mb-3">🐕 Stream Watchdog (Optional)</h3>
                   <p className="text-sm text-gray-400 mb-4">
                     Monitors your FFmpeg encoder and automatically restarts it if it crashes or hangs.
