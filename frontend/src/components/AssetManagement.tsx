@@ -466,7 +466,7 @@ const AssetManagement: React.FC = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-hidden">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-3xl flex flex-col" style={{ maxHeight: '90vh' }}>
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-3xl flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <h3 className="text-xl font-bold text-white">
                 {selectedAsset ? 'Edit Asset' : 'Add New Asset'}
@@ -480,7 +480,7 @@ const AssetManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
+              <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-6 overscroll-contain">
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">

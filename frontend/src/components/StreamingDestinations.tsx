@@ -606,7 +606,7 @@ const StreamingDestinations: React.FC = () => {
       {/* Add/Edit Modal */}
       {(showAddModal || editingDestination) && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-hidden">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-2xl flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <h2 className="text-xl font-bold text-white">
                 {editingDestination ? 'Edit Destination' : 'Add Streaming Destination'}
@@ -621,7 +621,7 @@ const StreamingDestinations: React.FC = () => {
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-4" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
+            <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-4 overscroll-contain">
               {/* Platform Selection */}
               <div>
                 <label className="block text-gray-300 mb-2">Platform</label>

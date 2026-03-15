@@ -369,7 +369,7 @@ const CameraManagement: React.FC = () => {
       {/* Stream Viewing Modal */}
       {showStreamModal && streamingCamera && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-hidden">
-          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-4xl flex flex-col" style={{ maxHeight: '90vh' }}>
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-4xl flex flex-col max-h-[90vh]">
             <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
               <h3 className="text-xl font-bold text-white">
                 Live Stream: {streamingCamera.name}
@@ -382,7 +382,7 @@ const CameraManagement: React.FC = () => {
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1 min-h-0 p-6" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
+            <div className="overflow-y-auto flex-1 min-h-0 p-6 overscroll-contain">
               <div className="bg-black rounded-lg">
                 {streamingCamera.status === 'online' ? (
                   <div>
@@ -482,7 +482,7 @@ const AddCameraModal: React.FC<{
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-hidden">
-      <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg flex flex-col" style={{ maxHeight: '90vh' }}>
+      <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
           <h3 className="text-xl font-bold text-white">Add New Camera</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
@@ -491,7 +491,7 @@ const AddCameraModal: React.FC<{
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-4" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
+          <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-4 overscroll-contain">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
             <input
@@ -672,7 +672,7 @@ const EditCameraModal: React.FC<{
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-hidden">
-      <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg flex flex-col" style={{ maxHeight: '90vh' }}>
+      <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-dark-700 flex items-center justify-between shrink-0">
           <h3 className="text-xl font-bold text-white">Edit Camera</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
@@ -681,7 +681,7 @@ const EditCameraModal: React.FC<{
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-          <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-4" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
+          <div className="overflow-y-auto flex-1 min-h-0 p-6 space-y-4 overscroll-contain">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
             <input
