@@ -204,14 +204,14 @@ async def upload_asset_file(
     """Upload an asset file (image or video)"""
 
     # Validate file type
-    allowed_image_types = {"image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"}
+    allowed_image_types = {"image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/avif"}
     allowed_video_types = {"video/mp4", "video/mpeg", "video/quicktime", "video/webm"}
 
     if asset_type == "static_image":
         if file.content_type not in allowed_image_types:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid image type: {file.content_type}. Allowed: PNG, JPEG, GIF, WebP"
+                detail=f"Invalid image type: {file.content_type}. Allowed: PNG, JPEG, GIF, WebP, AVIF"
             )
     elif asset_type == "video":
         if file.content_type not in allowed_video_types:
@@ -249,12 +249,30 @@ async def upload_asset_file(
                     )
                 buffer.write(chunk)
 
+        # Auto-convert non-PNG images (AVIF, WebP, GIF) to PNG for FFmpeg compatibility
+        final_filename = unique_filename
+        if asset_type == "static_image" and file.content_type not in ("image/png", "image/jpeg", "image/jpg"):
+            try:
+                from PIL import Image as PILImage
+                with PILImage.open(file_path) as img:
+                    png_filename = f"{uuid.uuid4()}.png"
+                    png_path = UPLOAD_DIR / png_filename
+                    img.convert("RGBA").save(png_path, "PNG")
+                # Remove original, use PNG
+                os.unlink(file_path)
+                file_path = png_path
+                final_filename = png_filename
+                file_size = png_path.stat().st_size
+                logger.info("Converted %s to PNG: %s", file.content_type, png_filename)
+            except Exception as conv_err:
+                logger.warning("Image conversion failed, keeping original: %s", conv_err)
+
         # Return relative path that can be served
-        relative_path = f"/uploads/assets/{unique_filename}"
+        relative_path = f"/uploads/assets/{final_filename}"
 
         return {
             "file_path": relative_path,
-            "filename": unique_filename,
+            "filename": final_filename,
             "original_filename": file.filename,
             "size": file_size,
             "content_type": file.content_type
