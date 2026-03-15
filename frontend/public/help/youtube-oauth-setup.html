@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube OAuth Setup Guide - VistterStream</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      line-height: 1.6;
+      padding: 24px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    a { color: #60a5fa; }
+    h1 {
+      font-size: 1.75rem;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 32px;
+      font-size: 0.95rem;
+    }
+    h2 {
+      font-size: 1.25rem;
+      color: #fff;
+      margin: 32px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #334155;
+    }
+    h3 {
+      font-size: 1.05rem;
+      color: #fff;
+      margin: 24px 0 12px;
+    }
+    p { margin-bottom: 12px; color: #cbd5e1; }
+    ol, ul {
+      margin: 0 0 16px 24px;
+      color: #cbd5e1;
+    }
+    li { margin-bottom: 8px; }
+    .step-number {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      background: #2563eb;
+      color: #fff;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+    }
+    .step-content { flex: 1; }
+    .step-content p { margin-bottom: 4px; }
+    .step-content .detail {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    .callout {
+      padding: 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+    .callout-info {
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(37, 99, 235, 0.4);
+      color: #93c5fd;
+    }
+    .callout-warning {
+      background: rgba(234, 179, 8, 0.1);
+      border: 1px solid rgba(234, 179, 8, 0.3);
+      color: #fde68a;
+    }
+    .callout-success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+    }
+    code {
+      background: #334155;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: #f1f5f9;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 24px;
+      color: #60a5fa;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .back-link:hover { text-decoration: underline; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-green { background: #166534; color: #86efac; }
+    .badge-yellow { background: #713f12; color: #fde68a; }
+    .badge-red { background: #7f1d1d; color: #fca5a5; }
+    .faq { margin-bottom: 20px; }
+    .faq summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #fff;
+      padding: 8px 0;
+    }
+    .faq summary:hover { color: #60a5fa; }
+    .faq p {
+      padding: 8px 0 8px 16px;
+      border-left: 2px solid #334155;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+
+<a href="/" class="back-link">&larr; Back to VistterStream</a>
+
+<h1>YouTube OAuth Setup Guide</h1>
+<p class="subtitle">Connect your YouTube account to live stream directly from VistterStream &mdash; no stream keys needed.</p>
+
+<div class="callout callout-info">
+  <strong>What is YouTube OAuth?</strong><br>
+  OAuth lets VistterStream create and manage YouTube Live broadcasts on your behalf. Instead of manually copying stream keys from YouTube Studio, VistterStream handles everything automatically.
+</div>
+
+<h2>Before You Start</h2>
+
+<p>Make sure you have:</p>
+<ul>
+  <li>A YouTube account that is <strong>enabled for live streaming</strong> (YouTube requires you to verify your channel &mdash; this can take up to 24 hours the first time)</li>
+  <li>Access to VistterStream's Settings &rarr; Destinations page</li>
+</ul>
+
+<div class="callout callout-warning">
+  <strong>First time streaming on YouTube?</strong><br>
+  Go to <a href="https://studio.youtube.com" target="_blank">YouTube Studio</a> &rarr; click "Go Live" &rarr; YouTube will ask you to verify your channel. Once verified, wait 24 hours before attempting to connect OAuth in VistterStream.
+</div>
+
+<h2>Step-by-Step Setup</h2>
+
+<div class="step">
+  <span class="step-number">1</span>
+  <div class="step-content">
+    <p><strong>Add a YouTube OAuth destination</strong></p>
+    <p class="detail">Go to Settings &rarr; Destinations &rarr; click <strong>+ Add Destination</strong>. Select <strong>YouTube Live OAuth</strong> as the platform. Give it a name (e.g., "My YouTube Channel") and click <strong>Create</strong>.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">2</span>
+  <div class="step-content">
+    <p><strong>Click "Connect OAuth"</strong></p>
+    <p class="detail">On your new destination card, click the red <strong>Connect OAuth</strong> button. A popup window will open asking you to sign in to Google.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">3</span>
+  <div class="step-content">
+    <p><strong>Sign in and grant permissions</strong></p>
+    <p class="detail">Sign in with the Google account that owns your YouTube channel. Google will ask you to allow VistterStream to manage your YouTube live streams. Click <strong>Allow</strong>.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">4</span>
+  <div class="step-content">
+    <p><strong>Wait for the popup to close</strong></p>
+    <p class="detail">After granting permission, the popup will close automatically and your destination card will update to show <span class="badge badge-green">Connected</span>. If it doesn't update within a few seconds, click <strong>Refresh Status</strong>.</p>
+  </div>
+</div>
+
+<div class="step">
+  <span class="step-number">5</span>
+  <div class="step-content">
+    <p><strong>You're ready to stream!</strong></p>
+    <p class="detail">When you start a timeline that uses this destination, VistterStream will automatically create a YouTube Live broadcast and start streaming. No need to touch YouTube Studio.</p>
+  </div>
+</div>
+
+<h2>Understanding the Status</h2>
+
+<p>Your destination card shows the current connection status:</p>
+<ul>
+  <li><span class="badge badge-green">Connected</span> &mdash; OAuth is active and ready. VistterStream can create broadcasts on your behalf.</li>
+  <li><span class="badge badge-yellow">Not connected</span> &mdash; You need to click "Connect OAuth" to authorize.</li>
+  <li><strong>Token expires</strong> &mdash; OAuth tokens refresh automatically. If a token expires and can't be refreshed, reconnect by clicking "Reconnect OAuth".</li>
+</ul>
+
+<h2>Managing Broadcasts</h2>
+
+<p>Once connected, you have these options on the destination card:</p>
+<ul>
+  <li><strong>Create New Broadcast</strong> &mdash; Manually create a YouTube Live broadcast ahead of time. You'll be prompted for a title, description, and settings.</li>
+  <li><strong>Reconnect OAuth</strong> &mdash; Re-authorize if your connection has expired or you want to switch accounts.</li>
+  <li><strong>Disconnect</strong> &mdash; Remove the OAuth connection. The destination remains but can no longer create broadcasts automatically.</li>
+</ul>
+
+<div class="callout callout-success">
+  <strong>Automatic broadcast creation:</strong><br>
+  When you start a timeline with an OAuth destination, VistterStream automatically creates a broadcast using the timeline's broadcast metadata (title, description, tags, privacy). You don't need to create one manually unless you want to set it up in advance.
+</div>
+
+<h2>Troubleshooting</h2>
+
+<details class="faq">
+  <summary>The popup closed but status still says "Not connected"</summary>
+  <p>Click <strong>Refresh Status</strong> on the destination card. If it still shows as not connected, try clicking <strong>Connect OAuth</strong> again. Make sure you allowed all requested permissions when Google asked.</p>
+</details>
+
+<details class="faq">
+  <summary>I get an error saying "This app isn't verified"</summary>
+  <p>This is normal for apps in testing mode. Click <strong>Advanced</strong> &rarr; <strong>Go to VistterStream (unsafe)</strong> to proceed. Your data is only sent between your VistterStream server and Google &mdash; no third parties are involved.</p>
+</details>
+
+<details class="faq">
+  <summary>My stream starts but doesn't appear on YouTube</summary>
+  <p>Check that your YouTube channel has live streaming enabled. Go to <a href="https://studio.youtube.com" target="_blank">YouTube Studio</a> &rarr; Settings &rarr; Channel &rarr; Feature eligibility &rarr; Live streaming must show "Enabled". New channels need to wait 24 hours after verification.</p>
+</details>
+
+<details class="faq">
+  <summary>I want to stream to a different YouTube account</summary>
+  <p>Click <strong>Disconnect</strong> on the destination card, then click <strong>Connect OAuth</strong> again. When the Google sign-in popup appears, choose a different account or click "Use another account".</p>
+</details>
+
+<details class="faq">
+  <summary>The token expired and my stream stopped</summary>
+  <p>OAuth tokens refresh automatically in the background. If a refresh fails (e.g., you revoked access in your Google account settings), click <strong>Reconnect OAuth</strong> to re-authorize. Running streams may need to be restarted after reconnecting.</p>
+</details>
+
+</body>
+</html>

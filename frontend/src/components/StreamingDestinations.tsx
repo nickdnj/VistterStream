@@ -518,21 +518,14 @@ const StreamingDestinations: React.FC = () => {
                       </>
                     )}
                   </div>
-                  <div className="bg-dark-900 border border-dark-700 rounded p-3">
-                    <p className="text-xs text-gray-400 mb-2">
-                      <strong>How it works:</strong>
-                    </p>
-                    <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
-                      <li>Click "Connect OAuth" to open Google authorization</li>
-                      <li>Sign in with your YouTube account</li>
-                      <li>Grant the requested permissions</li>
-                      <li>The popup will auto-close and status will update automatically</li>
-                      <li>If status doesn't update, click "Refresh Status"</li>
-                    </ol>
-                    <p className="text-xs text-yellow-400 mt-2">
-                      ⚠️ Make sure OAuth credentials are configured above or set in backend environment variables.
-                  </p>
-                  </div>
+                  <a
+                    href="/help/youtube-oauth-setup.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1"
+                  >
+                    Need help? View the YouTube OAuth Setup Guide &rarr;
+                  </a>
                 </div>
               </div>
             )}
