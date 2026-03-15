@@ -185,6 +185,10 @@ class Asset(Base):
     latitude = Column(Float)  # Geographic latitude
     longitude = Column(Float)  # Geographic longitude
     
+    # Asset Studio links (Phase 1)
+    template_instance_id = Column(Integer, ForeignKey("template_instances.id"), nullable=True)
+    canvas_project_id = Column(Integer, ForeignKey("canvas_projects.id"), nullable=True)
+
     # Metadata
     description = Column(String)
     is_active = Column(Boolean, default=True)
@@ -226,6 +230,9 @@ from .schedule import Schedule, ScheduleTimeline  # noqa: F401
 from .destination import StreamingDestination  # noqa: F401
 from .reelforge import ReelTemplate, ReelPost, ReelPublishTarget, ReelExport, ReelCaptureQueue  # noqa: F401
 from .audit import AuditLog  # noqa: F401
+from .template import OverlayTemplate, TemplateInstance  # noqa: F401
+from .canvas import CanvasProject  # noqa: F401
+from .font import Font  # noqa: F401
 
 # Create tables
 def create_tables():

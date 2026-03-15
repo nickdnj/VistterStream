@@ -1,0 +1,105 @@
+{
+  "name": "Basic Lower Third",
+  "category": "lower_third",
+  "description": "A clean lower-third text overlay with title and subtitle. Customize colors, fonts, and positioning for on-screen identification.",
+  "version": 1,
+  "config_schema": {
+    "fields": [
+      {
+        "key": "title",
+        "label": "Title",
+        "type": "text",
+        "required": true,
+        "placeholder": "e.g. John Smith",
+        "help": "Primary text displayed on the lower third"
+      },
+      {
+        "key": "subtitle",
+        "label": "Subtitle",
+        "type": "text",
+        "required": false,
+        "placeholder": "e.g. Senior Producer",
+        "help": "Secondary text below the title"
+      },
+      {
+        "key": "background_color",
+        "label": "Background Color",
+        "type": "text",
+        "required": false,
+        "default": "rgba(0,0,0,0.7)",
+        "placeholder": "e.g. rgba(0,0,0,0.7) or #1a1a1a",
+        "help": "Background color of the lower-third bar"
+      },
+      {
+        "key": "text_color",
+        "label": "Text Color",
+        "type": "text",
+        "required": false,
+        "default": "#FFFFFF",
+        "placeholder": "e.g. #FFFFFF",
+        "help": "Color of the title and subtitle text"
+      },
+      {
+        "key": "accent_color",
+        "label": "Accent Color",
+        "type": "text",
+        "required": false,
+        "default": "#0088FF",
+        "placeholder": "e.g. #0088FF",
+        "help": "Color of the accent bar on the left edge"
+      }
+    ]
+  },
+  "default_config": {
+    "title": "",
+    "subtitle": "",
+    "background_color": "rgba(0,0,0,0.7)",
+    "text_color": "#FFFFFF",
+    "accent_color": "#0088FF"
+  },
+  "asset_type": "canvas_composite",
+  "default_canvas_json": {
+    "version": "6.0.0",
+    "objects": [
+      {
+        "type": "rect",
+        "left": 0,
+        "top": 800,
+        "width": 600,
+        "height": 120,
+        "fill": "rgba(0,0,0,0.7)",
+        "selectable": true
+      },
+      {
+        "type": "rect",
+        "left": 0,
+        "top": 800,
+        "width": 6,
+        "height": 120,
+        "fill": "#0088FF",
+        "selectable": false
+      },
+      {
+        "type": "text",
+        "left": 20,
+        "top": 815,
+        "text": "Title Text",
+        "fontSize": 36,
+        "fontFamily": "Arial",
+        "fill": "#FFFFFF",
+        "fontWeight": "bold",
+        "selectable": true
+      },
+      {
+        "type": "text",
+        "left": 20,
+        "top": 860,
+        "text": "Subtitle Text",
+        "fontSize": 24,
+        "fontFamily": "Arial",
+        "fill": "#CCCCCC",
+        "selectable": true
+      }
+    ]
+  }
+}

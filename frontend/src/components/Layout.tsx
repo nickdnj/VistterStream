@@ -12,8 +12,32 @@ import {
   ArrowRightOnRectangleIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
   SparklesIcon,
+  RectangleGroupIcon,
+  SwatchIcon,
+  PaintBrushIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ForwardRefExoticComponent<any>;
+}
+
+interface NavGroup {
+  name: string;
+  icon: React.ForwardRefExoticComponent<any>;
+  basePath: string;
+  children: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return 'children' in entry;
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,17 +46,37 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [openNavGroups, setOpenNavGroups] = useState<Record<string, boolean>>({ 'Asset Studio': true });
   const { user, logout } = useAuth();
   const location = useLocation();
 
-  const navigation = [
+  const navigation: NavEntry[] = [
     { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
     { name: 'Timelines', href: '/timelines', icon: FilmIcon },
+    {
+      name: 'Asset Studio',
+      icon: RectangleGroupIcon,
+      basePath: '/assets',
+      children: [
+        { name: 'My Assets', href: '/assets', icon: PhotoIcon },
+        { name: 'Templates', href: '/assets/templates', icon: SwatchIcon },
+        { name: 'Canvas Editor', href: '/assets/editor', icon: PaintBrushIcon },
+      ],
+    },
     { name: 'ReelForge', href: '/reelforge', icon: SparklesIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];
 
-  const isCurrentPath = (path: string) => location.pathname === path;
+  const isCurrentPath = (path: string) => {
+    if (path === '/assets') return location.pathname === '/assets';
+    return location.pathname.startsWith(path);
+  };
+
+  const isGroupActive = (group: NavGroup) => location.pathname.startsWith(group.basePath);
+
+  const toggleNavGroup = (name: string) => {
+    setOpenNavGroups(prev => ({ ...prev, [name]: !prev[name] }));
+  };
 
   return (
     <div className="min-h-screen bg-dark-900">
@@ -54,22 +98,64 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <XMarkIcon className="h-6 w-6" />
             </button>
           </div>
-          <nav className="mt-4 px-4">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isCurrentPath(item.href)
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-dark-700 hover:text-white'
-                }`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <item.icon className="h-5 w-5 mr-3" />
-                {item.name}
-              </Link>
-            ))}
+          <nav className="mt-4 px-4 space-y-1">
+            {navigation.map((entry) => {
+              if (isNavGroup(entry)) {
+                const isOpen = openNavGroups[entry.name] ?? false;
+                return (
+                  <div key={entry.name}>
+                    <button
+                      onClick={() => toggleNavGroup(entry.name)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isGroupActive(entry)
+                          ? 'bg-dark-700 text-white'
+                          : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center">
+                        <entry.icon className="h-5 w-5 mr-3" />
+                        {entry.name}
+                      </span>
+                      <ChevronDownIcon className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <div className="ml-4 mt-1 space-y-1">
+                        {entry.children.map((child) => (
+                          <Link
+                            key={child.name}
+                            to={child.href}
+                            className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              isCurrentPath(child.href)
+                                ? 'bg-primary-600 text-white'
+                                : 'text-gray-400 hover:bg-dark-700 hover:text-white'
+                            }`}
+                            onClick={() => setSidebarOpen(false)}
+                          >
+                            <child.icon className="h-4 w-4 mr-3" />
+                            {child.name}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  key={entry.name}
+                  to={entry.href}
+                  className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isCurrentPath(entry.href)
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <entry.icon className="h-5 w-5 mr-3" />
+                  {entry.name}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </div>
@@ -101,21 +187,78 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </button>
           </div>
           <nav className="mt-4 flex-1 px-2 space-y-1">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'px-3'} py-3 rounded-lg text-sm font-medium transition-colors ${
-                  isCurrentPath(item.href)
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-dark-700 hover:text-white'
-                }`}
-                title={sidebarCollapsed ? item.name : undefined}
-              >
-                <item.icon className={`h-5 w-5 flex-shrink-0 ${sidebarCollapsed ? '' : 'mr-3'}`} />
-                {!sidebarCollapsed && <span className="whitespace-nowrap">{item.name}</span>}
-              </Link>
-            ))}
+            {navigation.map((entry) => {
+              if (isNavGroup(entry)) {
+                const isOpen = openNavGroups[entry.name] ?? false;
+                if (sidebarCollapsed) {
+                  return (
+                    <Link
+                      key={entry.name}
+                      to={entry.basePath}
+                      className={`flex items-center justify-center px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
+                        isGroupActive(entry)
+                          ? 'bg-primary-600 text-white'
+                          : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                      }`}
+                      title={entry.name}
+                    >
+                      <entry.icon className="h-5 w-5 flex-shrink-0" />
+                    </Link>
+                  );
+                }
+                return (
+                  <div key={entry.name}>
+                    <button
+                      onClick={() => toggleNavGroup(entry.name)}
+                      className={`w-full flex items-center justify-between px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
+                        isGroupActive(entry)
+                          ? 'bg-dark-700 text-white'
+                          : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                      }`}
+                    >
+                      <span className="flex items-center">
+                        <entry.icon className="h-5 w-5 flex-shrink-0 mr-3" />
+                        <span className="whitespace-nowrap">{entry.name}</span>
+                      </span>
+                      <ChevronDownIcon className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <div className="ml-4 mt-1 space-y-1">
+                        {entry.children.map((child) => (
+                          <Link
+                            key={child.name}
+                            to={child.href}
+                            className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              isCurrentPath(child.href)
+                                ? 'bg-primary-600 text-white'
+                                : 'text-gray-400 hover:bg-dark-700 hover:text-white'
+                            }`}
+                          >
+                            <child.icon className="h-4 w-4 flex-shrink-0 mr-3" />
+                            <span className="whitespace-nowrap">{child.name}</span>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  key={entry.name}
+                  to={entry.href}
+                  className={`flex items-center ${sidebarCollapsed ? 'justify-center px-3' : 'px-3'} py-3 rounded-lg text-sm font-medium transition-colors ${
+                    isCurrentPath(entry.href)
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-300 hover:bg-dark-700 hover:text-white'
+                  }`}
+                  title={sidebarCollapsed ? entry.name : undefined}
+                >
+                  <entry.icon className={`h-5 w-5 flex-shrink-0 ${sidebarCollapsed ? '' : 'mr-3'}`} />
+                  {!sidebarCollapsed && <span className="whitespace-nowrap">{entry.name}</span>}
+                </Link>
+              );
+            })}
           </nav>
         </div>
       </div>

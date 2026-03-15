@@ -96,7 +96,7 @@ class Preset(PresetBase):
 # Asset schemas
 class AssetBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    type: str = Field(..., pattern="^(static_image|api_image|video|graphic|google_drawing)$")
+    type: str = Field(..., pattern="^(static_image|api_image|video|graphic|google_drawing|canvas_composite|data_bound)$")
     file_path: Optional[str] = None
     api_url: Optional[str] = None
     api_refresh_interval: int = Field(default=30, ge=1, le=3600)
@@ -112,7 +112,7 @@ class AssetCreate(AssetBase):
 
 class AssetUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
-    type: Optional[str] = Field(None, pattern="^(static_image|api_image|video|graphic|google_drawing)$")
+    type: Optional[str] = Field(None, pattern="^(static_image|api_image|video|graphic|google_drawing|canvas_composite|data_bound)$")
     file_path: Optional[str] = None
     api_url: Optional[str] = None
     api_refresh_interval: Optional[int] = Field(None, ge=1, le=3600)
@@ -126,11 +126,129 @@ class AssetUpdate(BaseModel):
 class Asset(AssetBase):
     id: int
     is_active: bool
+    template_instance_id: Optional[int] = None
+    canvas_project_id: Optional[int] = None
     created_at: datetime
     last_updated: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# Asset Studio Schemas - Templates, Canvas Projects, Fonts
+# ============================================================================
+
+# Overlay Template schemas
+class OverlayTemplateRead(BaseModel):
+    id: int
+    name: str
+    category: str
+    description: Optional[str] = None
+    config_schema: str  # JSON string
+    default_config: str  # JSON string
+    preview_path: Optional[str] = None
+    version: int
+    is_bundled: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TemplateInstanceCreate(BaseModel):
+    template_id: int
+    config_values: str  # JSON string with user-provided config
+    name: Optional[str] = None  # Override asset name (defaults to template name)
+    position_x: float = Field(default=0.0, ge=0.0, le=1.0)
+    position_y: float = Field(default=0.0, ge=0.0, le=1.0)
+    width: Optional[int] = Field(None, ge=1, le=3840)
+    height: Optional[int] = Field(None, ge=1, le=2160)
+    opacity: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class TemplateInstanceUpdate(BaseModel):
+    config_values: Optional[str] = None  # JSON string
+    position_x: Optional[float] = Field(None, ge=0.0, le=1.0)
+    position_y: Optional[float] = Field(None, ge=0.0, le=1.0)
+    width: Optional[int] = Field(None, ge=1, le=3840)
+    height: Optional[int] = Field(None, ge=1, le=2160)
+    opacity: Optional[float] = Field(None, ge=0.0, le=1.0)
+
+
+class TemplateInstanceRead(BaseModel):
+    id: int
+    template_id: int
+    config_values: str  # JSON string
+    asset_id: Optional[int] = None
+    user_id: Optional[int] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Canvas Project schemas
+class CanvasProjectCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    canvas_json: str = Field(default='{"version":"6.0.0","objects":[]}')
+    width: int = Field(default=1920, ge=1, le=3840)
+    height: int = Field(default=1080, ge=1, le=2160)
+
+
+class CanvasProjectSave(BaseModel):
+    canvas_json: str
+    thumbnail_data: Optional[str] = None  # Base64-encoded PNG thumbnail
+
+
+class CanvasProjectRead(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    thumbnail_path: Optional[str] = None
+    width: int
+    height: int
+    user_id: Optional[int] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CanvasProjectDetail(CanvasProjectRead):
+    canvas_json: str
+
+
+class CanvasProjectExport(BaseModel):
+    asset_name: str = Field(..., min_length=1, max_length=100)
+    png_data: str  # Base64-encoded PNG from canvas.toDataURL()
+    position_x: float = Field(default=0.0, ge=0.0, le=1.0)
+    position_y: float = Field(default=0.0, ge=0.0, le=1.0)
+    width: Optional[int] = Field(None, ge=1, le=3840)
+    height: Optional[int] = Field(None, ge=1, le=2160)
+    opacity: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+# Font schemas
+class FontRead(BaseModel):
+    id: int
+    family: str
+    weight: str
+    style: str
+    source: str
+    file_path: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 
 # Stream schemas
 class StreamBase(BaseModel):

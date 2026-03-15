@@ -655,16 +655,19 @@ class SeamlessTimelineExecutor:
                             return tmp.name
                     else:
                         logger.warning(f"Failed to download Google Drawing for asset '{asset.name}': HTTP {response.status_code}")
-            elif asset.type == 'static_image' and asset.file_path:
+            elif asset.type in ('static_image', 'canvas_composite') and asset.file_path:
                 # Skip SVG files for now - FFmpeg can't read them directly
-                # TODO: Convert SVG to PNG using librsvg or similar
                 if asset.file_path.endswith('.svg'):
                     logger.warning(f"Skipping SVG asset {asset.name} - not supported in FFmpeg yet")
                     return None
-                
-                # For other static images
-                if asset.file_path.startswith('/'):
-                    return f"/Users/nickd/Workspaces/VistterStream/frontend/public{asset.file_path}"
+
+                # Resolve file path using UPLOADS_DIR env var
+                if asset.file_path.startswith('/uploads/'):
+                    uploads_dir = os.getenv("UPLOADS_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads"))
+                    return os.path.join(uploads_dir, asset.file_path[len('/uploads/'):])
+                elif asset.file_path.startswith('/'):
+                    # Absolute path — use as-is (e.g. Docker volume mount)
+                    return asset.file_path
                 return asset.file_path
         except Exception as e:
             logger.error(f"Failed to download asset: {e}")

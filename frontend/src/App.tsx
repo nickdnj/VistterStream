@@ -7,6 +7,8 @@ import TimelineEditor from './components/TimelineEditor';
 import StreamingDestinations from './components/StreamingDestinations';
 import Settings from './components/Settings';
 import ReelForge from './components/ReelForge';
+import AssetStudio from './components/AssetStudio';
+import SpikeCanvasRoute from './components/spike/SpikeCanvasRoute';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -31,6 +33,11 @@ function App() {
                     <Route path="/presets" element={<Navigate to="/settings" replace />} />
                     <Route path="/scheduler" element={<Navigate to="/settings" replace />} />
                     <Route path="/settings" element={<Settings />} />
+                    <Route path="/assets" element={<AssetStudio />} />
+                    <Route path="/assets/templates" element={<AssetStudio />} />
+                    <Route path="/assets/editor" element={<AssetStudio />} />
+                    <Route path="/assets/analytics" element={<AssetStudio />} />
+                    <Route path="/spike-canvas" element={<SpikeCanvasRoute />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

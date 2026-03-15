@@ -1,0 +1,58 @@
+{
+  "name": "Tempest 5-Day Forecast",
+  "category": "weather",
+  "description": "5-day weather forecast from your Tempest Weather Station. Shows daily highs, lows, precipitation chance, and conditions icons.",
+  "version": 1,
+  "config_schema": {
+    "fields": [
+      {
+        "key": "station_id",
+        "label": "Station ID",
+        "type": "text",
+        "required": true,
+        "placeholder": "e.g. 12345",
+        "help": "Your Tempest Weather Station ID"
+      },
+      {
+        "key": "theme",
+        "label": "Theme",
+        "type": "select",
+        "required": false,
+        "default": "dark",
+        "options": [
+          {"value": "dark", "label": "Dark"},
+          {"value": "light", "label": "Light"},
+          {"value": "transparent", "label": "Transparent"}
+        ]
+      },
+      {
+        "key": "units",
+        "label": "Units",
+        "type": "select",
+        "required": false,
+        "default": "imperial",
+        "options": [
+          {"value": "imperial", "label": "Imperial (\u00b0F, mph)"},
+          {"value": "metric", "label": "Metric (\u00b0C, km/h)"}
+        ]
+      },
+      {
+        "key": "refresh_interval",
+        "label": "Refresh Interval (seconds)",
+        "type": "number",
+        "required": false,
+        "default": 300,
+        "min": 60,
+        "max": 3600
+      }
+    ]
+  },
+  "default_config": {
+    "station_id": "",
+    "theme": "dark",
+    "units": "imperial",
+    "refresh_interval": 300
+  },
+  "asset_type": "api_image",
+  "api_url_template": "http://host.docker.internal:8036/forecast?station_id={station_id}&theme={theme}&units={units}"
+}

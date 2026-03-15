@@ -1,0 +1,60 @@
+{
+  "name": "Sponsor / Ad Slot",
+  "category": "sponsor_ad",
+  "description": "Display a sponsor or advertiser logo and tagline on your stream. Upload a logo image and configure text to show during broadcasts.",
+  "version": 1,
+  "config_schema": {
+    "fields": [
+      {
+        "key": "business_name",
+        "label": "Business Name",
+        "type": "text",
+        "required": true,
+        "placeholder": "e.g. Acme Corp",
+        "help": "Name of the sponsor or advertiser"
+      },
+      {
+        "key": "tagline",
+        "label": "Tagline",
+        "type": "text",
+        "required": false,
+        "placeholder": "e.g. Your trusted partner since 1990",
+        "help": "Short tagline or slogan"
+      },
+      {
+        "key": "logo_upload",
+        "label": "Logo Image",
+        "type": "file",
+        "required": false,
+        "accept": "image/png,image/jpeg,image/webp",
+        "help": "Upload the sponsor logo (PNG, JPEG, or WebP)"
+      },
+      {
+        "key": "background_color",
+        "label": "Background Color",
+        "type": "text",
+        "required": false,
+        "default": "rgba(0,0,0,0.6)",
+        "placeholder": "e.g. rgba(0,0,0,0.6)",
+        "help": "Background color behind the sponsor information"
+      },
+      {
+        "key": "text_color",
+        "label": "Text Color",
+        "type": "text",
+        "required": false,
+        "default": "#FFFFFF",
+        "placeholder": "e.g. #FFFFFF",
+        "help": "Color of the business name and tagline text"
+      }
+    ]
+  },
+  "default_config": {
+    "business_name": "",
+    "tagline": "",
+    "logo_upload": "",
+    "background_color": "rgba(0,0,0,0.6)",
+    "text_color": "#FFFFFF"
+  },
+  "asset_type": "static_image"
+}

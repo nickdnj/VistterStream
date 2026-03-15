@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 from middleware.audit import AuditMiddleware
 
 # Import routers
-from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog, settings, reelforge
+from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog, settings, reelforge, canvas_projects, fonts, templates
 from routers import presets as presets_router
 from routers import ptz as ptz_router
 
@@ -89,6 +89,23 @@ async def lifespan(app: FastAPI):
         logger.info("ReelForge scheduler started")
     except Exception as e:
         logger.warning("Failed to start ReelForge scheduler: %s", e)
+    # Scan system fonts for the Asset Studio font picker
+    try:
+        logger.info("Scanning system fonts...")
+        from services import font_service
+        with get_session() as db:
+            count = font_service.scan_system_fonts(db)
+        logger.info("System font scan complete: %d fonts", count)
+    except Exception as e:
+        logger.warning("Failed to scan system fonts: %s", e)
+    # Seed overlay templates from the catalog directory
+    try:
+        logger.info("Seeding overlay templates from catalog...")
+        from services.template_seeder import seed_templates
+        count = seed_templates()
+        logger.info("Template seeder complete: %d templates created/updated", count)
+    except Exception as e:
+        logger.warning("Failed to seed templates: %s", e)
     logger.info("All services started")
 
     yield
@@ -197,7 +214,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["X-XSS-Protection"] = "0"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; frame-src https://www.youtube.com; connect-src 'self' ws: wss:"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: http: https:; frame-src https://www.youtube.com; connect-src 'self' ws: wss: https://fonts.googleapis.com https://fonts.gstatic.com"
         return response
 
 
@@ -209,6 +226,11 @@ uploads_dir_env = os.getenv("UPLOADS_DIR")
 uploads_path = Path(uploads_dir_env) if uploads_dir_env else (Path(__file__).parent / "uploads")
 uploads_path.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_path), name="uploads")
+
+# Mount fonts directory for serving uploaded and Google-cached fonts
+fonts_path = uploads_path.parent / "fonts"
+fonts_path.mkdir(parents=True, exist_ok=True)
+app.mount("/fonts", StaticFiles(directory=fonts_path), name="fonts")
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
@@ -230,6 +252,9 @@ app.include_router(scheduler.router)
 # Preview disabled per refactor away from local HLS preview
 app.include_router(emergency.router)  # Emergency controls (kill all streams)
 app.include_router(reelforge.router)  # ReelForge - automated social media content generation
+app.include_router(templates.router)  # Asset Studio - Overlay templates & instances
+app.include_router(canvas_projects.router)  # Asset Studio - Canvas projects
+app.include_router(fonts.router)  # Asset Studio - Font management
 
 # Serve static files (React build)
 # Support both Vite (dist) and CRA (build)

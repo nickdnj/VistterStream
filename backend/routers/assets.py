@@ -31,13 +31,25 @@ _BLOCKED_NETWORKS = [
 ]
 _BLOCKED_HOSTNAMES = {"host.docker.internal"}
 
+# Internal hostnames that template-generated URLs may target (e.g. TempestWeather via Docker)
+_SSRF_ALLOWED_INTERNAL_HOSTS = set(
+    h.strip().lower()
+    for h in os.getenv("SSRF_ALLOWED_INTERNAL_HOSTS", "host.docker.internal").split(",")
+    if h.strip()
+)
 
-def _validate_url(url: str) -> bool:
+
+def _validate_url(url: str, *, allow_internal: bool = False) -> bool:
     """Validate that a URL is safe to fetch (blocks SSRF targets).
 
     Allows http/https schemes. Blocks loopback, link-local, 10.x, and
     host.docker.internal. Permits 192.168.x.x and *.local for local
     network services (e.g. TempestWeather).
+
+    If allow_internal=True, hostnames in SSRF_ALLOWED_INTERNAL_HOSTS are
+    permitted. This is used for template-generated URLs (e.g. TempestWeather
+    running at host.docker.internal) where the URL is constructed by the
+    backend, not supplied by the user.
     """
     try:
         parsed = urlparse(url)
@@ -52,7 +64,8 @@ def _validate_url(url: str) -> bool:
         return False
 
     if hostname.lower() in _BLOCKED_HOSTNAMES:
-        return False
+        if not (allow_internal and hostname.lower() in _SSRF_ALLOWED_INTERNAL_HOSTS):
+            return False
 
     try:
         addr = ipaddress.ip_address(hostname)

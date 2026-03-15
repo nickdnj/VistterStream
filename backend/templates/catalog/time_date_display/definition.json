@@ -1,0 +1,71 @@
+{
+  "name": "Time & Date Display",
+  "category": "time_date",
+  "description": "Shows the current time and date on your stream overlay. Supports 12-hour and 24-hour formats with configurable timezone.",
+  "version": 1,
+  "config_schema": {
+    "fields": [
+      {
+        "key": "timezone",
+        "label": "Timezone",
+        "type": "text",
+        "required": false,
+        "default": "America/New_York",
+        "placeholder": "e.g. America/New_York",
+        "help": "IANA timezone identifier"
+      },
+      {
+        "key": "format",
+        "label": "Time Format",
+        "type": "select",
+        "required": false,
+        "default": "12h",
+        "options": [
+          {"value": "12h", "label": "12-hour (3:45 PM)"},
+          {"value": "24h", "label": "24-hour (15:45)"}
+        ]
+      },
+      {
+        "key": "show_date",
+        "label": "Show Date",
+        "type": "select",
+        "required": false,
+        "default": "true",
+        "options": [
+          {"value": "true", "label": "Yes"},
+          {"value": "false", "label": "No"}
+        ]
+      },
+      {
+        "key": "theme",
+        "label": "Theme",
+        "type": "select",
+        "required": false,
+        "default": "dark",
+        "options": [
+          {"value": "dark", "label": "Dark"},
+          {"value": "light", "label": "Light"},
+          {"value": "transparent", "label": "Transparent"}
+        ]
+      },
+      {
+        "key": "refresh_interval",
+        "label": "Refresh Interval (seconds)",
+        "type": "number",
+        "required": false,
+        "default": 10,
+        "min": 1,
+        "max": 60
+      }
+    ]
+  },
+  "default_config": {
+    "timezone": "America/New_York",
+    "format": "12h",
+    "show_date": "true",
+    "theme": "dark",
+    "refresh_interval": 10
+  },
+  "asset_type": "api_image",
+  "api_url_template": "http://host.docker.internal:8036/time?timezone={timezone}&format={format}&show_date={show_date}&theme={theme}"
+}
