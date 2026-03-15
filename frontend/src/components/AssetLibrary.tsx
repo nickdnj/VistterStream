@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { getAssetImageUrl } from '../utils/assetImageUrl';
+import SlideOver from './shared/SlideOver';
+import PositionPicker from './shared/PositionPicker';
 import {
   PlusIcon,
   PencilIcon,
@@ -70,6 +72,22 @@ const AssetLibrary: React.FC = () => {
   const navigate = useNavigate();
   const debounceTimer = useRef<NodeJS.Timeout>(undefined);
 
+  // Edit state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editAsset, setEditAsset] = useState<Asset | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    api_url: '',
+    api_refresh_interval: 30,
+    width: null as number | null,
+    height: null as number | null,
+    position_x: 0,
+    position_y: 0,
+    opacity: 1,
+    description: '',
+  });
+  const [saving, setSaving] = useState(false);
+
   // Debounce search input
   useEffect(() => {
     debounceTimer.current = setTimeout(() => setDebouncedSearch(searchQuery), 300);
@@ -123,6 +141,54 @@ const AssetLibrary: React.FC = () => {
       alert(result.success ? `Connection OK: ${result.content_type}` : `Failed: ${result.error}`);
     } catch (err) {
       alert('Test failed — could not reach the API endpoint.');
+    }
+  };
+
+  const openEdit = (asset: Asset) => {
+    setEditAsset(asset);
+    setEditForm({
+      name: asset.name,
+      api_url: asset.api_url || '',
+      api_refresh_interval: asset.api_refresh_interval,
+      width: asset.width,
+      height: asset.height,
+      position_x: asset.position_x,
+      position_y: asset.position_y,
+      opacity: asset.opacity,
+      description: asset.description || '',
+    });
+    setEditOpen(true);
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setEditAsset(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editAsset) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {
+        name: editForm.name,
+        position_x: editForm.position_x,
+        position_y: editForm.position_y,
+        opacity: editForm.opacity,
+        description: editForm.description || null,
+        width: editForm.width,
+        height: editForm.height,
+      };
+      if (editAsset.type === 'api_image') {
+        payload.api_url = editForm.api_url || null;
+        payload.api_refresh_interval = editForm.api_refresh_interval;
+      }
+      const response = await api.put(`/assets/${editAsset.id}`, payload);
+      setAssets(prev => prev.map(a => a.id === editAsset.id ? response.data : a));
+      closeEdit();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to update asset');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -249,6 +315,13 @@ const AssetLibrary: React.FC = () => {
 
                   {/* Actions */}
                   <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => openEdit(asset)}
+                      title="Edit"
+                      className="p-1.5 bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white rounded transition-colors"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </button>
                     {asset.canvas_project_id && (
                       <button
                         onClick={() => navigate(`/assets/editor/${asset.canvas_project_id}`)}
@@ -289,6 +362,167 @@ const AssetLibrary: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* Edit Asset SlideOver */}
+      <SlideOver
+        isOpen={editOpen}
+        onClose={closeEdit}
+        title={editAsset?.name || 'Edit Asset'}
+        subtitle={editAsset ? `${getAssetTypeIcon(editAsset.type)} ${editAsset.type.replace('_', ' ')}` : ''}
+        footer={
+          <div className="flex gap-3">
+            <button
+              onClick={closeEdit}
+              className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              disabled={saving || !editForm.name.trim()}
+              className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        }
+      >
+        {editAsset && (
+          <div className="space-y-5">
+            {/* Preview */}
+            {(() => {
+              const url = getAssetImageUrl(editAsset);
+              return url ? (
+                <div className="bg-dark-900 border border-dark-700 rounded-lg overflow-hidden">
+                  <img src={url} alt={editAsset.name} className="w-full object-contain max-h-40" />
+                </div>
+              ) : null;
+            })()}
+
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Name</label>
+              <input
+                type="text"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            {/* API URL (only for api_image) */}
+            {editAsset.type === 'api_image' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">API URL</label>
+                  <input
+                    type="text"
+                    value={editForm.api_url}
+                    onChange={(e) => setEditForm({ ...editForm, api_url: e.target.value })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Refresh Interval: {editForm.api_refresh_interval}s
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.api_refresh_interval}
+                    min={1}
+                    max={3600}
+                    onChange={(e) => setEditForm({ ...editForm, api_refresh_interval: parseInt(e.target.value) || 30 })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Google Drawing URL */}
+            {editAsset.type === 'google_drawing' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Google Drawing URL</label>
+                <p className="text-xs text-gray-500 mb-1">
+                  The file_path for Google Drawings is set at creation and cannot be changed here.
+                </p>
+                <div className="px-3 py-2 bg-dark-900 border border-dark-700 rounded-md text-gray-400 text-sm font-mono truncate">
+                  {editAsset.file_path || 'Not set'}
+                </div>
+              </div>
+            )}
+
+            {/* Dimensions */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Dimensions (px)</label>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-0.5">Width</label>
+                  <input
+                    type="number"
+                    value={editForm.width ?? ''}
+                    min={1}
+                    max={3840}
+                    placeholder="Auto"
+                    onChange={(e) => setEditForm({ ...editForm, width: e.target.value ? parseInt(e.target.value) : null })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 mb-0.5">Height</label>
+                  <input
+                    type="number"
+                    value={editForm.height ?? ''}
+                    min={1}
+                    max={2160}
+                    placeholder="Auto"
+                    onChange={(e) => setEditForm({ ...editForm, height: e.target.value ? parseInt(e.target.value) : null })}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Position */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Position</label>
+              <PositionPicker
+                positionX={editForm.position_x}
+                positionY={editForm.position_y}
+                onChange={(x, y) => setEditForm({ ...editForm, position_x: x, position_y: y })}
+                showRawInputs
+              />
+            </div>
+
+            {/* Opacity */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Opacity: {Math.round(editForm.opacity * 100)}%
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={editForm.opacity}
+                onChange={(e) => setEditForm({ ...editForm, opacity: parseFloat(e.target.value) })}
+                className="w-full accent-primary-500"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+              <textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                rows={2}
+                className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                placeholder="Optional description..."
+              />
+            </div>
+          </div>
+        )}
+      </SlideOver>
     </div>
   );
 };
