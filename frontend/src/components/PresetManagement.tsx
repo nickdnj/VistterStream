@@ -440,11 +440,22 @@ const PresetManagement: React.FC = () => {
       })}
 
       {showCaptureModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-md space-y-4">
-            <h3 className="text-xl font-bold text-white">📸 Capture Preset</h3>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+              <h3 className="text-xl font-bold text-white">Capture Preset</h3>
+              <button
+                onClick={() => { setShowCaptureModal(false); setPresetName(''); setLiveStatus({ available: false }); setStatusError(null); }}
+                className="text-gray-400 hover:text-white transition-colors"
+                disabled={capturing}
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-            <div className="space-y-4">
+            <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Camera
@@ -498,140 +509,153 @@ const PresetManagement: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
 
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => {
-                  setShowCaptureModal(false);
-                  setPresetName('');
-                  setLiveStatus({ available: false });
-                  setStatusError(null);
-                }}
-                className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
-                disabled={capturing}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCapturePreset}
-                disabled={capturing || !presetName.trim()}
-                className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
-                  capturing || !presetName.trim()
-                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                    : 'bg-primary-600 hover:bg-primary-700 text-white'
-                }`}
-              >
-                {capturing ? '⏳ Capturing...' : '📸 Capture'}
-              </button>
+              <div className="flex gap-3 pt-4 border-t border-dark-700">
+                <button
+                  onClick={() => {
+                    setShowCaptureModal(false);
+                    setPresetName('');
+                    setLiveStatus({ available: false });
+                    setStatusError(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
+                  disabled={capturing}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCapturePreset}
+                  disabled={capturing || !presetName.trim()}
+                  className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+                    capturing || !presetName.trim()
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-primary-600 hover:bg-primary-700 text-white'
+                  }`}
+                >
+                  {capturing ? 'Capturing...' : 'Capture'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {editorState && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-800 rounded-lg p-6 w-full max-w-lg space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white">🛠 Edit PTZ Coordinates</h3>
-              <span className="text-sm text-gray-400">
-                {getCameraName(editorState.preset.camera_id)} • {editorState.preset.name}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className="flex flex-col text-sm text-gray-300">
-                <span className="mb-1 uppercase tracking-wide text-xs text-gray-500">Pan</span>
-                <input
-                  type="number"
-                  min={-180}
-                  max={180}
-                  step={0.001}
-                  value={editorState.pan}
-                  onChange={(event) =>
-                    setEditorState((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            pan: event.target.value,
-                          }
-                        : prev
-                    )
-                  }
-                  className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </label>
-
-              <label className="flex flex-col text-sm text-gray-300">
-                <span className="mb-1 uppercase tracking-wide text-xs text-gray-500">Tilt</span>
-                <input
-                  type="number"
-                  min={-90}
-                  max={90}
-                  step={0.001}
-                  value={editorState.tilt}
-                  onChange={(event) =>
-                    setEditorState((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            tilt: event.target.value,
-                          }
-                        : prev
-                    )
-                  }
-                  className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </label>
-
-              <label className="flex flex-col text-sm text-gray-300">
-                <span className="mb-1 uppercase tracking-wide text-xs text-gray-500">Zoom</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.01}
-                  value={editorState.zoom}
-                  onChange={(event) =>
-                    setEditorState((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            zoom: event.target.value,
-                          }
-                        : prev
-                    )
-                  }
-                  className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
-              </label>
-            </div>
-
-            {editorError && (
-              <div className="bg-red-900 bg-opacity-30 border border-red-700 rounded-md p-3 text-sm text-red-300">
-                {editorError}
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-800 rounded-lg border border-dark-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-dark-800 px-6 py-4 border-b border-dark-700 flex items-center justify-between z-10">
+              <div>
+                <h3 className="text-xl font-bold text-white">Edit PTZ Coordinates</h3>
+                <span className="text-sm text-gray-400">
+                  {getCameraName(editorState.preset.camera_id)} &bull; {editorState.preset.name}
+                </span>
               </div>
-            )}
-
-            <div className="flex gap-3 justify-end">
               <button
                 onClick={closeEditor}
                 disabled={editorSaving}
-                className="px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
+                className="text-gray-400 hover:text-white transition-colors"
               >
-                Cancel
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-              <button
-                onClick={handleEditorSave}
-                disabled={editorSaving}
-                className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                  editorSaving
-                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
-              >
-                {editorSaving ? '💾 Saving…' : '💾 Save'}
-              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label className="flex flex-col text-sm text-gray-300">
+                  <span className="mb-1 uppercase tracking-wide text-xs text-gray-500">Pan</span>
+                  <input
+                    type="number"
+                    min={-180}
+                    max={180}
+                    step={0.001}
+                    value={editorState.pan}
+                    onChange={(event) =>
+                      setEditorState((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              pan: event.target.value,
+                            }
+                          : prev
+                      )
+                    }
+                    className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </label>
+
+                <label className="flex flex-col text-sm text-gray-300">
+                  <span className="mb-1 uppercase tracking-wide text-xs text-gray-500">Tilt</span>
+                  <input
+                    type="number"
+                    min={-90}
+                    max={90}
+                    step={0.001}
+                    value={editorState.tilt}
+                    onChange={(event) =>
+                      setEditorState((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              tilt: event.target.value,
+                            }
+                          : prev
+                      )
+                    }
+                    className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </label>
+
+                <label className="flex flex-col text-sm text-gray-300">
+                  <span className="mb-1 uppercase tracking-wide text-xs text-gray-500">Zoom</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.01}
+                    value={editorState.zoom}
+                    onChange={(event) =>
+                      setEditorState((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              zoom: event.target.value,
+                            }
+                          : prev
+                      )
+                    }
+                    className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </label>
+              </div>
+
+              {editorError && (
+                <div className="bg-red-900 bg-opacity-30 border border-red-700 rounded-md p-3 text-sm text-red-300">
+                  {editorError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4 border-t border-dark-700">
+                <button
+                  onClick={closeEditor}
+                  disabled={editorSaving}
+                  className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 text-white rounded-md font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditorSave}
+                  disabled={editorSaving}
+                  className={`flex-1 px-4 py-2 rounded-md font-medium transition-colors ${
+                    editorSaving
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-primary-600 hover:bg-primary-700 text-white'
+                  }`}
+                >
+                  {editorSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
