@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
 interface SlideOverProps {
@@ -21,6 +21,23 @@ const SlideOver: React.FC<SlideOverProps> = ({
   footer,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [animateIn, setAnimateIn] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setVisible(true);
+      // Trigger slide-in on next frame so the initial translate-x-full is painted first
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setAnimateIn(true));
+      });
+    } else {
+      setAnimateIn(false);
+      // Wait for slide-out animation to finish before unmounting
+      const timer = setTimeout(() => setVisible(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -36,13 +53,15 @@ const SlideOver: React.FC<SlideOverProps> = ({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!visible) return null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 transition-opacity"
+        className={`absolute inset-0 bg-black transition-opacity duration-300 ${
+          animateIn ? 'opacity-50' : 'opacity-0'
+        }`}
         onClick={onClose}
       />
 
@@ -50,7 +69,9 @@ const SlideOver: React.FC<SlideOverProps> = ({
       <div className="absolute inset-y-0 right-0 flex">
         <div
           ref={panelRef}
-          className={`relative w-screen ${width} transform transition-transform duration-300 translate-x-0`}
+          className={`relative w-screen ${width} transform transition-transform duration-300 ease-in-out ${
+            animateIn ? 'translate-x-0' : 'translate-x-full'
+          }`}
         >
           <div className="flex h-full flex-col bg-dark-800 border-l border-dark-700 shadow-xl">
             {/* Header */}

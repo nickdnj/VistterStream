@@ -73,6 +73,60 @@ def get_template_detail(template_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Template not found")
 
 
+@router.post("/test-connection")
+async def test_template_connection(
+    data: TemplateInstanceCreate,
+    db: Session = Depends(get_db),
+):
+    """Dry-run a template instantiation: validate config and test the generated URL.
+
+    Does NOT create any asset or instance — just checks that the config is valid
+    and (for api_image templates) that the generated URL is reachable.
+    """
+    import httpx as _httpx
+
+    try:
+        config_values = json.loads(data.config_values)
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=400, detail="config_values must be valid JSON")
+
+    try:
+        template = get_template(db, data.template_id)
+    except TemplateNotFoundError:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    config_schema = json.loads(template.config_schema)
+    default_config = json.loads(template.default_config)
+
+    try:
+        from services.template_service import _validate_config, _merge_config, _build_api_url, _load_definition_meta
+        _validate_config(config_values, config_schema)
+    except ConfigValidationError as exc:
+        return {"success": False, "message": str(exc)}
+
+    merged = _merge_config(config_values, default_config)
+    defn = _load_definition_meta(template)
+    asset_type = defn.get("asset_type", "static_image")
+
+    if asset_type == "api_image":
+        api_url_template = defn.get("api_url_template", "")
+        api_url = _build_api_url(api_url_template, merged)
+
+        if not _validate_url(api_url, allow_internal=True):
+            return {"success": False, "message": f"Generated URL is blocked by SSRF policy: {api_url}"}
+
+        try:
+            async with _httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(api_url)
+                resp.raise_for_status()
+                ct = resp.headers.get("content-type", "")
+                return {"success": True, "message": f"Connection OK: {ct}", "url": api_url}
+        except Exception as e:
+            return {"success": False, "message": f"Failed to reach URL: {e}", "url": api_url}
+
+    return {"success": True, "message": f"Config valid (asset_type={asset_type}, no URL to test)"}
+
+
 @router.post("/instances", response_model=TemplateInstanceRead)
 def create_instance(
     data: TemplateInstanceCreate,

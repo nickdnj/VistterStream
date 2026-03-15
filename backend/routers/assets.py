@@ -203,21 +203,31 @@ async def upload_asset_file(
 ):
     """Upload an asset file (image or video)"""
 
-    # Validate file type
+    # Validate file type — fall back to extension if content_type is generic
+    _EXT_TO_MIME = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".webp": "image/webp", ".avif": "image/avif",
+        ".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
+    }
+    content_type = file.content_type
+    if content_type in (None, "application/octet-stream") and file.filename:
+        ext = Path(file.filename).suffix.lower()
+        content_type = _EXT_TO_MIME.get(ext, content_type)
+
     allowed_image_types = {"image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp", "image/avif"}
     allowed_video_types = {"video/mp4", "video/mpeg", "video/quicktime", "video/webm"}
 
     if asset_type == "static_image":
-        if file.content_type not in allowed_image_types:
+        if content_type not in allowed_image_types:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid image type: {file.content_type}. Allowed: PNG, JPEG, GIF, WebP, AVIF"
+                detail=f"Invalid image type: {content_type}. Allowed: PNG, JPEG, GIF, WebP, AVIF"
             )
     elif asset_type == "video":
-        if file.content_type not in allowed_video_types:
+        if content_type not in allowed_video_types:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid video type: {file.content_type}. Allowed: MP4, MOV, WebM"
+                detail=f"Invalid video type: {content_type}. Allowed: MP4, MOV, WebM"
             )
     else:
         raise HTTPException(status_code=400, detail=f"Invalid asset type: {asset_type}")
@@ -251,7 +261,7 @@ async def upload_asset_file(
 
         # Auto-convert non-PNG images (AVIF, WebP, GIF) to PNG for FFmpeg compatibility
         final_filename = unique_filename
-        if asset_type == "static_image" and file.content_type not in ("image/png", "image/jpeg", "image/jpg"):
+        if asset_type == "static_image" and content_type not in ("image/png", "image/jpeg", "image/jpg"):
             try:
                 from PIL import Image as PILImage
                 with PILImage.open(file_path) as img:
@@ -275,7 +285,7 @@ async def upload_asset_file(
             "filename": final_filename,
             "original_filename": file.filename,
             "size": file_size,
-            "content_type": file.content_type
+            "content_type": content_type
         }
 
     except HTTPException:
@@ -297,7 +307,9 @@ async def test_asset(asset_id: int, db: Session = Depends(get_db)):
     if asset.type == "api_image":
         if not asset.api_url:
             raise HTTPException(status_code=400, detail="No API URL configured")
-        if not _validate_url(asset.api_url):
+        # Template-generated assets may target internal hosts (e.g. host.docker.internal)
+        allow_internal = asset.template_instance_id is not None
+        if not _validate_url(asset.api_url, allow_internal=allow_internal):
             raise HTTPException(status_code=400, detail="Asset API URL is not allowed (blocked scheme or address)")
 
         try:

@@ -1,4 +1,4 @@
-import { Canvas } from 'fabric';
+import { Canvas, classRegistry } from 'fabric';
 
 /**
  * Manages undo/redo history for a Fabric.js Canvas.
@@ -91,7 +91,44 @@ export class CanvasHistoryManager {
 
     this.isRestoring = true;
     try {
-      await this.canvas.loadFromJSON(json);
+      // Fabric.js v6 bug workaround: canvas.loadFromJSON() internally calls
+      // clear() → getContext() which crashes when the internal `elements`
+      // property is undefined ("Cannot read properties of undefined (reading 'ctx')").
+      //
+      // Instead of loadFromJSON, we manually remove all objects and
+      // reconstruct them from the serialised JSON using the class registry.
+      // This avoids the problematic clear() call entirely.
+
+      // 1. Remove all existing objects
+      const existing = this.canvas.getObjects();
+      if (existing.length > 0) {
+        this.canvas.remove(...existing);
+      }
+
+      // 2. Parse the saved state
+      const parsed = JSON.parse(json);
+
+      // 3. Reconstruct and add objects from serialised data
+      if (parsed.objects && parsed.objects.length > 0) {
+        for (const objData of parsed.objects) {
+          try {
+            const typeName = objData.type;
+            const klass = classRegistry.getClass(typeName);
+            if (klass && typeof (klass as any).fromObject === 'function') {
+              const obj = await (klass as any).fromObject(objData);
+              this.canvas.add(obj);
+            }
+          } catch (objErr) {
+            console.warn('CanvasHistoryManager: failed to restore object', objData.type, objErr);
+          }
+        }
+      }
+
+      // 4. Restore background colour if present
+      if (parsed.background != null) {
+        this.canvas.backgroundColor = parsed.background;
+      }
+
       this.canvas.requestRenderAll();
     } finally {
       this.isRestoring = false;

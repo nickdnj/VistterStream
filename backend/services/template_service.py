@@ -231,7 +231,7 @@ def instantiate_template(
             width=width,
             height=height,
             opacity=opacity,
-            description=f"Created from template: {template.name} (upload required)",
+            description=f"Created from template: {template.name}. Upload a logo image via the Edit panel to complete this asset.",
             created_at=datetime.now(timezone.utc),
         )
 

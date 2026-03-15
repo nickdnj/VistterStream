@@ -347,17 +347,15 @@ const TemplateCatalog: React.FC = () => {
                 onClick={async () => {
                   setTestResult(null);
                   try {
-                    // Build a test URL from config
-                    const resp = await api.post('/templates/instances', {
+                    const resp = await api.post('/templates/test-connection', {
                       template_id: selectedTemplate.id,
                       config_values: JSON.stringify(configValues),
                       name: assetName,
                       position_x: positionX,
                       position_y: positionY,
                       opacity,
-                      dry_run: true, // Just test, don't create
                     });
-                    setTestResult({ success: true, message: 'Connection successful' });
+                    setTestResult({ success: resp.data.success, message: resp.data.message });
                   } catch (err: any) {
                     setTestResult({ success: false, message: err.response?.data?.detail || 'Connection failed' });
                   }
