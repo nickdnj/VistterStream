@@ -122,20 +122,21 @@ const CanvasEditorPage: React.FC = () => {
     if (!historyRef.current) return;
     await historyRef.current.undo();
     syncHistoryCounts();
-    syncLayers();
     setSelectedObject(null);
     isDirtyRef.current = true;
     setSaveStatus('unsaved');
+    // Delay layer sync to ensure canvas objects are fully updated after restore
+    requestAnimationFrame(() => syncLayers());
   }, [syncHistoryCounts, syncLayers]);
 
   const handleRedo = useCallback(async () => {
     if (!historyRef.current) return;
     await historyRef.current.redo();
     syncHistoryCounts();
-    syncLayers();
     setSelectedObject(null);
     isDirtyRef.current = true;
     setSaveStatus('unsaved');
+    requestAnimationFrame(() => syncLayers());
   }, [syncHistoryCounts, syncLayers]);
 
   // ---- Image tool ----
@@ -277,24 +278,30 @@ const CanvasEditorPage: React.FC = () => {
 
   const initHistory = useCallback(() => {
     const canvas = canvasRef.current?.getCanvas();
-    if (canvas && !historyRef.current) {
-      historyRef.current = new CanvasHistoryManager(canvas);
-      syncHistoryCounts();
-    }
+    if (!canvas) return;
+    if (historyRef.current) return; // already initialised
+    historyRef.current = new CanvasHistoryManager(() => canvasRef.current?.getCanvas() ?? null);
+    syncHistoryCounts();
   }, [syncHistoryCounts]);
 
   // ---- Load or create project ----
 
   useEffect(() => {
+    let cancelled = false;
+
     const init = async () => {
+      if (cancelled) return;
       setLoading(true);
       try {
-        if (id === 'new') {
+        // id is undefined when matched via /assets/editor/new (literal route),
+        // or 'new' if matched via /assets/editor/:id — handle both.
+        if (!id || id === 'new') {
           // Create a new project
           const resp = await api.post('/canvas-projects', {
             name: `Canvas ${new Date().toLocaleDateString()}`,
             canvas_json: JSON.stringify({ version: '6.0.0', objects: [] }),
           });
+          if (cancelled) return;
           const newProject = resp.data;
           projectIdRef.current = newProject.id;
           setProject(newProject);
@@ -307,6 +314,7 @@ const CanvasEditorPage: React.FC = () => {
           const localData = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${pid}`);
 
           const resp = await api.get(`/canvas-projects/${pid}`);
+          if (cancelled) return;
           const loadedProject = resp.data;
           setProject(loadedProject);
 
@@ -330,17 +338,23 @@ const CanvasEditorPage: React.FC = () => {
           initHistory();
         }
       } catch (err) {
+        if (cancelled) return;
         console.error('Failed to load canvas project:', err);
         alert('Failed to load canvas project.');
         navigate('/assets');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     // Small delay to ensure canvas ref is ready
     const t = setTimeout(init, 100);
-    return () => clearTimeout(t);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      // Reset history on cleanup (StrictMode remount creates a new canvas)
+      historyRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 

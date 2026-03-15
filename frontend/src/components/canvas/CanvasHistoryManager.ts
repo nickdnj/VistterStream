@@ -3,22 +3,23 @@ import { Canvas, classRegistry } from 'fabric';
 /**
  * Manages undo/redo history for a Fabric.js Canvas.
  *
+ * Uses a canvas getter function instead of a direct reference to handle
+ * React StrictMode remounts where the Canvas instance changes.
+ *
  * Usage:
- *   const history = new CanvasHistoryManager(canvas);
+ *   const history = new CanvasHistoryManager(() => canvasRef.current?.getCanvas());
  *   history.saveState();          // after every meaningful change
  *   history.undo() / history.redo();
- *
- * Internally prevents re-entrant saves when restoring state.
  */
 export class CanvasHistoryManager {
-  private canvas: Canvas;
+  private getCanvas: () => Canvas | null | undefined;
   private history: string[] = [];
   private currentIndex: number = -1;
   private maxHistory: number = 50;
   private isRestoring: boolean = false;
 
-  constructor(canvas: Canvas) {
-    this.canvas = canvas;
+  constructor(getCanvas: () => Canvas | null | undefined) {
+    this.getCanvas = getCanvas;
     // Save the initial blank state
     this.saveState();
   }
@@ -30,7 +31,10 @@ export class CanvasHistoryManager {
   saveState(): void {
     if (this.isRestoring) return;
 
-    const json = JSON.stringify(this.canvas.toJSON());
+    const canvas = this.getCanvas();
+    if (!canvas) return;
+
+    const json = JSON.stringify(canvas.toJSON());
 
     // If we are not at the end of the stack, discard any redo states
     if (this.currentIndex < this.history.length - 1) {
@@ -89,20 +93,19 @@ export class CanvasHistoryManager {
     const json = this.history[this.currentIndex];
     if (!json) return;
 
+    const canvas = this.getCanvas();
+    if (!canvas) return;
+
     this.isRestoring = true;
     try {
       // Fabric.js v6 bug workaround: canvas.loadFromJSON() internally calls
-      // clear() → getContext() which crashes when the internal `elements`
-      // property is undefined ("Cannot read properties of undefined (reading 'ctx')").
-      //
-      // Instead of loadFromJSON, we manually remove all objects and
-      // reconstruct them from the serialised JSON using the class registry.
-      // This avoids the problematic clear() call entirely.
+      // clear() → getContext() which can crash. Instead, manually remove all
+      // objects and reconstruct them from the serialised JSON.
 
-      // 1. Remove all existing objects
-      const existing = this.canvas.getObjects();
+      // 1. Remove all existing objects (clone — getObjects() is a live array)
+      const existing = [...canvas.getObjects()];
       if (existing.length > 0) {
-        this.canvas.remove(...existing);
+        canvas.remove(...existing);
       }
 
       // 2. Parse the saved state
@@ -116,7 +119,7 @@ export class CanvasHistoryManager {
             const klass = classRegistry.getClass(typeName);
             if (klass && typeof (klass as any).fromObject === 'function') {
               const obj = await (klass as any).fromObject(objData);
-              this.canvas.add(obj);
+              canvas.add(obj);
             }
           } catch (objErr) {
             console.warn('CanvasHistoryManager: failed to restore object', objData.type, objErr);
@@ -126,10 +129,10 @@ export class CanvasHistoryManager {
 
       // 4. Restore background colour if present
       if (parsed.background != null) {
-        this.canvas.backgroundColor = parsed.background;
+        canvas.backgroundColor = parsed.background;
       }
 
-      this.canvas.requestRenderAll();
+      canvas.requestRenderAll();
     } finally {
       this.isRestoring = false;
     }
