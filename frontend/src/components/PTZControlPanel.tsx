@@ -172,8 +172,8 @@ const PTZControlPanel: React.FC<PTZControlPanelProps> = ({ camera, onClose }) =>
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-dark-900/95 flex items-center justify-center">
-      <div className="w-full max-w-6xl mx-4 bg-dark-800 rounded-xl border border-dark-600 shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-dark-900 flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'rgba(15, 23, 42, 0.95)' }}>
+      <div className="w-full max-w-6xl mx-4 bg-dark-800 rounded-xl border border-dark-600 shadow-2xl overflow-hidden flex flex-col" style={{ maxHeight: '95vh' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-dark-600 flex-shrink-0">
           <h2 className="text-xl font-bold text-white">PTZ Control: {camera.name}</h2>
@@ -186,10 +186,10 @@ const PTZControlPanel: React.FC<PTZControlPanelProps> = ({ camera, onClose }) =>
         </div>
 
         {/* Body */}
-        <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-y-auto lg:overflow-hidden" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
           {/* Left: Live Preview */}
-          <div className="lg:w-[65%] p-4 flex flex-col min-h-0">
-            <div className="relative bg-black rounded-lg overflow-hidden flex-1 min-h-[300px]">
+          <div className="lg:w-2/3 p-4 flex flex-col min-h-0 shrink-0">
+            <div className="relative bg-black rounded-lg overflow-hidden flex-1" style={{ minHeight: '200px' }}>
               {liveSnapshot ? (
                 <img
                   src={liveSnapshot}
@@ -218,7 +218,7 @@ const PTZControlPanel: React.FC<PTZControlPanelProps> = ({ camera, onClose }) =>
           </div>
 
           {/* Right: Controls & Presets */}
-          <div className="lg:w-[35%] border-t lg:border-t-0 lg:border-l border-dark-600 p-4 flex flex-col gap-5 overflow-y-auto min-h-0">
+          <div className="lg:w-1/3 border-t lg:border-t-0 lg:border-l border-dark-600 p-4 flex flex-col gap-5 lg:overflow-y-auto min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
             {/* D-Pad */}
             <div>
               <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Direction</h3>
@@ -320,7 +320,7 @@ const PTZControlPanel: React.FC<PTZControlPanelProps> = ({ camera, onClose }) =>
                 </h3>
               </div>
 
-              <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0 max-h-[200px]">
+              <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0" style={{ maxHeight: '200px' }}>
                 {presets.length === 0 ? (
                   <div className="text-sm text-gray-500 text-center py-4">No presets saved</div>
                 ) : (
