@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { cameraService, CameraWithStatus } from '../services/cameraService';
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon, PlayIcon, StopIcon, XMarkIcon, DocumentDuplicateIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon, TrashIcon, DocumentDuplicateIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import PTZControlPanel from './PTZControlPanel';
 import OverlayPreviewPanel, { CueKey, OverlayPositionUpdate, OverlayInfo } from './timeline/OverlayPreviewPanel';
 
@@ -310,6 +310,7 @@ const TimelineEditor: React.FC = () => {
       setLoading(false);
     };
     loadAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Save zoom level to sessionStorage whenever it changes
@@ -448,6 +449,7 @@ const TimelineEditor: React.FC = () => {
       console.log('⚠️ Found and auto-fixed cues extending beyond timeline duration');
       setSelectedTimeline(validatedTimeline);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTimeline?.id]); // Only run when timeline changes, not on every render
 
   useEffect(() => {
@@ -472,6 +474,7 @@ const TimelineEditor: React.FC = () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draggingCue, resizingCue, selectedTimeline]);
 
   const loadTimelines = async () => {
@@ -638,50 +641,6 @@ const TimelineEditor: React.FC = () => {
     
     setOrder(order);
     setContextMenu(null);
-  };
-
-  const addCueToTimeline = (trackIndex: number, camera: Camera, preset?: Preset) => {
-    if (!selectedTimeline) return;
-
-    const track = selectedTimeline.tracks[trackIndex];
-    const lastCue = track.cues[track.cues.length - 1];
-    const newStartTime = lastCue ? lastCue.start_time + lastCue.duration : 0;
-    
-    // Constrain to timeline bounds
-    const defaultDuration = 10;
-    
-    // Check if there's any room left in the timeline
-    if (newStartTime >= selectedTimeline.duration) {
-      alert('⚠️ No room left in timeline! The timeline is full.');
-      return;
-    }
-    
-    // Calculate actual duration that fits in remaining space
-    const remainingTime = selectedTimeline.duration - newStartTime;
-    const actualDuration = Math.min(defaultDuration, remainingTime);
-    
-    // Sanity check (should not happen given above check, but defensive programming)
-    if (actualDuration <= 0) {
-      alert('⚠️ Cannot add cue - no space remaining.');
-      return;
-    }
-
-    const newCue: Cue = {
-      cue_order: track.cues.length,
-      start_time: newStartTime,
-      duration: actualDuration,
-      action_type: 'show_camera',
-      action_params: {
-        camera_id: camera.id,
-        preset_id: preset?.id,
-        transition: 'cut'
-      },
-      transition_type: 'cut',
-      transition_duration: 0
-    };
-
-    track.cues.push(newCue);
-    setSelectedTimeline({ ...selectedTimeline });
   };
 
   const removeCue = (trackIndex: number, cueIndex: number) => {
@@ -1089,7 +1048,7 @@ const TimelineEditor: React.FC = () => {
 
       // Start timeline from the target position
       console.log(`▶️ Starting timeline from ${targetTime.toFixed(1)}s`);
-      const response = await api.post('/timeline-execution/start', {
+      await api.post('/timeline-execution/start', {
         timeline_id: selectedTimeline.id,
         destination_ids: selectedDestinations,
         start_position: targetTime
@@ -1141,24 +1100,6 @@ const TimelineEditor: React.FC = () => {
     } catch (error) {
       console.error('Failed to create timeline:', error);
       alert('Failed to create timeline');
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent, trackIndex: number) => {
-    e.preventDefault();
-    const data = JSON.parse(e.dataTransfer.getData('application/json'));
-    
-    if (data.type === 'camera') {
-      const camera = cameras.find(c => c.id === data.cameraId);
-      if (camera) {
-        addCueToTimeline(trackIndex, camera);
-      }
-    } else if (data.type === 'preset') {
-      const preset = presets.find(p => p.id === data.presetId);
-      const camera = cameras.find(c => c.id === data.cameraId);
-      if (camera && preset) {
-        addCueToTimeline(trackIndex, camera, preset);
-      }
     }
   };
 
@@ -1315,6 +1256,7 @@ const TimelineEditor: React.FC = () => {
     if (videoCue && videoCue.cue.action_params.camera_id) {
       fetchCameraSnapshot(videoCue.cue.action_params.camera_id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playheadTime, selectedTimeline]);
 
   // Compute current snapshot URL for overlay preview
@@ -1334,6 +1276,7 @@ const TimelineEditor: React.FC = () => {
     // Fall back to live camera snapshot
     const camId = videoCue.cue.action_params.camera_id;
     return camId ? cameraSnapshots[camId] ?? null : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTimeline, playheadTime, cameraSnapshots, presets]);
 
   // Compute overlay info for preview panel
@@ -1356,6 +1299,7 @@ const TimelineEditor: React.FC = () => {
         } as OverlayInfo;
       })
       .filter((o): o is OverlayInfo => o !== null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTimeline, playheadTime, assets]);
 
   // Update overlay position/size/opacity per-cue

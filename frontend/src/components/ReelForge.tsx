@@ -15,7 +15,6 @@ import {
   ExclamationCircleIcon,
   ArrowPathIcon,
   VideoCameraIcon,
-  EyeIcon,
   ArrowDownTrayIcon,
   ClipboardDocumentIcon,
   XMarkIcon,
@@ -419,15 +418,6 @@ const ReelForge: React.FC = () => {
     } catch (err) {
       console.error('Failed to execute capture:', err);
       setExecutingQueueId(null);
-    }
-  };
-
-  const handleRetryQueue = async (queueId: number) => {
-    try {
-      await api.post(`/reelforge/queue/${queueId}/retry`);
-      loadData();
-    } catch (err) {
-      console.error('Failed to retry queue item:', err);
     }
   };
 

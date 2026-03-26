@@ -431,7 +431,7 @@ const AssetLibrary: React.FC = () => {
                 {/* Show current or replacement preview */}
                 <div className="bg-dark-900 border border-dark-700 rounded-lg overflow-hidden mb-2">
                   {replacePreview ? (
-                    <img src={replacePreview} alt="New image" className="w-full object-contain max-h-40" />
+                    <img src={replacePreview} alt="New upload preview" className="w-full object-contain max-h-40" />
                   ) : (() => {
                     const url = getAssetImageUrl(editAsset);
                     return url ? (

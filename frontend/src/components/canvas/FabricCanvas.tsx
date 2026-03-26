@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
-import { Canvas, Rect, Circle, Textbox, Line, FabricImage } from 'fabric';
+import { Canvas, Rect, Circle, Textbox, Line } from 'fabric';
 import type { FabricObject } from 'fabric';
 import type { ActiveTool } from './types';
 

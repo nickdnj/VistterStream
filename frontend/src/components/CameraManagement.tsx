@@ -19,7 +19,6 @@ const CameraManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingCamera, setEditingCamera] = useState<CameraWithStatus | null>(null);
-  const [testingCamera, setTestingCamera] = useState<number | null>(null);
   const [showStreamModal, setShowStreamModal] = useState(false);
   const [streamingCamera, setStreamingCamera] = useState<CameraWithStatus | null>(null);
   const [snapshots, setSnapshots] = useState<{[key: number]: string}>({});
@@ -29,13 +28,14 @@ const CameraManagement: React.FC = () => {
 
   useEffect(() => {
     loadCameras();
-    
+
     // Auto-refresh every 4 minutes to keep cameras online (5-min timeout)
     const interval = setInterval(() => {
       loadCameras();
     }, 4 * 60 * 1000); // 4 minutes
-    
+
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-refresh snapshot for live stream view
@@ -137,18 +137,6 @@ const CameraManagement: React.FC = () => {
     }
   };
 
-  const handleTestCamera = async (id: number) => {
-    setTestingCamera(id);
-    try {
-      const result = await cameraService.testCameraConnection(id);
-      alert(`Test Result: ${result.success ? 'Success' : 'Failed'}\n${result.message}`);
-    } catch (error) {
-      alert('Test failed: ' + error);
-    } finally {
-      setTestingCamera(null);
-    }
-  };
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'online':
@@ -159,19 +147,6 @@ const CameraManagement: React.FC = () => {
         return <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500" />;
       default:
         return <XCircleIcon className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'online':
-        return 'bg-green-500';
-      case 'offline':
-        return 'bg-red-500';
-      case 'error':
-        return 'bg-yellow-500';
-      default:
-        return 'bg-gray-500';
     }
   };
 

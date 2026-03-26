@@ -57,21 +57,6 @@ interface PlatformPreset {
   description: string;
 }
 
-const TooltipIcon: React.FC<{ label: string; tooltip: string }> = ({ label, tooltip }) => (
-  <div className="relative group flex items-center justify-center">
-    <button
-      type="button"
-      className="text-gray-400 hover:text-gray-200 focus:text-gray-200 focus:outline-none"
-      aria-label={tooltip}
-    >
-      {label}
-    </button>
-    <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden w-64 -translate-x-1/2 rounded bg-black px-3 py-2 text-xs text-gray-100 shadow-lg group-hover:block group-focus-within:block">
-      {tooltip}
-    </div>
-  </div>
-);
-
 const StreamingDestinations: React.FC = () => {
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [presets, setPresets] = useState<Record<string, PlatformPreset>>({});
@@ -80,7 +65,7 @@ const StreamingDestinations: React.FC = () => {
   const [showStreamKey, setShowStreamKey] = useState<Record<number, boolean>>({});
   const pollingRef = useRef<Record<number, number>>({});
 
-  const [oauthEnvDraft, setOauthEnvDraft] = useState<{ clientId: string; clientSecret: string; redirectUri: string }>({
+  const [, setOauthEnvDraft] = useState<{ clientId: string; clientSecret: string; redirectUri: string }>({
     clientId: '',
     clientSecret: '',
     redirectUri: ''
@@ -371,7 +356,7 @@ const StreamingDestinations: React.FC = () => {
         enable_dvr: enableDvr
       });
 
-      const { broadcast_id, video_id, stream_id, stream_key, rtmp_url, studio_url, watch_url } = response.data;
+      const { broadcast_id, video_id, stream_id, stream_key } = response.data;
 
       alert(
         `Broadcast created successfully!\n\n` +
