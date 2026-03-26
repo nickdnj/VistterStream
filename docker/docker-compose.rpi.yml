@@ -127,6 +127,8 @@ services:
     # Cloudflared automatically reads TUNNEL_TOKEN from env_file
     # TUNNEL_TOKEN must be set in .env file (can be same value as CLOUDFLARE_TUNNEL_TOKEN)
     command: tunnel run
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
       - cloudflared_creds:/etc/cloudflared
