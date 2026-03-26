@@ -268,21 +268,44 @@ VistterStream/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/VistterStream.git
+git clone https://github.com/nickdnj/VistterStream.git
 cd VistterStream
 
-# Copy and configure environment
-cp env.sample .env
-# Edit .env with your settings
-
-# Start the system
-docker-compose up -d
-
-# Access the UI
-open http://localhost:3000
+# Run the setup script
+./setup.sh
 ```
 
+The setup script will:
+- Check prerequisites (Docker, rclone)
+- Ask: **fresh install** or **restore from backup**
+- Generate `.env` with secrets, or restore from Google Drive backup
+- Build and start all Docker services
+- Restore database and uploads if applicable
+
 ### Manual Installation
+
+```bash
+cp env.sample .env
+# Edit .env with your settings (JWT_SECRET_KEY, ENCRYPTION_KEY, CLOUDFLARE_TUNNEL_TOKEN)
+
+cd docker
+docker compose -f docker-compose.rpi.yml --env-file ../.env up -d --build
+```
+
+### Backup & Recovery
+
+Daily automated backup to Google Drive at 3 AM:
+- SQLite database snapshot (30-day retention)
+- Uploaded files (preset thumbnails, etc.)
+- `.env` configuration backup
+
+```bash
+# Manual backup
+./scripts/backup-to-gdrive.sh
+
+# Restore from backup on new hardware
+./setup.sh  # Choose option 2
+```
 
 See **[Docker Testing Guide](docs/Docker-Testing-Complete.md)** for advanced deployment options.
 
