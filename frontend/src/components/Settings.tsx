@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { authService } from '../services/authService';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,7 +22,9 @@ interface GeneralSettings {
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const location = useLocation();
+  const initialTab = (location.state as { tab?: SettingsTab } | undefined)?.tab || 'general';
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [isKilling, setIsKilling] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');

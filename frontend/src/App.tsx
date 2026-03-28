@@ -26,12 +26,12 @@ function App() {
                   <Routes>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/cameras" element={<Navigate to="/settings" replace />} />
+                    <Route path="/cameras" element={<Navigate to="/settings" state={{ tab: 'cameras' }} replace />} />
                     <Route path="/streams" element={<Navigate to="/timelines" replace />} />
                     <Route path="/timelines" element={<TimelineEditor />} />
                     <Route path="/reelforge" element={<ReelForge />} />
                     <Route path="/destinations" element={<StreamingDestinations />} />
-                    <Route path="/presets" element={<Navigate to="/settings" replace />} />
+                    <Route path="/presets" element={<Navigate to="/settings" state={{ tab: 'cameras' }} replace />} />
                     <Route path="/scheduler" element={<Navigate to="/settings" replace />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/assets" element={<AssetStudio />} />
