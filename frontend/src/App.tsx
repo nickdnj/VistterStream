@@ -7,6 +7,7 @@ import TimelineEditor from './components/TimelineEditor';
 import StreamingDestinations from './components/StreamingDestinations';
 import Settings from './components/Settings';
 import ReelForge from './components/ReelForge';
+import ShortForge from './components/ShortForge';
 import AssetStudio from './components/AssetStudio';
 import CanvasEditorPage from './components/canvas/CanvasEditorPage';
 import SpikeCanvasRoute from './components/spike/SpikeCanvasRoute';
@@ -30,6 +31,7 @@ function App() {
                     <Route path="/streams" element={<Navigate to="/timelines" replace />} />
                     <Route path="/timelines" element={<TimelineEditor />} />
                     <Route path="/reelforge" element={<ReelForge />} />
+                    <Route path="/shortforge" element={<ShortForge />} />
                     <Route path="/destinations" element={<StreamingDestinations />} />
                     <Route path="/presets" element={<Navigate to="/settings" state={{ tab: 'cameras' }} replace />} />
                     <Route path="/scheduler" element={<Navigate to="/settings" replace />} />

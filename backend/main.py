@@ -26,6 +26,7 @@ from middleware.audit import AuditMiddleware
 
 # Import routers
 from routers import cameras, auth, streams, status, timelines, timeline_execution, emergency, destinations, assets, scheduler, watchdog, settings, reelforge, canvas_projects, fonts, templates
+from routers import shortforge as shortforge_router
 from routers import presets as presets_router
 from routers import ptz as ptz_router
 
@@ -106,6 +107,15 @@ async def lifespan(app: FastAPI):
         logger.info("Template seeder complete: %d templates created/updated", count)
     except Exception as e:
         logger.warning("Failed to seed templates: %s", e)
+    # Start ShortForge scheduler (automated YouTube Shorts pipeline)
+    try:
+        logger.info("Starting ShortForge scheduler...")
+        from services.shortforge.scheduler import get_shortforge_scheduler
+        sf_scheduler = get_shortforge_scheduler()
+        await sf_scheduler.start()
+        logger.info("ShortForge scheduler started")
+    except Exception as e:
+        logger.warning("Failed to start ShortForge scheduler: %s", e)
     logger.info("All services started")
 
     yield
@@ -137,6 +147,15 @@ async def lifespan(app: FastAPI):
         from services.reelforge_capture_service import stop_reelforge_capture_service
         await stop_reelforge_capture_service()
         logger.info("ReelForge capture scheduler stopped")
+    except Exception:
+        pass
+    # Stop ShortForge scheduler
+    try:
+        logger.info("Stopping ShortForge scheduler...")
+        from services.shortforge.scheduler import get_shortforge_scheduler
+        sf_scheduler = get_shortforge_scheduler()
+        await sf_scheduler.stop()
+        logger.info("ShortForge scheduler stopped")
     except Exception:
         pass
     logger.info("All services stopped")
@@ -255,6 +274,7 @@ app.include_router(reelforge.router)  # ReelForge - automated social media conte
 app.include_router(templates.router)  # Asset Studio - Overlay templates & instances
 app.include_router(canvas_projects.router)  # Asset Studio - Canvas projects
 app.include_router(fonts.router)  # Asset Studio - Font management
+app.include_router(shortforge_router.router)  # ShortForge - Automated YouTube Shorts
 
 # Serve static files (React build)
 # Support both Vite (dist) and CRA (build)

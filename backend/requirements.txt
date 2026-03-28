@@ -16,7 +16,9 @@ aiohttp==3.13.3  # YouTube API async HTTP client for watchdog
 google-auth==2.49.0
 google-auth-oauthlib==1.3.0
 google-api-python-client==2.192.0  # YouTube Data API for Shorts publishing
-openai==2.26.0  # OpenAI API for ReelForge AI content generation
+openai==2.26.0  # OpenAI API for ReelForge/ShortForge AI content generation
+opencv-python-headless==4.11.0.86  # OpenCV for ShortForge moment detection (headless - no GUI deps)
+numpy==2.2.6  # Required by OpenCV
 cryptography==46.0.1  # Fernet encryption for secrets at rest
 bcrypt==5.0.0  # Password hashing (direct dependency)
 slowapi==0.1.9  # Rate limiting for FastAPI

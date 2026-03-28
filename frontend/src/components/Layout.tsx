@@ -63,7 +63,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         { name: 'Canvas Editor', href: '/assets/editor', icon: PaintBrushIcon },
       ],
     },
-    { name: 'ReelForge', href: '/reelforge', icon: SparklesIcon },
+    { name: 'ShortForge', href: '/shortforge', icon: SparklesIcon },
     { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ];
 
