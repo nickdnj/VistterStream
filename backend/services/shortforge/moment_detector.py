@@ -38,6 +38,8 @@ class MomentDetector:
         self._last_moment_time: float = 0
         self._http_client: Optional[httpx.AsyncClient] = None
         self._log_counter: int = 0
+        # HOG person detector (initialized lazily)
+        self._hog: Optional[cv2.HOGDescriptor] = None
         # Suppress httpx request logging (snapshot URL contains camera credentials)
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -96,6 +98,15 @@ class MomentDetector:
         )
 
         if score < threshold:
+            return None
+
+        # Person detection gate — reject frames containing people (privacy)
+        has_people = await asyncio.to_thread(self._detect_people, frame)
+        if has_people:
+            logger.info(
+                "ShortForge [preset %d]: moment rejected (people detected)",
+                preset_id,
+            )
             return None
 
         # Check cooldown (global, not per-preset)
@@ -183,6 +194,30 @@ class MomentDetector:
         best_score = scores[best_type]
 
         return (best_type, best_score)
+
+    def _detect_people(self, frame: np.ndarray) -> bool:
+        """Detect people in a frame using HOG + SVM. Returns True if people found."""
+        if self._hog is None:
+            self._hog = cv2.HOGDescriptor()
+            self._hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
+        # Downscale for speed (HOG is slow on full 1080p)
+        h, w = frame.shape[:2]
+        scale = 480 / max(h, w)
+        if scale < 1.0:
+            small = cv2.resize(frame, (int(w * scale), int(h * scale)))
+        else:
+            small = frame
+
+        rects, weights = self._hog.detectMultiScale(
+            small,
+            winStride=(8, 8),
+            padding=(4, 4),
+            scale=1.05,
+        )
+        # Filter weak detections
+        confident = [w for w in weights if w > 0.3]
+        return len(confident) > 0
 
     def _get_threshold(self, config: ShortForgeConfig, trigger_type: str) -> float:
         """Get the threshold for a trigger type from config."""
