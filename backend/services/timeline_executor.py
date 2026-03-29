@@ -980,8 +980,8 @@ class TimelineExecutor:
                             preset_id=preset_id,
                             snapshot_url=camera.snapshot_url,
                         )
-                    except Exception as e:
-                        logger.debug("ShortForge evaluate failed: %s", e)
+                    except Exception:
+                        logger.exception("ShortForge evaluate failed")
 
                 # Wait for cue duration
                 logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
