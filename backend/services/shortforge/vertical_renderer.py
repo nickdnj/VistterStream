@@ -108,13 +108,14 @@ async def render_vertical(
         cmd = [
             "ffmpeg", "-y",
             "-i", str(input_path),
+            # Silent audio track (YouTube requires audio) — must be before output options
+            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
             "-vf", filter_chain,
+            "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "23",
             "-pix_fmt", "yuv420p",
-            # Add silent audio track (YouTube requires audio)
-            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
             "-c:a", "aac",
             "-shortest",
             "-movflags", "+faststart",
