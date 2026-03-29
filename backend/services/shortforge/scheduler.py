@@ -288,8 +288,23 @@ class ShortForgeScheduler:
             finally:
                 db.close()
 
-            # Stage 4: Publish to YouTube
-            await publish_short(clip_id, config)
+            # Stage 4: Publish to YouTube (skip if no credentials configured)
+            if config.openai_api_key_enc:
+                # Only attempt publish if YouTube OAuth is set up
+                from models.database import ReelForgeSettings
+                pub_db = SessionLocal()
+                try:
+                    rf = pub_db.query(ReelForgeSettings).first()
+                    has_creds = rf and rf.youtube_access_token
+                finally:
+                    pub_db.close()
+
+                if has_creds:
+                    await publish_short(clip_id, config)
+                else:
+                    logger.info("Skipping publish for clip %d (no YouTube credentials)", clip_id)
+            else:
+                logger.info("Skipping publish for clip %d (no API key configured)", clip_id)
 
         except Exception:
             logger.exception("Pipeline failed for moment %d", moment_id)
