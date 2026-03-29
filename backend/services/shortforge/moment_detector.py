@@ -89,13 +89,11 @@ class MomentDetector:
         trigger_type, score = result
         threshold = self._get_threshold(config, trigger_type)
 
-        # Periodic logging (~1 per preset per few minutes)
-        self._log_counter += 1
-        if self._log_counter % 4 == 1:
-            logger.info(
-                "ShortForge [preset %d]: %s=%.4f (threshold=%.2f)",
-                preset_id, trigger_type, score, threshold,
-            )
+        # Log every evaluation (only ~8 per 2-minute timeline loop)
+        logger.info(
+            "ShortForge [preset %d]: %s=%.4f (threshold=%.2f)",
+            preset_id, trigger_type, score, threshold,
+        )
 
         if score < threshold:
             return None
