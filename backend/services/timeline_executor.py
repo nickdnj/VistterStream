@@ -988,24 +988,19 @@ class TimelineExecutor:
                 logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
                 await asyncio.sleep(duration)
 
-                # ShortForge: if a moment was detected, lock the preset and capture a clean clip
+                # ShortForge: if a moment was detected, capture clip in background
+                # (non-blocking — timeline continues immediately to avoid stalling the stream)
                 if sf_moment_id and camera.snapshot_url:
                     try:
                         from services.shortforge.clip_capture import get_clip_capture
                         capture = get_clip_capture()
-                        clip_duration = 25  # seconds of clean footage from this preset
-                        logger.info(f"🎬 ShortForge: locking preset '{preset.name if preset else preset_id}' for {clip_duration}s clip capture")
-                        # Use RTMP relay (avoids opening another RTSP session)
                         relay_url = f"rtmp://rtmp-relay:1935/live/camera_{camera.id}"
-                        clip_id = await capture.capture_direct(
+                        logger.info(f"🎬 ShortForge: capturing clip for moment {sf_moment_id} (background)")
+                        asyncio.create_task(capture.capture_direct(
                             moment_id=sf_moment_id,
                             rtsp_url=relay_url,
-                            duration=clip_duration,
-                        )
-                        if clip_id:
-                            logger.info(f"✅ ShortForge: clip {clip_id} captured, resuming timeline")
-                        else:
-                            logger.warning("ShortForge: clip capture failed, resuming timeline")
+                            duration=20,
+                        ))
                     except Exception:
                         logger.exception("ShortForge clip capture failed")
                 logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
