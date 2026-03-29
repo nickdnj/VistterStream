@@ -12,12 +12,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import os
+
 import cv2
 import numpy as np
 from sqlalchemy.orm import Session
 
 from models.database import SessionLocal
 from models.shortforge import Moment, ShortForgeConfig
+
+# Tell OpenCV's FFmpeg backend to use TCP for RTSP (required for many IP cameras)
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 logger = logging.getLogger(__name__)
 
@@ -66,13 +71,18 @@ class MomentDetector:
             return True
         if not self._rtsp_url:
             return False
+        logger.info("Opening RTSP stream for moment detection...")
         self._cap = cv2.VideoCapture(self._rtsp_url, cv2.CAP_FFMPEG)
+        if not self._cap.isOpened():
+            logger.warning("FFmpeg backend failed, trying auto-detect...")
+            self._cap = cv2.VideoCapture(self._rtsp_url)
         if not self._cap.isOpened():
             logger.error("Failed to open RTSP stream: %s", self._rtsp_url)
             self._cap = None
             return False
         # Set buffer size to 1 to always get the latest frame
         self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        logger.info("RTSP stream opened successfully for moment detection")
         return True
 
     async def _detection_loop(self, initial_config: ShortForgeConfig):
