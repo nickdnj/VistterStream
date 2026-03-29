@@ -222,7 +222,6 @@ class ClipCapture:
 
             cmd = [
                 "ffmpeg", "-y",
-                "-rtsp_transport", "tcp",
                 "-i", rtsp_url,
                 "-t", str(duration),
                 "-c:v", "copy",

@@ -995,9 +995,11 @@ class TimelineExecutor:
                         capture = get_clip_capture()
                         clip_duration = 25  # seconds of clean footage from this preset
                         logger.info(f"🎬 ShortForge: locking preset '{preset.name if preset else preset_id}' for {clip_duration}s clip capture")
+                        # Use RTMP relay (avoids opening another RTSP session)
+                        relay_url = f"rtmp://rtmp-relay:1935/live/camera_{camera.id}"
                         clip_id = await capture.capture_direct(
                             moment_id=sf_moment_id,
-                            rtsp_url=self._build_rtsp_url(camera),
+                            rtsp_url=relay_url,
                             duration=clip_duration,
                         )
                         if clip_id:
