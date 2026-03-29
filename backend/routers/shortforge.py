@@ -375,6 +375,51 @@ async def update_config(
     return await get_config(db=db, current_user=current_user)
 
 
+@router.get("/clips/{clip_id}/video")
+async def stream_clip_video(
+    clip_id: int,
+    rendered: bool = True,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Stream a clip's video file (rendered vertical or raw horizontal)."""
+    from fastapi.responses import FileResponse
+
+    clip = db.query(Clip).filter(Clip.id == clip_id).first()
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    path = clip.rendered_path if rendered and clip.rendered_path else clip.file_path
+    if not path:
+        raise HTTPException(status_code=404, detail="No video file available")
+
+    from pathlib import Path as P
+    if not P(path).exists():
+        raise HTTPException(status_code=404, detail="Video file not found on disk")
+
+    return FileResponse(path, media_type="video/mp4", filename=P(path).name)
+
+
+@router.get("/moments/{moment_id}/snapshot")
+async def get_moment_snapshot(
+    moment_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get the snapshot image for a moment."""
+    from fastapi.responses import FileResponse
+
+    moment = db.query(Moment).filter(Moment.id == moment_id).first()
+    if not moment or not moment.frame_path:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+
+    from pathlib import Path as P
+    if not P(moment.frame_path).exists():
+        raise HTTPException(status_code=404, detail="Snapshot file not found on disk")
+
+    return FileResponse(moment.frame_path, media_type="image/jpeg")
+
+
 @router.delete("/shorts/{short_id}")
 async def delete_short(
     short_id: int,

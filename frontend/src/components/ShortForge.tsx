@@ -178,11 +178,24 @@ const ShortCard: React.FC<{ short: ShortItem; onClick: () => void }> = ({ short,
       className="bg-dark-800 rounded-lg border border-dark-700 hover:border-dark-600 cursor-pointer transition-colors overflow-hidden"
       onClick={onClick}
     >
-      {/* Thumbnail placeholder (9:16 aspect) */}
+      {/* Video thumbnail (9:16 aspect) */}
       <div className="relative bg-dark-700 w-full" style={{ aspectRatio: '9/16', maxHeight: '12rem' }}>
-        <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-          <SparklesIcon className="h-8 w-8" />
-        </div>
+        {short.clip_id ? (
+          <video
+            className="absolute inset-0 w-full h-full object-cover"
+            src={`/api/shortforge/clips/${short.clip_id}/video`}
+            muted
+            loop
+            playsInline
+            onMouseEnter={e => (e.target as HTMLVideoElement).play().catch(() => {})}
+            onMouseLeave={e => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+            preload="metadata"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+            <SparklesIcon className="h-8 w-8" />
+          </div>
+        )}
         <div className="absolute top-2 left-2">
           <StatusBadge status={short.status} />
         </div>
@@ -232,11 +245,21 @@ const ShortDetailSlideOver: React.FC<{
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Thumbnail area */}
-            <div className="bg-dark-700 rounded-lg mx-auto" style={{ width: '200px', aspectRatio: '9/16' }}>
-              <div className="flex items-center justify-center h-full text-gray-500">
-                <SparklesIcon className="h-12 w-12" />
-              </div>
+            {/* Video preview */}
+            <div className="bg-dark-700 rounded-lg mx-auto overflow-hidden" style={{ width: '220px', aspectRatio: '9/16' }}>
+              {short.clip_id ? (
+                <video
+                  className="w-full h-full object-cover"
+                  src={`/api/shortforge/clips/${short.clip_id}/video`}
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <SparklesIcon className="h-12 w-12" />
+                </div>
+              )}
             </div>
 
             {/* Headline */}
