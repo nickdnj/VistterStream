@@ -161,9 +161,16 @@ async def get_pipeline_status(
     # Determine pipeline state
     state = "disabled"
     if config.enabled:
-        state = "running"
         if not config.camera_id:
             state = "error"
+        else:
+            # Check if the timeline is actually executing (detection is timeline-driven)
+            try:
+                from services.timeline_executor import get_timeline_executor
+                executor = get_timeline_executor()
+                state = "running" if executor.active_timelines else "idle"
+            except Exception:
+                state = "idle"
 
     # Calculate disk usage
     from pathlib import Path

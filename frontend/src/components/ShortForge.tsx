@@ -128,9 +128,18 @@ const TriggerBadge: React.FC<{ type: string }> = ({ type }) => {
 const PipelineStatusBar: React.FC<{ status: PipelineStatus }> = ({ status }) => {
   const stateColors: Record<string, string> = {
     running: 'bg-green-500',
+    idle: 'bg-yellow-500',
     paused: 'bg-yellow-500',
     error: 'bg-red-500',
     disabled: 'bg-gray-500',
+  };
+
+  const stateLabels: Record<string, string> = {
+    running: 'Running',
+    idle: 'Idle — start timeline to detect',
+    paused: 'Paused',
+    error: 'Error',
+    disabled: 'Disabled',
   };
 
   return (
@@ -138,7 +147,7 @@ const PipelineStatusBar: React.FC<{ status: PipelineStatus }> = ({ status }) => 
       <div className="flex flex-wrap items-center gap-6 text-sm">
         <div className="flex items-center gap-2">
           <div className={`w-2.5 h-2.5 rounded-full ${stateColors[status.state] || 'bg-gray-500'}`} />
-          <span className="text-gray-300 font-medium capitalize">{status.state}</span>
+          <span className="text-gray-300 font-medium">{stateLabels[status.state] || status.state}</span>
         </div>
         <div className="text-gray-400">
           <span className="text-white font-medium">{status.shorts_today}</span>/{status.max_shorts_per_day} shorts today
