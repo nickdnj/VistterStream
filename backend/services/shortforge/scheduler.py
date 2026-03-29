@@ -63,7 +63,7 @@ class ShortForgeScheduler:
                 self._pipeline_task = asyncio.create_task(self._standby_loop())
                 return
 
-            # Get camera details
+            # Get camera for clip capture RTSP URL
             from models.database import Camera
             camera = db.query(Camera).filter(Camera.id == config.camera_id).first()
             if not camera:
@@ -71,27 +71,18 @@ class ShortForgeScheduler:
                 self._pipeline_task = asyncio.create_task(self._standby_loop())
                 return
 
-            # Build snapshot URL for moment detection (avoids RTSP session contention)
-            snapshot_url = self._build_snapshot_url(camera)
-            if not snapshot_url:
-                logger.error("ShortForge camera has no snapshot URL configured")
-                self._pipeline_task = asyncio.create_task(self._standby_loop())
-                return
-
-            # Build RTSP URL for clip capture
+            # Build RTSP URL for clip capture ring buffer
             rtsp_url = self._build_rtsp_url(camera)
 
         finally:
             db.close()
 
-        # Start pipeline components
-        detector = get_moment_detector()
+        # Start clip capture ring buffer (uses RTSP — may fail if no sessions available)
         capture = get_clip_capture()
-
-        # Moment detector uses HTTP snapshots (no RTSP session needed)
-        await detector.start(snapshot_url, config)
-        # Clip capture uses RTSP for the ring buffer
         await capture.start(rtsp_url)
+
+        # Moment detection is now driven by the timeline executor (per-preset).
+        # The scheduler just runs the pipeline processor and housekeeping.
 
         # Start pipeline processor (watches for new moments)
         self._pipeline_task = asyncio.create_task(self._pipeline_loop())
@@ -108,11 +99,11 @@ class ShortForgeScheduler:
         """Stop all pipeline components."""
         self._running = False
 
-        detector = get_moment_detector()
         capture = get_clip_capture()
-
-        await detector.stop()
         await capture.stop()
+
+        detector = get_moment_detector()
+        await detector.close()
 
         for task in [self._pipeline_task, self._cleanup_task, self._views_task]:
             if task:

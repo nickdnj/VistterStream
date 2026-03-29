@@ -970,6 +970,19 @@ class TimelineExecutor:
                     # Same camera, same overlays - just log that we're continuing
                     logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
                 
+                # ShortForge: evaluate this preset for interesting moments
+                if preset_id and camera.snapshot_url:
+                    try:
+                        from services.shortforge.moment_detector import get_moment_detector
+                        sf_detector = get_moment_detector()
+                        await sf_detector.evaluate(
+                            camera_id=camera.id,
+                            preset_id=preset_id,
+                            snapshot_url=camera.snapshot_url,
+                        )
+                    except Exception as e:
+                        logger.debug("ShortForge evaluate failed: %s", e)
+
                 # Wait for cue duration
                 logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
                 await asyncio.sleep(duration)
