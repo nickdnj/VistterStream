@@ -193,7 +193,7 @@ async def list_shorts(
     current_user=Depends(get_current_user),
 ):
     """List published shorts for the dashboard grid."""
-    query = db.query(PublishedShort)
+    query = db.query(PublishedShort).filter(PublishedShort.status != "removed")
     if status:
         query = query.filter(PublishedShort.status == status)
     shorts = (
