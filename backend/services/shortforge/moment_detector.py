@@ -49,7 +49,9 @@ class MomentDetector:
         self._snapshot_url = snapshot_url
         self._running = True
         SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-        self._http_client = httpx.AsyncClient(timeout=10.0)
+        self._http_client = httpx.AsyncClient(timeout=10.0, event_hooks={})
+        # Suppress httpx request logging (snapshot URL contains camera credentials)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
         self._task = asyncio.create_task(self._detection_loop(config))
         logger.info("MomentDetector started (snapshot URL: %s)",
                      snapshot_url.split("?")[0] + "?...")
