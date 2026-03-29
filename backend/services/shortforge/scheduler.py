@@ -288,23 +288,23 @@ class ShortForgeScheduler:
             finally:
                 db.close()
 
-            # Stage 4: Publish to YouTube (skip if no credentials configured)
-            if config.openai_api_key_enc:
-                # Only attempt publish if YouTube OAuth is set up
-                from models.database import ReelForgeSettings
-                pub_db = SessionLocal()
-                try:
-                    rf = pub_db.query(ReelForgeSettings).first()
-                    has_creds = rf and rf.youtube_access_token
-                finally:
-                    pub_db.close()
+            # Stage 4: Create short record and optionally publish to YouTube
+            db = SessionLocal()
+            try:
+                clip = db.query(Clip).filter(Clip.id == clip_id).first()
+                short = PublishedShort(
+                    clip_id=clip_id,
+                    title=clip.headline if clip else "Marina moment",
+                    status="rendered",
+                )
+                db.add(short)
+                db.commit()
+                logger.info("Short created: id=%d clip=%d (pending publish)", short.id, clip_id)
+            finally:
+                db.close()
 
-                if has_creds:
-                    await publish_short(clip_id, config)
-                else:
-                    logger.info("Skipping publish for clip %d (no YouTube credentials)", clip_id)
-            else:
-                logger.info("Skipping publish for clip %d (no API key configured)", clip_id)
+            # TODO: Wire up YouTube publish using streaming destination OAuth
+            # For now, shorts stay in "rendered" status for manual review
 
         except Exception:
             logger.exception("Pipeline failed for moment %d", moment_id)
