@@ -1,8 +1,8 @@
 """
-Vertical Renderer — FFmpeg portrait crop + overlay compositing.
+Vertical Renderer — FFmpeg portrait crop with horizontal pan + overlay compositing.
 
 Takes a horizontal 1920x1080 clip and produces a vertical 1080x1920 short with:
-- Center crop (or motion-centroid offset)
+- Slow horizontal pan across the full 16:9 source (Ken Burns style)
 - Text overlay (headline)
 - Weather bug overlay
 - Location tag
@@ -14,10 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy.orm import Session
-
 from models.database import SessionLocal
-from models.shortforge import Clip, Moment
+from models.shortforge import Clip
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,8 @@ async def render_vertical(
     """
     Render a vertical (1080x1920) short from a horizontal clip.
 
-    Applies center crop, headline text overlay, weather bug, and location tag.
+    Applies a slow horizontal pan across the 16:9 source, viewed through
+    a 9:16 portrait window. Adds headline, weather, and location overlays.
     Returns the path to the rendered file, or None on failure.
     """
     RENDERED_DIR.mkdir(parents=True, exist_ok=True)
@@ -51,27 +50,32 @@ async def render_vertical(
             logger.error("Clip file missing: %s", input_path)
             return None
 
+        # Get clip duration for pan timing
+        duration = clip.duration_seconds or 25.0
+
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         output_path = RENDERED_DIR / f"short_{clip_id}_{ts}.mp4"
-
-        # Build FFmpeg filter chain:
-        # 1. Center crop 1080x1920 from 1920x1080 (take center 607px horizontal slice, scale up)
-        # 2. Text overlays
-        #
-        # For 16:9 → 9:16 center crop: crop the center portion and scale
-        # Source is 1920x1080. For 9:16 output at 1080x1920:
-        # Crop width from source = 1080 * (1080/1920) = 607px centered
-        # Then scale to 1080x1920
 
         # Escape text for FFmpeg drawtext
         safe_headline = _escape_ffmpeg_text(headline)
         safe_weather = _escape_ffmpeg_text(weather_text)
         safe_location = _escape_ffmpeg_text(location)
 
-        # Build filter graph
+        # Build filter graph with horizontal pan effect:
+        #
+        # Source: 1920x1080 (16:9)
+        # Output: 1080x1920 (9:16)
+        #
+        # The 9:16 crop window at source height (1080) is 607px wide.
+        # Pan range: 0 to (1920 - 607) = 1313 pixels
+        # We animate the crop X position from 0 → 1313 over the clip duration.
+        #
+        # crop=w:h:x:y where x animates with time: x = (1313) * (t / duration)
+        pan_range = 1313  # 1920 - 607
+
         filters = [
-            # Center crop to 9:16 aspect from 16:9 source
-            "crop=ih*9/16:ih:(iw-ih*9/16)/2:0",
+            # Animated horizontal pan: crop window slides left-to-right
+            f"crop=ih*9/16:ih:'min({pan_range},({pan_range})*t/{duration:.1f})':0",
             # Scale to output resolution
             "scale=1080:1920:flags=lanczos",
         ]
@@ -122,7 +126,7 @@ async def render_vertical(
             str(output_path),
         ]
 
-        logger.info("Rendering vertical short for clip %d", clip_id)
+        logger.info("Rendering vertical short for clip %d (pan over %.1fs)", clip_id, duration)
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
@@ -156,7 +160,6 @@ def _escape_ffmpeg_text(text: str) -> str:
     """Escape special characters for FFmpeg drawtext filter."""
     if not text:
         return ""
-    # FFmpeg drawtext escaping: single quotes, colons, backslashes
     text = text.replace("\\", "\\\\")
     text = text.replace("'", "'\\\\\\''")
     text = text.replace(":", "\\:")

@@ -209,6 +209,70 @@ class ClipCapture:
         except Exception:
             return None
 
+    async def capture_direct(self, moment_id: int, rtsp_url: str, duration: int = 25) -> Optional[int]:
+        """
+        Capture a clean clip directly from the RTSP stream for a fixed duration.
+        Called by the timeline executor while the preset is locked.
+        Returns the clip ID, or None on failure.
+        """
+        try:
+            CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            clip_path = CLIPS_DIR / f"clip_{moment_id}_{ts}.mp4"
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-rtsp_transport", "tcp",
+                "-i", rtsp_url,
+                "-t", str(duration),
+                "-c:v", "copy",
+                "-an",
+                "-movflags", "+faststart",
+                str(clip_path),
+            ]
+
+            logger.info("Direct capture: %ds from RTSP for moment %d", duration, moment_id)
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+
+            if proc.returncode != 0:
+                error = stderr[-300:].decode(errors="replace") if stderr else ""
+                logger.error("Direct capture failed for moment %d: %s", moment_id, error)
+                return await self._mark_moment_failed(moment_id, "Direct capture failed")
+
+            if not clip_path.exists():
+                return await self._mark_moment_failed(moment_id, "Output clip missing")
+
+            clip_duration = await self._get_duration(clip_path)
+
+            db = SessionLocal()
+            try:
+                clip = Clip(
+                    moment_id=moment_id,
+                    file_path=str(clip_path),
+                    duration_seconds=clip_duration,
+                    width=1920,
+                    height=1080,
+                )
+                db.add(clip)
+                moment = db.query(Moment).filter(Moment.id == moment_id).first()
+                if moment:
+                    moment.status = "captured"
+                db.commit()
+                db.refresh(clip)
+                logger.info("Direct clip captured: id=%d path=%s duration=%.1fs", clip.id, clip_path, clip_duration or 0)
+                return clip.id
+            finally:
+                db.close()
+
+        except Exception:
+            logger.exception("Error in direct capture for moment %d", moment_id)
+            return await self._mark_moment_failed(moment_id, "Direct capture exception")
+
     async def _mark_moment_failed(self, moment_id: int, error: str) -> None:
         """Mark a moment as failed."""
         db = SessionLocal()

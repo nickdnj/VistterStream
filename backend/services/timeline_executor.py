@@ -971,11 +971,12 @@ class TimelineExecutor:
                     logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
                 
                 # ShortForge: evaluate this preset for interesting moments
+                sf_moment_id = None
                 if preset_id and camera.snapshot_url:
                     try:
                         from services.shortforge.moment_detector import get_moment_detector
                         sf_detector = get_moment_detector()
-                        await sf_detector.evaluate(
+                        sf_moment_id = await sf_detector.evaluate(
                             camera_id=camera.id,
                             preset_id=preset_id,
                             snapshot_url=camera.snapshot_url,
@@ -986,6 +987,25 @@ class TimelineExecutor:
                 # Wait for cue duration
                 logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
                 await asyncio.sleep(duration)
+
+                # ShortForge: if a moment was detected, lock the preset and capture a clean clip
+                if sf_moment_id and camera.snapshot_url:
+                    try:
+                        from services.shortforge.clip_capture import get_clip_capture
+                        capture = get_clip_capture()
+                        clip_duration = 25  # seconds of clean footage from this preset
+                        logger.info(f"🎬 ShortForge: locking preset '{preset.name if preset else preset_id}' for {clip_duration}s clip capture")
+                        clip_id = await capture.capture_direct(
+                            moment_id=sf_moment_id,
+                            rtsp_url=self._build_rtsp_url(camera),
+                            duration=clip_duration,
+                        )
+                        if clip_id:
+                            logger.info(f"✅ ShortForge: clip {clip_id} captured, resuming timeline")
+                        else:
+                            logger.warning("ShortForge: clip capture failed, resuming timeline")
+                    except Exception:
+                        logger.exception("ShortForge clip capture failed")
                 logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
                 
                 # Update heartbeat for stall detection
