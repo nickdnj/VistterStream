@@ -49,6 +49,9 @@ from models.database import get_session
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize background services on startup and clean up on shutdown"""
+    # Reconfigure logging after uvicorn's setup (uvicorn disables pre-existing loggers)
+    from utils.logging_config import configure_logging
+    configure_logging()
     # --- Startup ---
     logger.info("Starting VistterStream Backend...")
     logger.info("Starting camera health monitor...")
