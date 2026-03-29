@@ -21,6 +21,8 @@ from services.shortforge.headline_generator import generate_headline, fetch_weat
 from services.shortforge.vertical_renderer import render_vertical
 from services.shortforge.publisher import publish_short, refresh_view_counts
 from services.shortforge.moment_detector import get_moment_detector
+from utils.crypto import decrypt
+from utils.rtsp import build_rtsp_url
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +71,7 @@ class ShortForgeScheduler:
                 self._pipeline_task = asyncio.create_task(self._standby_loop())
                 return
 
-            from utils.rtsp import build_rtsp_url
-            rtsp_url = build_rtsp_url(camera)
+            rtsp_url = self._build_rtsp_url(camera)
 
         finally:
             db.close()
@@ -112,6 +113,16 @@ class ShortForgeScheduler:
                     pass
 
         logger.info("ShortForge scheduler stopped")
+
+    def _build_rtsp_url(self, camera) -> str:
+        """Build RTSP URL from a Camera object, decrypting the password."""
+        password = None
+        if camera.password_enc:
+            try:
+                password = decrypt(camera.password_enc)
+            except Exception:
+                pass
+        return build_rtsp_url(camera.address, camera.port, camera.username, password, camera.stream_path)
 
     async def _standby_loop(self):
         """Wait for config to become enabled, then restart."""

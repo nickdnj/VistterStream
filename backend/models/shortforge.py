@@ -79,9 +79,9 @@ class ShortForgeConfig(Base):
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=True)
 
     # Detection thresholds
-    motion_threshold = Column(Float, default=0.6)
-    brightness_threshold = Column(Float, default=0.5)
-    activity_threshold = Column(Float, default=0.7)
+    motion_threshold = Column(Float, default=0.05)
+    brightness_threshold = Column(Float, default=0.15)
+    activity_threshold = Column(Float, default=0.10)
     cooldown_seconds = Column(Integer, default=120)  # min seconds between moments
     detector_interval_seconds = Column(Integer, default=5)  # how often to analyze frames
 

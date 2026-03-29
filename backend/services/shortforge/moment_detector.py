@@ -112,8 +112,19 @@ class MomentDetector:
 
                 retry_count = 0
                 trigger_type, score = result
+                threshold = self._get_threshold(config, trigger_type)
 
-                if trigger_type and score >= self._get_threshold(config, trigger_type):
+                # Log scores periodically for debugging (every 12th frame = ~1/min at 5s interval)
+                if not hasattr(self, '_log_counter'):
+                    self._log_counter = 0
+                self._log_counter += 1
+                if self._log_counter % 12 == 1:
+                    logger.info(
+                        "ShortForge scores: %s=%.4f (threshold=%.2f)",
+                        trigger_type, score, threshold,
+                    )
+
+                if trigger_type and score >= threshold:
                     # Check cooldown
                     now = time.time()
                     if now - self._last_moment_time < (config.cooldown_seconds or 120):
@@ -198,11 +209,11 @@ class MomentDetector:
     def _get_threshold(self, config: ShortForgeConfig, trigger_type: str) -> float:
         """Get the threshold for a trigger type from config."""
         thresholds = {
-            "motion": config.motion_threshold or 0.6,
-            "brightness": config.brightness_threshold or 0.5,
-            "activity": config.activity_threshold or 0.7,
+            "motion": config.motion_threshold if config.motion_threshold is not None else 0.05,
+            "brightness": config.brightness_threshold if config.brightness_threshold is not None else 0.15,
+            "activity": config.activity_threshold if config.activity_threshold is not None else 0.10,
         }
-        return thresholds.get(trigger_type, 0.5)
+        return thresholds.get(trigger_type, 0.10)
 
     def _save_snapshot(self) -> Optional[Path]:
         """Save the current frame as a JPEG snapshot."""

@@ -274,6 +274,25 @@ def ensure_destination_secrets_encrypted() -> None:
         logger.warning("Could not encrypt destination secrets: %s", e)
 
 
+def ensure_shortforge_thresholds_fix() -> None:
+    """Fix ShortForge detection thresholds — original defaults (0.6, 0.5, 0.7) were too high."""
+    try:
+        db = SessionLocal()
+        row = db.execute(
+            text("SELECT id, motion_threshold, brightness_threshold, activity_threshold FROM shortforge_config LIMIT 1")
+        ).fetchone()
+        if row and row[1] is not None and row[1] >= 0.5:
+            db.execute(
+                text("UPDATE shortforge_config SET motion_threshold = 0.05, brightness_threshold = 0.15, activity_threshold = 0.10 WHERE id = :id"),
+                {"id": row[0]},
+            )
+            db.commit()
+            logger.info("Fixed ShortForge thresholds: motion=0.05, brightness=0.15, activity=0.10")
+        db.close()
+    except Exception as e:
+        logger.warning("Could not fix ShortForge thresholds: %s", e)
+
+
 def run_alembic_migrations() -> None:
     """Run Alembic migrations to bring the database schema up to date.
 
@@ -322,6 +341,7 @@ if __name__ == "__main__":
     ensure_timeline_broadcast_columns()
     ensure_tempest_url_port_fix()
     ensure_destination_secrets_encrypted()
+    ensure_shortforge_thresholds_fix()
     ensure_default_admin()
 
     # Start the server
