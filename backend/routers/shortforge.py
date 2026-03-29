@@ -380,7 +380,6 @@ async def stream_clip_video(
     clip_id: int,
     rendered: bool = True,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
     """Stream a clip's video file (rendered vertical or raw horizontal)."""
     from fastapi.responses import FileResponse
@@ -404,7 +403,6 @@ async def stream_clip_video(
 async def get_moment_snapshot(
     moment_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
     """Get the snapshot image for a moment."""
     from fastapi.responses import FileResponse
