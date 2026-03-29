@@ -257,7 +257,41 @@ class ShortForgeScheduler:
                 logger.info("Moment %d blocked by safety gate", moment_id)
                 return
 
-            # Stage 3: Render vertical
+            # Stage 3: Generate narration + TTS
+            scene_desc = headline_result.get("scene_description", "")
+            audio_path = None
+            word_filter = None
+
+            try:
+                from services.shortforge.narration import (
+                    generate_narration, generate_tts,
+                    compute_word_timings, build_word_overlay_filter,
+                )
+
+                narration_result = await generate_narration(scene_desc, config, weather)
+                narration_text = narration_result.get("narration", "")
+                narration_title = narration_result.get("title", "")
+
+                if narration_text:
+                    # Update headline with narration title (better than generic)
+                    if narration_title:
+                        headline = narration_title
+
+                    # Generate TTS audio
+                    audio_path = await generate_tts(narration_text, clip_id, config)
+
+                    # Get audio duration for word timing
+                    if audio_path:
+                        audio_dur = await self._get_audio_duration(audio_path)
+                        if audio_dur and audio_dur > 0:
+                            timings = compute_word_timings(narration_text, audio_dur)
+                            word_filter = build_word_overlay_filter(timings)
+
+                    logger.info("Narration: '%s' (audio=%s)", narration_text[:80], bool(audio_path))
+            except Exception:
+                logger.exception("Narration generation failed, rendering without narration")
+
+            # Stage 4: Render vertical
             weather_text = ""
             if weather:
                 temp = weather.get("temperature", "")
@@ -265,7 +299,11 @@ class ShortForgeScheduler:
                 if temp:
                     weather_text = f"{temp}°F {conditions}".strip()
 
-            rendered_path = await render_vertical(clip_id, headline, weather_text)
+            rendered_path = await render_vertical(
+                clip_id, headline, weather_text,
+                audio_path=audio_path,
+                word_overlay_filter=word_filter,
+            )
             if not rendered_path:
                 db = SessionLocal()
                 try:
@@ -356,6 +394,23 @@ class ShortForgeScheduler:
                 return False
 
         return True
+
+    async def _get_audio_duration(self, audio_path: str) -> Optional[float]:
+        """Get audio duration via ffprobe."""
+        try:
+            import json as _json
+            proc = await asyncio.create_subprocess_exec(
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_format", audio_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            data = _json.loads(stdout)
+            return float(data.get("format", {}).get("duration", 0))
+        except Exception:
+            return None
 
     async def _cleanup_loop(self):
         """Periodic disk cleanup based on retention policies."""

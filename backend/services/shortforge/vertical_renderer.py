@@ -3,9 +3,10 @@ Vertical Renderer — FFmpeg portrait crop with horizontal pan + overlay composi
 
 Takes a horizontal 1920x1080 clip and produces a vertical 1080x1920 short with:
 - Slow horizontal pan across the full 16:9 source (Ken Burns style)
-- Text overlay (headline)
+- TikTok-style word-by-word text overlay (synced to narration)
 - Weather bug overlay
 - Location tag
+- Narration audio track
 """
 
 import asyncio
@@ -28,12 +29,16 @@ async def render_vertical(
     headline: str,
     weather_text: str = "",
     location: str = "Wharfside Marina",
+    audio_path: Optional[str] = None,
+    word_overlay_filter: Optional[str] = None,
 ) -> Optional[str]:
     """
     Render a vertical (1080x1920) short from a horizontal clip.
 
     Applies a slow horizontal pan across the 16:9 source, viewed through
-    a 9:16 portrait window. Adds headline, weather, and location overlays.
+    a 9:16 portrait window. Adds word-by-word text overlay, weather, location,
+    and narration audio.
+
     Returns the path to the rendered file, or None on failure.
     """
     RENDERED_DIR.mkdir(parents=True, exist_ok=True)
@@ -50,27 +55,15 @@ async def render_vertical(
             logger.error("Clip file missing: %s", input_path)
             return None
 
-        # Get clip duration for pan timing
         duration = clip.duration_seconds or 25.0
-
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         output_path = RENDERED_DIR / f"short_{clip_id}_{ts}.mp4"
 
         # Escape text for FFmpeg drawtext
-        safe_headline = _escape_ffmpeg_text(headline)
         safe_weather = _escape_ffmpeg_text(weather_text)
         safe_location = _escape_ffmpeg_text(location)
 
-        # Build filter graph with horizontal pan effect:
-        #
-        # Source: 1920x1080 (16:9)
-        # Output: 1080x1920 (9:16)
-        #
-        # The 9:16 crop window at source height (1080) is 607px wide.
-        # Pan range: 0 to (1920 - 607) = 1313 pixels
-        # We animate the crop X position from 0 → 1313 over the clip duration.
-        #
-        # crop=w:h:x:y where x animates with time: x = (1313) * (t / duration)
+        # Build filter graph with horizontal pan effect
         pan_range = 1313  # 1920 - 607
 
         filters = [
@@ -80,14 +73,9 @@ async def render_vertical(
             "scale=1080:1920:flags=lanczos",
         ]
 
-        # Headline text overlay (bottom area, large white text with shadow)
-        if safe_headline:
-            filters.append(
-                f"drawtext=text='{safe_headline}'"
-                ":fontsize=48:fontcolor=white:borderw=3:bordercolor=black"
-                ":x=(w-text_w)/2:y=h-200"
-                ":font=DejaVu Sans"
-            )
+        # TikTok-style word-by-word overlay (synced to narration)
+        if word_overlay_filter:
+            filters.append(word_overlay_filter)
 
         # Weather bug (top-right)
         if safe_weather:
@@ -109,13 +97,23 @@ async def render_vertical(
 
         filter_chain = ",".join(filters)
 
+        # Build FFmpeg command
         cmd = [
             "ffmpeg", "-y",
             "-i", str(input_path),
-            # Silent audio track (YouTube requires audio) — must be before output options
-            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        ]
+
+        # Add audio input: narration file or silent track
+        if audio_path and Path(audio_path).exists():
+            cmd.extend(["-i", audio_path])
+            audio_map = "1:a:0"
+        else:
+            cmd.extend(["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo"])
+            audio_map = "1:a:0"
+
+        cmd.extend([
             "-vf", filter_chain,
-            "-map", "0:v:0", "-map", "1:a:0",
+            "-map", "0:v:0", "-map", audio_map,
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "23",
@@ -124,9 +122,10 @@ async def render_vertical(
             "-shortest",
             "-movflags", "+faststart",
             str(output_path),
-        ]
+        ])
 
-        logger.info("Rendering vertical short for clip %d (pan over %.1fs)", clip_id, duration)
+        logger.info("Rendering vertical short for clip %d (pan over %.1fs, audio=%s)",
+                     clip_id, duration, "narration" if audio_path else "silent")
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
@@ -143,7 +142,6 @@ async def render_vertical(
             logger.error("Rendered file missing after FFmpeg: %s", output_path)
             return None
 
-        # Update clip record with rendered path
         clip.rendered_path = str(output_path)
         db.commit()
         logger.info("Rendered vertical short: %s", output_path)
