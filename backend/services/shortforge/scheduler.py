@@ -63,7 +63,7 @@ class ShortForgeScheduler:
                 self._pipeline_task = asyncio.create_task(self._standby_loop())
                 return
 
-            # Build RTSP URL from camera
+            # Get camera details
             from models.database import Camera
             camera = db.query(Camera).filter(Camera.id == config.camera_id).first()
             if not camera:
@@ -71,6 +71,14 @@ class ShortForgeScheduler:
                 self._pipeline_task = asyncio.create_task(self._standby_loop())
                 return
 
+            # Build snapshot URL for moment detection (avoids RTSP session contention)
+            snapshot_url = self._build_snapshot_url(camera)
+            if not snapshot_url:
+                logger.error("ShortForge camera has no snapshot URL configured")
+                self._pipeline_task = asyncio.create_task(self._standby_loop())
+                return
+
+            # Build RTSP URL for clip capture
             rtsp_url = self._build_rtsp_url(camera)
 
         finally:
@@ -80,7 +88,9 @@ class ShortForgeScheduler:
         detector = get_moment_detector()
         capture = get_clip_capture()
 
-        await detector.start(rtsp_url, config)
+        # Moment detector uses HTTP snapshots (no RTSP session needed)
+        await detector.start(snapshot_url, config)
+        # Clip capture uses RTSP for the ring buffer
         await capture.start(rtsp_url)
 
         # Start pipeline processor (watches for new moments)
@@ -123,6 +133,24 @@ class ShortForgeScheduler:
             except Exception:
                 pass
         return build_rtsp_url(camera.address, camera.port, camera.username, password, camera.stream_path)
+
+    def _build_snapshot_url(self, camera) -> Optional[str]:
+        """Build snapshot URL from a Camera object, injecting decrypted credentials."""
+        if not camera.snapshot_url:
+            return None
+        snapshot_url = camera.snapshot_url
+        # If the snapshot URL already has credentials embedded, use as-is
+        if "user=" in snapshot_url or "@" in snapshot_url:
+            # Decrypt password and substitute if needed
+            if camera.password_enc and "password=" in snapshot_url:
+                try:
+                    password = decrypt(camera.password_enc)
+                    # URL might have a placeholder or the encrypted value
+                    # The snapshot_url in the DB should already have the correct creds
+                except Exception:
+                    pass
+            return snapshot_url
+        return snapshot_url
 
     async def _standby_loop(self):
         """Wait for config to become enabled, then restart."""

@@ -1,8 +1,12 @@
 """
-Moment Detector — lightweight OpenCV frame analysis on RTSP feed.
+Moment Detector — lightweight frame analysis using HTTP snapshots.
 
-Runs every N seconds (configurable). Scores frames for motion, brightness changes,
-and activity. When a threshold is crossed, logs a Moment to the database.
+Grabs a JPEG snapshot from the camera every N seconds (configurable).
+Scores frames for motion and brightness changes using OpenCV.
+When a threshold is crossed, logs a Moment to the database.
+
+Uses HTTP snapshots instead of RTSP to avoid competing for the camera's
+limited RTSP sessions (already used by the timeline executor and RTMP relay).
 """
 
 import asyncio
@@ -12,17 +16,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-import os
-
 import cv2
+import httpx
 import numpy as np
-from sqlalchemy.orm import Session
 
 from models.database import SessionLocal
 from models.shortforge import Moment, ShortForgeConfig
-
-# Tell OpenCV's FFmpeg backend to use TCP for RTSP (required for many IP cameras)
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 
 
 class MomentDetector:
-    """Analyzes RTSP frames for interesting moments using OpenCV."""
+    """Analyzes camera snapshots for interesting moments using OpenCV."""
 
     def __init__(self):
         self._running = False
@@ -40,16 +39,20 @@ class MomentDetector:
         self._prev_frame: Optional[np.ndarray] = None
         self._prev_hist: Optional[np.ndarray] = None
         self._last_moment_time: float = 0
-        self._rtsp_url: Optional[str] = None
-        self._cap: Optional[cv2.VideoCapture] = None
+        self._snapshot_url: Optional[str] = None
+        self._current_frame: Optional[np.ndarray] = None
+        self._http_client: Optional[httpx.AsyncClient] = None
+        self._log_counter: int = 0
 
-    async def start(self, rtsp_url: str, config: ShortForgeConfig):
+    async def start(self, snapshot_url: str, config: ShortForgeConfig):
         """Start the moment detection loop."""
-        self._rtsp_url = rtsp_url
+        self._snapshot_url = snapshot_url
         self._running = True
         SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        self._http_client = httpx.AsyncClient(timeout=10.0)
         self._task = asyncio.create_task(self._detection_loop(config))
-        logger.info("MomentDetector started for %s", rtsp_url)
+        logger.info("MomentDetector started (snapshot URL: %s)",
+                     snapshot_url.split("?")[0] + "?...")
 
     async def stop(self):
         """Stop the moment detection loop."""
@@ -60,35 +63,32 @@ class MomentDetector:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        if self._cap and self._cap.isOpened():
-            self._cap.release()
-            self._cap = None
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
         logger.info("MomentDetector stopped")
 
-    def _open_capture(self) -> bool:
-        """Open or reopen the RTSP capture."""
-        if self._cap and self._cap.isOpened():
-            return True
-        if not self._rtsp_url:
-            return False
-        logger.info("Opening RTSP stream for moment detection...")
-        self._cap = cv2.VideoCapture(self._rtsp_url, cv2.CAP_FFMPEG)
-        if not self._cap.isOpened():
-            logger.warning("FFmpeg backend failed, trying auto-detect...")
-            self._cap = cv2.VideoCapture(self._rtsp_url)
-        if not self._cap.isOpened():
-            logger.error("Failed to open RTSP stream: %s", self._rtsp_url)
-            self._cap = None
-            return False
-        # Set buffer size to 1 to always get the latest frame
-        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        logger.info("RTSP stream opened successfully for moment detection")
-        return True
+    async def _grab_frame(self) -> Optional[np.ndarray]:
+        """Grab a frame via HTTP snapshot."""
+        if not self._snapshot_url or not self._http_client:
+            return None
+        try:
+            resp = await self._http_client.get(self._snapshot_url)
+            if resp.status_code != 200:
+                logger.warning("Snapshot HTTP %d", resp.status_code)
+                return None
+            # Decode JPEG to numpy array
+            arr = np.frombuffer(resp.content, dtype=np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            return frame
+        except Exception as e:
+            logger.warning("Snapshot fetch failed: %s", e)
+            return None
 
     async def _detection_loop(self, initial_config: ShortForgeConfig):
-        """Main detection loop — runs in asyncio, offloads CV to thread."""
+        """Main detection loop."""
         retry_count = 0
-        max_retries = 3
+        max_retries = 5
 
         while self._running:
             try:
@@ -103,30 +103,31 @@ class MomentDetector:
                 finally:
                     db.close()
 
-                # Grab and analyze a frame in a thread (blocking OpenCV call)
-                result = await asyncio.to_thread(self._analyze_frame, config)
+                # Grab a frame via HTTP snapshot
+                frame = await self._grab_frame()
 
-                if result is None:
-                    # Frame grab failed
+                if frame is None:
                     retry_count += 1
                     if retry_count >= max_retries:
-                        logger.error("RTSP feed lost after %d retries, pausing detection", max_retries)
-                        if self._cap:
-                            self._cap.release()
-                            self._cap = None
-                        await asyncio.sleep(30)  # wait before reconnect
+                        logger.error("Snapshot unavailable after %d retries, pausing 60s", max_retries)
+                        await asyncio.sleep(60)
                         retry_count = 0
                     else:
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(interval)
                     continue
 
                 retry_count = 0
+
+                # Analyze frame (CPU-bound OpenCV in thread)
+                result = await asyncio.to_thread(self._analyze_frame, frame)
+                if result is None:
+                    await asyncio.sleep(interval)
+                    continue
+
                 trigger_type, score = result
                 threshold = self._get_threshold(config, trigger_type)
 
-                # Log scores periodically for debugging (every 12th frame = ~1/min at 5s interval)
-                if not hasattr(self, '_log_counter'):
-                    self._log_counter = 0
+                # Log scores periodically (~1/min at 5s interval)
                 self._log_counter += 1
                 if self._log_counter % 12 == 1:
                     logger.info(
@@ -172,15 +173,8 @@ class MomentDetector:
                 logger.exception("Error in moment detection loop")
                 await asyncio.sleep(5)
 
-    def _analyze_frame(self, config: ShortForgeConfig) -> Optional[tuple[str, float]]:
-        """Grab a frame and compute motion + brightness scores. Returns (trigger_type, score) or None."""
-        if not self._open_capture():
-            return None
-
-        ret, frame = self._cap.read()
-        if not ret or frame is None:
-            return None
-
+    def _analyze_frame(self, frame: np.ndarray) -> Optional[tuple[str, float]]:
+        """Compute motion + brightness scores from a frame. Returns (trigger_type, score) or None."""
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
@@ -196,14 +190,12 @@ class MomentDetector:
         hist = cv2.calcHist([gray], [0], None, [64], [0, 256])
         cv2.normalize(hist, hist)
         if self._prev_hist is not None:
-            # Correlation: 1.0 = identical, lower = more change
             corr = cv2.compareHist(self._prev_hist, hist, cv2.HISTCMP_CORREL)
-            brightness_score = max(0.0, 1.0 - corr)  # invert so higher = more change
+            brightness_score = max(0.0, 1.0 - corr)
 
         # Store current frame for next comparison
         self._prev_frame = gray
         self._prev_hist = hist
-        # Keep the color frame for snapshot
         self._current_frame = frame
 
         # Return the highest-scoring trigger
@@ -211,7 +203,7 @@ class MomentDetector:
             "motion": motion_score,
             "brightness": brightness_score,
         }
-        best_type = max(scores, key=scores.get)
+        best_type = max(scores, key=lambda k: scores[k])
         best_score = scores[best_type]
 
         return (best_type, best_score)
@@ -227,7 +219,7 @@ class MomentDetector:
 
     def _save_snapshot(self) -> Optional[Path]:
         """Save the current frame as a JPEG snapshot."""
-        if not hasattr(self, '_current_frame') or self._current_frame is None:
+        if self._current_frame is None:
             return None
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         path = SNAPSHOTS_DIR / f"moment_{ts}.jpg"
