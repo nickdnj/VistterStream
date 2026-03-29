@@ -266,6 +266,7 @@ class ShortForgeScheduler:
                 from services.shortforge.narration import (
                     generate_narration, generate_tts,
                     compute_word_timings, build_word_overlay_filter,
+                    mix_narration_with_music,
                 )
 
                 narration_result = await generate_narration(scene_desc, config, weather)
@@ -278,7 +279,11 @@ class ShortForgeScheduler:
                         headline = narration_title
 
                     # Generate TTS audio
-                    audio_path = await generate_tts(narration_text, clip_id, config)
+                    raw_audio = await generate_tts(narration_text, clip_id, config)
+
+                    # Mix narration with background music
+                    if raw_audio:
+                        audio_path = await mix_narration_with_music(raw_audio, clip_id)
 
                     # Get audio duration for word timing
                     if audio_path:

@@ -116,7 +116,7 @@ async def generate_tts(
     text: str,
     clip_id: int,
     config: ShortForgeConfig,
-    voice: str = "nova",
+    voice: str = "shimmer",
 ) -> Optional[str]:
     """
     Generate TTS audio from narration text using OpenAI.
@@ -139,10 +139,10 @@ async def generate_tts(
     try:
         client = AsyncOpenAI(api_key=api_key)
         response = await client.audio.speech.create(
-            model="tts-1",
+            model="tts-1-hd",
             voice=voice,
             input=text,
-            speed=1.05,  # slightly faster for punchy delivery
+            speed=0.95,  # natural, unhurried delivery
         )
 
         audio_path = AUDIO_DIR / f"narration_{clip_id}.mp3"
@@ -212,13 +212,110 @@ def build_word_overlay_filter(timings: list[dict], font: str = "DejaVu Sans") ->
 
         parts.append(
             f"drawtext=text='{word}'"
-            f":fontsize=64:fontcolor=white:borderw=4:bordercolor=black"
+            f":fontsize=84:fontcolor=white:borderw=5:bordercolor=black"
             f":x=(w-text_w)/2:y=160"
             f":font={font}"
             f":enable='between(t,{start:.3f},{end:.3f})'"
         )
 
     return ",".join(parts)
+
+
+MUSIC_DIR = DATA_DIR / "music"
+
+
+async def get_music_bed(duration: float = 30.0) -> Optional[str]:
+    """
+    Get or generate an ambient music bed for shorts.
+    Creates a warm ambient pad using FFmpeg synthesis (no external files needed).
+    Returns path to the music file.
+    """
+    MUSIC_DIR.mkdir(parents=True, exist_ok=True)
+    music_path = MUSIC_DIR / "ambient_pad.mp3"
+
+    # Reuse existing music bed if it exists
+    if music_path.exists():
+        return str(music_path)
+
+    # Generate a warm ambient pad: A minor chord (A2 + C3 + E3) with reverb
+    import asyncio
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"sine=frequency=110:duration={duration}",
+        "-f", "lavfi", "-i", f"sine=frequency=131:duration={duration}",
+        "-f", "lavfi", "-i", f"sine=frequency=165:duration={duration}",
+        "-f", "lavfi", "-i", f"sine=frequency=220:duration={duration}",
+        "-filter_complex",
+        "[0]volume=0.3[a];[1]volume=0.25[b];[2]volume=0.2[c];[3]volume=0.15[d];"
+        "[a][b][c][d]amix=inputs=4:duration=longest,"
+        "lowpass=f=600,highpass=f=80,"
+        "afade=t=in:d=2,afade=t=out:st=" + f"{duration - 3}" + ":d=3",
+        "-c:a", "libmp3lame", "-b:a", "128k",
+        str(music_path),
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.communicate()
+        if music_path.exists():
+            logger.info("Generated ambient music bed: %s", music_path)
+            return str(music_path)
+    except Exception:
+        logger.exception("Failed to generate music bed")
+    return None
+
+
+async def mix_narration_with_music(
+    narration_path: str,
+    clip_id: int,
+    music_volume: float = 0.12,
+) -> Optional[str]:
+    """
+    Mix narration audio with background music bed.
+    Returns path to the mixed audio file.
+    """
+    import asyncio
+
+    music_path = await get_music_bed()
+    if not music_path:
+        return narration_path  # fallback: just the narration
+
+    mixed_path = AUDIO_DIR / f"mixed_{clip_id}.mp3"
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", narration_path,
+        "-i", music_path,
+        "-filter_complex",
+        f"[0:a]volume=1.0[narr];"
+        f"[1:a]volume={music_volume}[music];"
+        f"[narr][music]amix=inputs=2:duration=first:dropout_transition=2[out]",
+        "-map", "[out]",
+        "-c:a", "libmp3lame", "-b:a", "192k",
+        str(mixed_path),
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode == 0 and mixed_path.exists():
+            logger.info("Mixed narration + music: %s", mixed_path)
+            return str(mixed_path)
+        else:
+            error = stderr[-200:].decode(errors="replace") if stderr else ""
+            logger.warning("Audio mix failed: %s", error)
+    except Exception:
+        logger.exception("Failed to mix narration with music")
+
+    return narration_path  # fallback: just the narration
 
 
 def _fallback_narration(weather_data: Optional[dict], location: str) -> dict:
