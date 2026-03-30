@@ -7,9 +7,10 @@ import StreamingDestinations from './StreamingDestinations';
 import AssetManagement from './AssetManagement';
 import CameraManagement from './CameraManagement';
 import Scheduler from './Scheduler';
+import ShortForgeSettings from './ShortForgeSettings';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'assets' | 'destinations' | 'system';
+type SettingsTab = 'general' | 'account' | 'cameras' | 'scheduler' | 'assets' | 'destinations' | 'shortforge' | 'system';
 
 interface GeneralSettings {
   appliance_name: string;
@@ -23,7 +24,10 @@ interface GeneralSettings {
 const Settings: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
-  const initialTab = (location.state as { tab?: SettingsTab } | undefined)?.tab || 'general';
+  const urlParams = new URLSearchParams(location.search);
+  const tabFromUrl = urlParams.get('tab') as SettingsTab | null;
+  const tabFromState = (location.state as { tab?: SettingsTab } | undefined)?.tab;
+  const initialTab = tabFromUrl || tabFromState || 'general';
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [isKilling, setIsKilling] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -300,6 +304,7 @@ const Settings: React.FC = () => {
     { id: 'scheduler' as SettingsTab, name: 'Scheduler', icon: '📅' },
     { id: 'assets' as SettingsTab, name: 'Assets', icon: '🎨' },
     { id: 'destinations' as SettingsTab, name: 'Destinations', icon: '📡' },
+    { id: 'shortforge' as SettingsTab, name: 'ShortForge', icon: '✨' },
     { id: 'system' as SettingsTab, name: 'System', icon: '💻' },
   ];
 
@@ -592,6 +597,12 @@ const Settings: React.FC = () => {
         {activeTab === 'destinations' && (
           <div>
             <StreamingDestinations />
+          </div>
+        )}
+
+        {activeTab === 'shortforge' && (
+          <div>
+            <ShortForgeSettings />
           </div>
         )}
 

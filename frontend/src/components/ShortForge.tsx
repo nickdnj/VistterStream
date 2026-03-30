@@ -845,13 +845,14 @@ const ShortForge: React.FC = () => {
           <SparklesIcon className="h-6 w-6 text-primary-400" />
           <h1 className="text-xl font-bold text-white">ShortForge</h1>
         </div>
-        <button
-          onClick={() => setShowSettings(true)}
+        <a
+          href="/settings"
+          onClick={(e) => { e.preventDefault(); window.location.href = '/settings?tab=shortforge'; }}
           className="flex items-center gap-2 px-3 py-1.5 bg-dark-700 text-gray-300 rounded-lg hover:bg-dark-600 text-sm"
         >
           <Cog6ToothIcon className="h-4 w-4" />
           Settings
-        </button>
+        </a>
       </div>
 
       {/* Pipeline Status Bar */}
