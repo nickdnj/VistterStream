@@ -970,11 +970,14 @@ class TimelineExecutor:
                     # Same camera, same overlays - just log that we're continuing
                     logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
                 
-                # ShortForge: evaluate this preset for interesting moments
-                # Small delay to let camera settle after PTZ move before snapshotting
+                # Wait for first half of segment (camera fully settled by now)
+                half = max(3, duration / 2)
+                logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
+                await asyncio.sleep(half)
+
+                # ShortForge: snapshot mid-segment when camera is definitely on this preset
                 sf_moment_id = None
                 if preset_id and camera.snapshot_url:
-                    await asyncio.sleep(4)  # let PTZ camera fully settle before snapshot
                     try:
                         from services.shortforge.moment_detector import get_moment_detector
                         sf_detector = get_moment_detector()
@@ -986,9 +989,10 @@ class TimelineExecutor:
                     except Exception:
                         logger.exception("ShortForge evaluate failed")
 
-                # Wait for cue duration
-                logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
-                await asyncio.sleep(duration)
+                # Wait for remaining segment time
+                remaining = duration - half
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
 
                 # ShortForge: if a moment was detected, capture clip in background
                 # (non-blocking — timeline continues immediately to avoid stalling the stream)
