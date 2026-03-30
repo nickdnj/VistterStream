@@ -47,6 +47,8 @@ class MomentDetector:
         self.score_history: dict[int, list[dict]] = {}
         # Test capture queue: set of preset_ids to capture on next timeline hit
         self.test_queue: set[int] = set()
+        # Latest snapshot per preset: {preset_id: {"path": str, "time": str}}
+        self.latest_snapshots: dict[int, dict] = {}
         # Suppress httpx request logging (snapshot URL contains camera credentials)
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -139,6 +141,15 @@ class MomentDetector:
         frame = await self._grab_frame(snapshot_url)
         if frame is None:
             return None
+
+        # Save as latest snapshot for this preset (used by test captures)
+        snap_path = self._save_snapshot(frame, preset_id)
+        if snap_path:
+            self.latest_snapshots[preset_id] = {
+                "path": str(snap_path),
+                "time": datetime.now(timezone.utc).isoformat(),
+                "camera_id": camera_id,
+            }
 
         # Analyze against per-preset state
         result = await asyncio.to_thread(self._analyze_frame, frame, preset_id)

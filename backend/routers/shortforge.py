@@ -571,14 +571,64 @@ async def get_timeline_presets(
 @router.post("/test-capture/{preset_id}")
 async def test_capture(
     preset_id: int,
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Queue a test capture for a preset (fires on next timeline hit)."""
+    """Run a test short from the latest saved snapshot for this preset."""
     from services.shortforge.moment_detector import get_moment_detector
     detector = get_moment_detector()
-    detector.test_queue.add(preset_id)
-    logger.info("Test capture queued: preset=%d (will fire on next timeline segment)", preset_id)
-    return {"message": "Test capture queued", "preset_id": preset_id}
+
+    latest = detector.latest_snapshots.get(preset_id)
+    if not latest or not latest.get("path"):
+        raise HTTPException(status_code=404, detail="No snapshot available for this preset yet. Wait for the timeline to cycle through it.")
+
+    from pathlib import Path as P
+    if not P(latest["path"]).exists():
+        raise HTTPException(status_code=404, detail="Snapshot file no longer exists. Wait for next cycle.")
+
+    config = db.query(ShortForgeConfig).first()
+    if not config:
+        raise HTTPException(status_code=400, detail="ShortForge not configured")
+
+    # Create moment from the saved snapshot
+    moment = Moment(
+        camera_id=latest.get("camera_id"),
+        timestamp=datetime.now(timezone.utc),
+        trigger_type="test",
+        score=1.0,
+        frame_path=latest["path"],
+        status="detected",
+    )
+    db.add(moment)
+    db.commit()
+    db.refresh(moment)
+
+    # Run clip creation + pipeline in background
+    import asyncio
+
+    async def _run_test(moment_id, frame_path):
+        from services.shortforge.clip_capture import get_clip_capture
+        from services.shortforge.scheduler import get_shortforge_scheduler
+        from models.database import SessionLocal as SL
+        from models.shortforge import ShortForgeConfig as SFC
+
+        # Create video from the snapshot image
+        capture = get_clip_capture()
+        clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
+        if clip_id:
+            db2 = SL()
+            try:
+                cfg = db2.query(SFC).first()
+            finally:
+                db2.close()
+            if cfg:
+                sched = get_shortforge_scheduler()
+                await sched._process_moment(moment_id, frame_path, cfg)
+
+    asyncio.create_task(_run_test(moment.id, latest["path"]))
+
+    logger.info("Test capture from snapshot: preset=%d moment=%d", preset_id, moment.id)
+    return {"message": "Test capture started from latest snapshot", "moment_id": moment.id}
 
 
 @router.get("/test-queue")

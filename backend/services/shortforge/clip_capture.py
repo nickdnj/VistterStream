@@ -209,6 +209,64 @@ class ClipCapture:
         except Exception:
             return None
 
+    async def capture_from_snapshot_file(self, moment_id: int, image_path: str, duration: int = 15) -> Optional[int]:
+        """Create a video clip from an existing image file on disk."""
+        try:
+            CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+            from pathlib import Path as _P
+            if not _P(image_path).exists():
+                return await self._mark_moment_failed(moment_id, "Image file missing")
+
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            clip_path = CLIPS_DIR / f"clip_{moment_id}_{ts}.mp4"
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-i", image_path,
+                "-t", str(duration),
+                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-r", "15",
+                "-preset", "fast",
+                str(clip_path),
+            ]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+
+            if proc.returncode != 0 or not clip_path.exists():
+                error = stderr[-300:].decode(errors="replace") if stderr else ""
+                return await self._mark_moment_failed(moment_id, f"Image video failed: {error}")
+
+            db = SessionLocal()
+            try:
+                clip = Clip(
+                    moment_id=moment_id,
+                    file_path=str(clip_path),
+                    duration_seconds=float(duration),
+                    width=1920,
+                    height=1080,
+                )
+                db.add(clip)
+                moment = db.query(Moment).filter(Moment.id == moment_id).first()
+                if moment:
+                    moment.status = "captured"
+                db.commit()
+                db.refresh(clip)
+                logger.info("Test clip from file: id=%d duration=%ds", clip.id, duration)
+                return clip.id
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("Error creating clip from file for moment %d", moment_id)
+            return await self._mark_moment_failed(moment_id, "File clip exception")
+
     async def capture_from_snapshot(self, moment_id: int, snapshot_url: str, duration: int = 15) -> Optional[int]:
         """
         Create a video clip from an HTTP snapshot (no RTSP/RTMP needed).
