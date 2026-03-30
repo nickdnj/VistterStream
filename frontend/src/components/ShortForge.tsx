@@ -171,7 +171,7 @@ const PipelineStatusBar: React.FC<{ status: PipelineStatus }> = ({ status }) => 
 };
 
 // Short card
-const ShortCard: React.FC<{ short: ShortItem; onClick: () => void }> = ({ short, onClick }) => {
+const ShortCard: React.FC<{ short: ShortItem; onClick: () => void; onDelete: (id: number) => void }> = ({ short, onClick, onDelete }) => {
   const formatViews = (v: number) => {
     if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
     if (v >= 1000) return `${(v / 1000).toFixed(1)}K`;
@@ -214,6 +214,13 @@ const ShortCard: React.FC<{ short: ShortItem; onClick: () => void }> = ({ short,
             {short.score.toFixed(2)}
           </div>
         )}
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(short.id); }}
+          className="absolute bottom-2 right-2 bg-dark-900/80 hover:bg-red-600 p-1 rounded transition-colors"
+          title="Delete short"
+        >
+          <TrashIcon className="h-4 w-4 text-gray-400 hover:text-white" />
+        </button>
       </div>
       <div className="p-3">
         <p className="text-sm text-gray-200 line-clamp-2 mb-1">{short.headline || short.title || 'Untitled'}</p>
@@ -788,7 +795,7 @@ const ShortForge: React.FC = () => {
             <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Recent Shorts</h2>
             <div className="grid grid-cols-3 gap-4">
               {shorts.map(s => (
-                <ShortCard key={s.id} short={s} onClick={() => setSelectedShort(s)} />
+                <ShortCard key={s.id} short={s} onClick={() => setSelectedShort(s)} onDelete={handleDeleteShort} />
               ))}
             </div>
           </div>
