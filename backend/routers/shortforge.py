@@ -601,15 +601,14 @@ async def test_capture(
     db.commit()
     db.refresh(moment)
 
-    # Trigger capture in background
+    # Trigger snapshot-based capture in background (doesn't interfere with live stream)
     import asyncio
     from services.shortforge.clip_capture import get_clip_capture
     capture = get_clip_capture()
-    relay_url = f"rtmp://rtmp-relay:1935/live/camera_{camera.id}"
-    asyncio.create_task(capture.capture_direct(
+    asyncio.create_task(capture.capture_from_snapshot(
         moment_id=moment.id,
-        rtsp_url=relay_url,
-        duration=20,
+        snapshot_url=camera.snapshot_url,
+        duration=15,
     ))
 
     logger.info("Test capture triggered: preset=%d moment=%d", preset_id, moment.id)

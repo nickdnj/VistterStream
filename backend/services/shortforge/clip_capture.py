@@ -209,6 +209,80 @@ class ClipCapture:
         except Exception:
             return None
 
+    async def capture_from_snapshot(self, moment_id: int, snapshot_url: str, duration: int = 15) -> Optional[int]:
+        """
+        Create a video clip from an HTTP snapshot (no RTSP/RTMP needed).
+        Generates a 15s video from a single still image using FFmpeg loop.
+        Returns the clip ID, or None on failure.
+        """
+        try:
+            CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Download snapshot
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(snapshot_url)
+                if resp.status_code != 200:
+                    return await self._mark_moment_failed(moment_id, f"Snapshot HTTP {resp.status_code}")
+
+            snap_path = CLIPS_DIR / f"snap_{moment_id}.jpg"
+            snap_path.write_bytes(resp.content)
+
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            clip_path = CLIPS_DIR / f"clip_{moment_id}_{ts}.mp4"
+
+            # Create video from still image (FFmpeg loop)
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-i", str(snap_path),
+                "-t", str(duration),
+                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                "-r", "15",
+                "-preset", "fast",
+                str(clip_path),
+            ]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+
+            # Clean up snapshot
+            snap_path.unlink(missing_ok=True)
+
+            if proc.returncode != 0 or not clip_path.exists():
+                error = stderr[-300:].decode(errors="replace") if stderr else ""
+                return await self._mark_moment_failed(moment_id, f"Snapshot video failed: {error}")
+
+            db = SessionLocal()
+            try:
+                clip = Clip(
+                    moment_id=moment_id,
+                    file_path=str(clip_path),
+                    duration_seconds=float(duration),
+                    width=1920,
+                    height=1080,
+                )
+                db.add(clip)
+                moment = db.query(Moment).filter(Moment.id == moment_id).first()
+                if moment:
+                    moment.status = "captured"
+                db.commit()
+                db.refresh(clip)
+                logger.info("Snapshot clip created: id=%d duration=%ds", clip.id, duration)
+                return clip.id
+            finally:
+                db.close()
+
+        except Exception:
+            logger.exception("Error creating snapshot clip for moment %d", moment_id)
+            return await self._mark_moment_failed(moment_id, "Snapshot clip exception")
+
     async def capture_direct(self, moment_id: int, rtsp_url: str, duration: int = 25) -> Optional[int]:
         """
         Capture a clean clip directly from the RTSP stream for a fixed duration.
