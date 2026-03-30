@@ -652,7 +652,7 @@ const ShortForge: React.FC = () => {
       const [statusRes, shortsRes, momentsRes, scoresRes] = await Promise.all([
         api.get('/shortforge/status'),
         api.get('/shortforge/shorts?limit=12'),
-        api.get('/shortforge/moments?limit=30'),
+        api.get('/shortforge/moments?limit=50'),
         api.get('/shortforge/scores').catch(() => ({ data: {} })),
       ]);
       setPipelineStatus(statusRes.data);
@@ -874,6 +874,31 @@ const ShortForge: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                <div className="flex items-center justify-between px-4 py-2 border-t border-dark-700">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await api.get(`/shortforge/moments?limit=50&offset=${moments.length}`);
+                        if (res.data.length > 0) setMoments(prev => [...prev, ...res.data]);
+                      } catch {}
+                    }}
+                    className="text-xs text-primary-400 hover:text-primary-300"
+                  >
+                    Load more...
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Purge all moments? This cannot be undone.')) return;
+                      try {
+                        await api.delete('/shortforge/moments');
+                        setMoments([]);
+                      } catch (err) { console.error(err); }
+                    }}
+                    className="text-xs text-red-500/60 hover:text-red-400"
+                  >
+                    Purge all
+                  </button>
+                </div>
               </div>
             )}
           </div>

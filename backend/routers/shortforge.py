@@ -448,6 +448,18 @@ async def delete_short(
     return {"message": "Short marked as removed"}
 
 
+@router.delete("/moments")
+async def purge_moments(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Purge all moments from the database."""
+    count = db.query(Moment).delete()
+    db.commit()
+    logger.info("Purged %d moments", count)
+    return {"message": f"Purged {count} moments"}
+
+
 @router.get("/scores")
 async def get_score_history(
     current_user=Depends(get_current_user),
