@@ -618,9 +618,11 @@ async def test_capture(
     # Trigger snapshot-based capture + full pipeline in background
     import asyncio
 
-    async def _run_test_pipeline(moment_id: int, snapshot_url: str, frame_path_val, config_obj):
+    async def _run_test_pipeline(moment_id: int, snapshot_url: str, frame_path_val):
         from services.shortforge.clip_capture import get_clip_capture
         from services.shortforge.scheduler import get_shortforge_scheduler
+        from models.database import SessionLocal as SL
+        from models.shortforge import ShortForgeConfig as SFC
         capture = get_clip_capture()
         clip_id = await capture.capture_from_snapshot(
             moment_id=moment_id,
@@ -628,10 +630,17 @@ async def test_capture(
             duration=15,
         )
         if clip_id:
-            scheduler = get_shortforge_scheduler()
-            await scheduler._process_moment(moment_id, frame_path_val, config_obj)
+            # Reload config in this async context (original session is closed)
+            db = SL()
+            try:
+                fresh_config = db.query(SFC).first()
+            finally:
+                db.close()
+            if fresh_config:
+                scheduler = get_shortforge_scheduler()
+                await scheduler._process_moment(moment_id, frame_path_val, fresh_config)
 
-    asyncio.create_task(_run_test_pipeline(moment.id, camera.snapshot_url, frame_path, config))
+    asyncio.create_task(_run_test_pipeline(moment.id, camera.snapshot_url, frame_path))
 
     logger.info("Test capture triggered: preset=%d moment=%d", preset_id, moment.id)
     return {"message": "Test capture started", "moment_id": moment.id}
