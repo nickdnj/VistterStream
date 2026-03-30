@@ -208,16 +208,19 @@ const ShortForgeSettings: React.FC = () => {
                       onClick={async () => {
                         setTestingPreset(p.preset_id);
                         try {
-                          await api.post(`/shortforge/test-capture/${p.preset_id}`);
-                        } catch (err) {
-                          console.error('Test capture failed:', err);
+                          const res = await api.post(`/shortforge/test-capture/${p.preset_id}`);
+                          // Reset after short delay — pipeline runs in background
+                          setTimeout(() => setTestingPreset(null), 5000);
+                        } catch (err: any) {
+                          const msg = err?.response?.data?.detail || 'Test capture failed';
+                          alert(msg);
                           setTestingPreset(null);
                         }
                       }}
                       disabled={testingPreset === p.preset_id}
-                      className={`text-xs px-2.5 py-1 rounded font-medium ${testingPreset === p.preset_id ? 'bg-yellow-600/80 text-yellow-100' : 'bg-dark-600 text-gray-300 hover:bg-primary-600 hover:text-white'}`}
+                      className={`text-xs px-2.5 py-1 rounded font-medium ${testingPreset === p.preset_id ? 'bg-green-600/80 text-green-100' : 'bg-dark-600 text-gray-300 hover:bg-primary-600 hover:text-white'}`}
                     >
-                      {testingPreset === p.preset_id ? 'Queued...' : 'Test'}
+                      {testingPreset === p.preset_id ? 'Building...' : 'Test'}
                     </button>
                   </div>
                 ))}
