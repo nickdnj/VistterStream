@@ -166,7 +166,9 @@ class ShortForgeScheduler:
                 await asyncio.sleep(30)
 
     async def _pipeline_loop(self):
-        """Watch for new detected moments and process them through the pipeline."""
+        """Check for completed capture windows and process best candidates."""
+        last_window: Optional[str] = None
+
         while self._running:
             try:
                 db = SessionLocal()
@@ -176,35 +178,54 @@ class ShortForgeScheduler:
                         await asyncio.sleep(10)
                         continue
 
-                    # Find unprocessed moments
-                    moment = (
-                        db.query(Moment)
-                        .filter(Moment.status == "detected")
-                        .order_by(Moment.timestamp.asc())
-                        .first()
-                    )
-
-                    if not moment:
-                        await asyncio.sleep(5)
-                        continue
-
-                    # Check posting limits
-                    if not self._can_publish(db, config):
-                        moment.status = "skipped"
-                        moment.error_message = "Posting limit reached or quiet hours"
-                        db.commit()
-                        logger.info("Moment %d skipped (posting limits)", moment.id)
-                        await asyncio.sleep(5)
-                        continue
-
-                    moment_id = moment.id
-                    frame_path = moment.frame_path
+                    # Get location for window manager
+                    from models.database import Settings
+                    settings = db.query(Settings).first()
+                    lat = settings.latitude if settings and settings.latitude else 40.338
+                    lon = settings.longitude if settings and settings.longitude else -73.977
                 finally:
                     db.close()
 
-                # Process through pipeline stages
-                await self._process_moment(moment_id, frame_path, config)
-                await asyncio.sleep(2)
+                from services.shortforge.capture_windows import get_capture_window_manager
+                wm = get_capture_window_manager(lat, lon)
+                current_window = wm.get_current_window()
+
+                # Detect window transition: we were in a window, now we're not (or in a different one)
+                if last_window and last_window != current_window:
+                    # Previous window ended — capture best candidate
+                    candidate = wm.get_best_candidate(last_window)
+                    if candidate:
+                        logger.info(
+                            "Window '%s' ended. Best: preset=%d score=%.3f. Triggering capture.",
+                            last_window, candidate["preset_id"], candidate["score"],
+                        )
+
+                        # Create moment from best candidate
+                        db = SessionLocal()
+                        try:
+                            moment = Moment(
+                                camera_id=config.camera_id,
+                                timestamp=datetime.now(timezone.utc),
+                                trigger_type="window",
+                                score=round(candidate["score"], 3),
+                                frame_path=candidate.get("frame_path"),
+                                status="detected",
+                            )
+                            db.add(moment)
+                            db.commit()
+                            db.refresh(moment)
+                            moment_id = moment.id
+                            frame_path = candidate.get("frame_path")
+                        finally:
+                            db.close()
+
+                        wm.mark_captured(last_window)
+                        await self._process_moment(moment_id, frame_path, config)
+                    else:
+                        logger.info("Window '%s' ended with no candidates", last_window)
+
+                last_window = current_window
+                await asyncio.sleep(30)  # Check every 30s
 
             except asyncio.CancelledError:
                 break

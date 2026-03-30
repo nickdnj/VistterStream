@@ -165,6 +165,11 @@ const PipelineStatusBar: React.FC<{ status: PipelineStatus }> = ({ status }) => 
         <div className="text-gray-400">
           Disk: <span className="text-white">{status.disk_usage_mb.toFixed(1)}</span> MB
         </div>
+        {(status as any).active_window && (
+          <div className="text-yellow-400 font-medium">
+            {(status as any).active_window.replace('_', ' ')}
+          </div>
+        )}
       </div>
     </div>
   );

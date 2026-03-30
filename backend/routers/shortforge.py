@@ -34,6 +34,8 @@ class PipelineStatus(BaseModel):
     next_post: Optional[str] = None
     disk_usage_mb: float = 0
     timezone: str = "America/New_York"
+    active_window: Optional[str] = None
+    capture_windows: list = []
 
 class ShortRead(BaseModel):
     id: int
@@ -180,10 +182,22 @@ async def get_pipeline_status(
     if data_dir.exists():
         disk_mb = sum(f.stat().st_size for f in data_dir.rglob("*") if f.is_file()) / (1024 * 1024)
 
-    # Get app timezone
+    # Get app timezone + capture windows
     from models.database import Settings
     app_settings = db.query(Settings).first()
     tz = app_settings.timezone if app_settings and app_settings.timezone else "America/New_York"
+
+    active_window = None
+    capture_windows = []
+    try:
+        from services.shortforge.capture_windows import get_capture_window_manager
+        lat = app_settings.latitude if app_settings and app_settings.latitude else 40.338
+        lon = app_settings.longitude if app_settings and app_settings.longitude else -73.977
+        wm = get_capture_window_manager(lat, lon)
+        active_window = wm.get_current_window()
+        capture_windows = wm.get_windows_for_today()
+    except Exception:
+        pass
 
     return PipelineStatus(
         enabled=config.enabled,
@@ -195,6 +209,8 @@ async def get_pipeline_status(
         moments_today=moments_today,
         disk_usage_mb=round(disk_mb, 1),
         timezone=tz,
+        active_window=active_window,
+        capture_windows=capture_windows,
     )
 
 

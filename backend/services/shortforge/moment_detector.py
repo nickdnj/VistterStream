@@ -117,49 +117,44 @@ class MomentDetector:
             preset_id, trigger_type, score, threshold,
         )
 
-        if score < threshold:
+        # --- Window-based capture ---
+        # Check if we're in a capture window
+        from services.shortforge.capture_windows import get_capture_window_manager
+        from models.database import Settings
+        db = SessionLocal()
+        try:
+            settings = db.query(Settings).first()
+            lat = settings.latitude if settings and settings.latitude else 40.338
+            lon = settings.longitude if settings and settings.longitude else -73.977
+        finally:
+            db.close()
+
+        wm = get_capture_window_manager(lat, lon)
+        window = wm.get_current_window()
+
+        if window is None:
+            # Not in a capture window — skip (dark hours or between windows)
             return None
 
         # Person detection gate — reject frames containing people (privacy)
         has_people = await asyncio.to_thread(self._detect_people, frame)
         if has_people:
             logger.info(
-                "ShortForge [preset %d]: moment rejected (people detected)",
+                "ShortForge [preset %d]: rejected (people detected)",
                 preset_id,
             )
             return None
 
-        # Check cooldown (global, not per-preset)
-        now = time.time()
-        if now - self._last_moment_time < (config.cooldown_seconds or 120):
-            return None
-
-        self._last_moment_time = now
-
-        # Save frame snapshot
+        # Submit score to window manager (combines motion + brightness as quality indicator)
+        quality_score = score  # Use the highest motion/brightness score as quality proxy
         frame_path = self._save_snapshot(frame, preset_id)
+        wm.submit_score(window, preset_id, quality_score, snapshot_url,
+                        str(frame_path) if frame_path else None)
 
-        # Log moment to database
-        db = SessionLocal()
-        try:
-            moment = Moment(
-                camera_id=camera_id,
-                timestamp=datetime.now(timezone.utc),
-                trigger_type=trigger_type,
-                score=round(score, 3),
-                frame_path=str(frame_path) if frame_path else None,
-                status="detected",
-            )
-            db.add(moment)
-            db.commit()
-            db.refresh(moment)
-            logger.info(
-                "Moment detected: preset=%d type=%s score=%.3f id=%d",
-                preset_id, trigger_type, score, moment.id,
-            )
-            return moment.id
-        finally:
-            db.close()
+        # Check if the window just ended — if so, trigger capture of best candidate
+        # This is checked by the scheduler's pipeline loop, not here.
+        # We just accumulate scores. The scheduler will check get_best_candidate() periodically.
+        return None
 
     async def _grab_frame(self, snapshot_url: str) -> Optional[np.ndarray]:
         """Grab a frame via HTTP snapshot."""
