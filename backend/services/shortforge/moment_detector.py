@@ -43,8 +43,10 @@ class MomentDetector:
         self._log_counter: int = 0
         # HOG person detector (initialized lazily)
         self._hog: Optional[cv2.HOGDescriptor] = None
-        # Recent score history for dashboard: {preset_id: [{"time": ..., "type": ..., "score": ..., "threshold": ...}]}
+        # Recent score history for dashboard
         self.score_history: dict[int, list[dict]] = {}
+        # Test capture queue: set of preset_ids to capture on next timeline hit
+        self.test_queue: set[int] = set()
         # Suppress httpx request logging (snapshot URL contains camera credentials)
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -82,6 +84,56 @@ class MomentDetector:
                 return None
         finally:
             db.close()
+
+        # Check test queue — if this preset is queued, force a test capture
+        if preset_id in self.test_queue:
+            self.test_queue.discard(preset_id)
+            logger.info("ShortForge: test capture triggered for queued preset %d", preset_id)
+
+            frame = await self._grab_frame(snapshot_url)
+            if frame is None:
+                return None
+
+            frame_path = self._save_snapshot(frame, preset_id)
+
+            # Create moment and trigger pipeline
+            db = SessionLocal()
+            try:
+                moment = Moment(
+                    camera_id=camera_id,
+                    timestamp=datetime.now(timezone.utc),
+                    trigger_type="test",
+                    score=1.0,
+                    frame_path=str(frame_path) if frame_path else None,
+                    status="detected",
+                )
+                db.add(moment)
+                db.commit()
+                db.refresh(moment)
+                logger.info("Test moment created: preset=%d id=%d", preset_id, moment.id)
+
+                # Run pipeline in background
+                import asyncio
+                from services.shortforge.clip_capture import get_clip_capture
+                from services.shortforge.scheduler import get_shortforge_scheduler
+
+                async def _run_test(mid, surl, fpath):
+                    capture = get_clip_capture()
+                    clip_id = await capture.capture_from_snapshot(mid, surl, duration=15)
+                    if clip_id:
+                        db2 = SessionLocal()
+                        try:
+                            cfg = db2.query(ShortForgeConfig).first()
+                        finally:
+                            db2.close()
+                        if cfg:
+                            sched = get_shortforge_scheduler()
+                            await sched._process_moment(mid, fpath, cfg)
+
+                asyncio.create_task(_run_test(moment.id, snapshot_url, str(frame_path) if frame_path else None))
+                return moment.id
+            finally:
+                db.close()
 
         # Grab frame via HTTP snapshot
         frame = await self._grab_frame(snapshot_url)

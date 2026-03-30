@@ -211,13 +211,13 @@ const ShortForgeSettings: React.FC = () => {
                           await api.post(`/shortforge/test-capture/${p.preset_id}`);
                         } catch (err) {
                           console.error('Test capture failed:', err);
+                          setTestingPreset(null);
                         }
-                        setTimeout(() => setTestingPreset(null), 3000);
                       }}
                       disabled={testingPreset === p.preset_id}
-                      className={`text-xs px-2 py-1 rounded ${testingPreset === p.preset_id ? 'bg-yellow-600 text-white' : 'bg-dark-600 text-gray-300 hover:bg-primary-600 hover:text-white'}`}
+                      className={`text-xs px-2.5 py-1 rounded font-medium ${testingPreset === p.preset_id ? 'bg-yellow-600/80 text-yellow-100' : 'bg-dark-600 text-gray-300 hover:bg-primary-600 hover:text-white'}`}
                     >
-                      {testingPreset === p.preset_id ? 'Capturing...' : 'Test'}
+                      {testingPreset === p.preset_id ? 'Queued...' : 'Test'}
                     </button>
                   </div>
                 ))}

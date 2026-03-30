@@ -571,79 +571,24 @@ async def get_timeline_presets(
 @router.post("/test-capture/{preset_id}")
 async def test_capture(
     preset_id: int,
-    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Trigger a test short capture for a specific preset (on-demand)."""
-    config = db.query(ShortForgeConfig).first()
-    if not config or not config.enabled:
-        raise HTTPException(status_code=400, detail="ShortForge is not enabled")
+    """Queue a test capture for a preset (fires on next timeline hit)."""
+    from services.shortforge.moment_detector import get_moment_detector
+    detector = get_moment_detector()
+    detector.test_queue.add(preset_id)
+    logger.info("Test capture queued: preset=%d (will fire on next timeline segment)", preset_id)
+    return {"message": "Test capture queued", "preset_id": preset_id}
 
-    # Find the camera for this preset
-    from models.database import Preset
-    preset = db.query(Preset).filter(Preset.id == preset_id).first()
-    if not preset:
-        raise HTTPException(status_code=404, detail="Preset not found")
 
-    camera = db.query(Camera).filter(Camera.id == preset.camera_id).first()
-    if not camera or not camera.snapshot_url:
-        raise HTTPException(status_code=400, detail="Camera has no snapshot URL")
-
-    # Save snapshot as frame for headline generation
-    from pathlib import Path as P
-    snap_dir = P("/data/shortforge/snapshots") if P("/data").exists() else P("data/shortforge/snapshots")
-    snap_dir.mkdir(parents=True, exist_ok=True)
-    frame_path = str(snap_dir / f"test_{preset_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.jpg")
-    try:
-        import httpx as _httpx
-        resp = _httpx.get(camera.snapshot_url, timeout=10.0)
-        if resp.status_code == 200:
-            P(frame_path).write_bytes(resp.content)
-    except Exception:
-        frame_path = None
-
-    # Create a moment directly
-    moment = Moment(
-        camera_id=camera.id,
-        timestamp=datetime.now(timezone.utc),
-        trigger_type="test",
-        score=1.0,
-        frame_path=frame_path,
-        status="detected",
-    )
-    db.add(moment)
-    db.commit()
-    db.refresh(moment)
-
-    # Trigger snapshot-based capture + full pipeline in background
-    import asyncio
-
-    async def _run_test_pipeline(moment_id: int, snapshot_url: str, frame_path_val):
-        from services.shortforge.clip_capture import get_clip_capture
-        from services.shortforge.scheduler import get_shortforge_scheduler
-        from models.database import SessionLocal as SL
-        from models.shortforge import ShortForgeConfig as SFC
-        capture = get_clip_capture()
-        clip_id = await capture.capture_from_snapshot(
-            moment_id=moment_id,
-            snapshot_url=snapshot_url,
-            duration=15,
-        )
-        if clip_id:
-            # Reload config in this async context (original session is closed)
-            db = SL()
-            try:
-                fresh_config = db.query(SFC).first()
-            finally:
-                db.close()
-            if fresh_config:
-                scheduler = get_shortforge_scheduler()
-                await scheduler._process_moment(moment_id, frame_path_val, fresh_config)
-
-    asyncio.create_task(_run_test_pipeline(moment.id, camera.snapshot_url, frame_path))
-
-    logger.info("Test capture triggered: preset=%d moment=%d", preset_id, moment.id)
-    return {"message": "Test capture started", "moment_id": moment.id}
+@router.get("/test-queue")
+async def get_test_queue(
+    current_user=Depends(get_current_user),
+):
+    """Get the current test capture queue."""
+    from services.shortforge.moment_detector import get_moment_detector
+    detector = get_moment_detector()
+    return {"queued": list(detector.test_queue)}
 
 
 @router.delete("/moments")
