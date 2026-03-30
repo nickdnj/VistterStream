@@ -589,12 +589,26 @@ async def test_capture(
     if not camera or not camera.snapshot_url:
         raise HTTPException(status_code=400, detail="Camera has no snapshot URL")
 
+    # Save snapshot as frame for headline generation
+    from pathlib import Path as P
+    snap_dir = P("/data/shortforge/snapshots") if P("/data").exists() else P("data/shortforge/snapshots")
+    snap_dir.mkdir(parents=True, exist_ok=True)
+    frame_path = str(snap_dir / f"test_{preset_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.jpg")
+    try:
+        import httpx as _httpx
+        resp = _httpx.get(camera.snapshot_url, timeout=10.0)
+        if resp.status_code == 200:
+            P(frame_path).write_bytes(resp.content)
+    except Exception:
+        frame_path = None
+
     # Create a moment directly
     moment = Moment(
         camera_id=camera.id,
         timestamp=datetime.now(timezone.utc),
         trigger_type="test",
         score=1.0,
+        frame_path=frame_path,
         status="detected",
     )
     db.add(moment)
@@ -604,7 +618,7 @@ async def test_capture(
     # Trigger snapshot-based capture + full pipeline in background
     import asyncio
 
-    async def _run_test_pipeline(moment_id: int, snapshot_url: str, config_obj):
+    async def _run_test_pipeline(moment_id: int, snapshot_url: str, frame_path_val, config_obj):
         from services.shortforge.clip_capture import get_clip_capture
         from services.shortforge.scheduler import get_shortforge_scheduler
         capture = get_clip_capture()
@@ -615,9 +629,9 @@ async def test_capture(
         )
         if clip_id:
             scheduler = get_shortforge_scheduler()
-            await scheduler._process_moment(moment_id, None, config_obj)
+            await scheduler._process_moment(moment_id, frame_path_val, config_obj)
 
-    asyncio.create_task(_run_test_pipeline(moment.id, camera.snapshot_url, config))
+    asyncio.create_task(_run_test_pipeline(moment.id, camera.snapshot_url, frame_path, config))
 
     logger.info("Test capture triggered: preset=%d moment=%d", preset_id, moment.id)
     return {"message": "Test capture started", "moment_id": moment.id}
