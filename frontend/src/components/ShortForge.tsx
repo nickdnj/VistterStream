@@ -224,9 +224,13 @@ const ShortCard: React.FC<{ short: ShortItem; onClick: () => void; onDelete: (id
       </div>
       <div className="p-3">
         <p className="text-sm text-gray-200 line-clamp-2 mb-1">{short.headline || short.title || 'Untitled'}</p>
-        <div className="flex items-center justify-between text-xs text-gray-400">
-          <span>{formatViews(short.views)} views</span>
-          <span>{formatTime(short.published_at)}</span>
+        <div className="text-xs text-gray-400">
+          {(() => {
+            const ts = short.moment_timestamp || short.published_at;
+            if (!ts) return '';
+            const d = new Date(ts + (ts.endsWith('Z') ? '' : 'Z'));
+            return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+          })()}
         </div>
       </div>
     </div>
