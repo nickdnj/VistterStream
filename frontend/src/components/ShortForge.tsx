@@ -29,6 +29,7 @@ interface PipelineStatus {
   moments_today: number;
   next_post: string | null;
   disk_usage_mb: number;
+  timezone: string;
 }
 
 interface ShortItem {
@@ -255,10 +256,11 @@ const ShortDetailSlideOver: React.FC<{
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* Video preview */}
-            <div className="bg-dark-700 rounded-lg mx-auto overflow-hidden" style={{ width: '220px', aspectRatio: '9/16' }}>
+            <div className="bg-dark-900 rounded-lg mx-auto overflow-hidden" style={{ width: '220px', aspectRatio: '9/16' }}>
               {short.clip_id ? (
                 <video
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-contain"
+                  style={{ objectFit: 'contain', backgroundColor: '#000' }}
                   src={`/api/shortforge/clips/${short.clip_id}/video`}
                   controls
                   playsInline
@@ -700,7 +702,10 @@ const ShortForge: React.FC = () => {
   };
 
   const formatTime = (ts: string) => {
-    return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const tz = pipelineStatus?.timezone || 'America/New_York';
+    return new Date(ts + (ts.endsWith('Z') ? '' : 'Z')).toLocaleTimeString([], {
+      hour: 'numeric', minute: '2-digit', timeZone: tz,
+    });
   };
 
   // Loading skeleton

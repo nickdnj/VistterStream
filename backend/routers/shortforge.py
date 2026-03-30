@@ -27,12 +27,13 @@ class PipelineStatus(BaseModel):
     enabled: bool = False
     camera_id: Optional[int] = None
     camera_name: Optional[str] = None
-    state: str = "disabled"  # disabled, running, paused, error
+    state: str = "disabled"  # disabled, running, idle, paused, error
     shorts_today: int = 0
     max_shorts_per_day: int = 6
     moments_today: int = 0
     next_post: Optional[str] = None
     disk_usage_mb: float = 0
+    timezone: str = "America/New_York"
 
 class ShortRead(BaseModel):
     id: int
@@ -179,6 +180,11 @@ async def get_pipeline_status(
     if data_dir.exists():
         disk_mb = sum(f.stat().st_size for f in data_dir.rglob("*") if f.is_file()) / (1024 * 1024)
 
+    # Get app timezone
+    from models.database import Settings
+    app_settings = db.query(Settings).first()
+    tz = app_settings.timezone if app_settings and app_settings.timezone else "America/New_York"
+
     return PipelineStatus(
         enabled=config.enabled,
         camera_id=config.camera_id,
@@ -188,6 +194,7 @@ async def get_pipeline_status(
         max_shorts_per_day=config.max_shorts_per_day or 6,
         moments_today=moments_today,
         disk_usage_mb=round(disk_mb, 1),
+        timezone=tz,
     )
 
 
