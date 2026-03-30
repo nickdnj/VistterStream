@@ -143,8 +143,28 @@ class MomentDetector:
             return None
 
         # Save as latest snapshot for this preset (used by test captures)
+        # Delete previous snapshot for this preset to avoid disk bloat
+        prev = self.latest_snapshots.get(preset_id)
         snap_path = self._save_snapshot(frame, preset_id)
         if snap_path:
+            # Check if previous snapshot is the window manager's best — don't delete it if so
+            keep_prev = False
+            try:
+                from services.shortforge.capture_windows import get_capture_window_manager
+                wm = get_capture_window_manager()
+                for cand in wm._candidates.values():
+                    if cand.get("frame_path") == prev.get("path") if prev else False:
+                        keep_prev = True
+                        break
+            except Exception:
+                pass
+
+            if prev and prev.get("path") and not keep_prev:
+                try:
+                    Path(prev["path"]).unlink(missing_ok=True)
+                except Exception:
+                    pass
+
             self.latest_snapshots[preset_id] = {
                 "path": str(snap_path),
                 "time": datetime.now(timezone.utc).isoformat(),
