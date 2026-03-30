@@ -19,6 +19,16 @@ import {
 } from '@heroicons/react/24/outline';
 
 // Types
+interface CaptureWindow {
+  name: string;
+  label: string;
+  start: string;
+  end: string;
+  active: boolean;
+  captured: boolean;
+  best_score: number | null;
+}
+
 interface PipelineStatus {
   enabled: boolean;
   camera_id: number | null;
@@ -30,6 +40,8 @@ interface PipelineStatus {
   next_post: string | null;
   disk_usage_mb: number;
   timezone: string;
+  active_window: string | null;
+  capture_windows: CaptureWindow[];
 }
 
 interface ShortItem {
@@ -165,12 +177,38 @@ const PipelineStatusBar: React.FC<{ status: PipelineStatus }> = ({ status }) => 
         <div className="text-gray-400">
           Disk: <span className="text-white">{status.disk_usage_mb.toFixed(1)}</span> MB
         </div>
-        {(status as any).active_window && (
+        {status.active_window && (
           <div className="text-yellow-400 font-medium">
-            {(status as any).active_window.replace('_', ' ')}
+            {status.active_window.replace(/_/g, ' ')}
           </div>
         )}
       </div>
+      {/* Capture windows timeline */}
+      {status.capture_windows && status.capture_windows.length > 0 && (
+        <div className="flex items-center gap-2 px-6 mt-2 text-xs">
+          {status.capture_windows.map(w => {
+            const tz = status.timezone || 'America/New_York';
+            const start = new Date(w.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz });
+            const end = new Date(w.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz });
+            return (
+              <div
+                key={w.name}
+                className={`px-2 py-1 rounded border ${
+                  w.active ? 'border-yellow-500 bg-yellow-500/10 text-yellow-300' :
+                  w.captured ? 'border-green-500/40 bg-green-500/10 text-green-400' :
+                  'border-dark-600 text-gray-500'
+                }`}
+                title={`${w.label}: ${start} – ${end}${w.best_score ? ` (best: ${w.best_score.toFixed(3)})` : ''}`}
+              >
+                {w.label.split(' ').map(word => word[0]).join('')}
+                {' '}{start}
+                {w.captured && ' ✓'}
+                {w.active && ' ●'}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
