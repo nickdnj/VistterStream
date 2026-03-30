@@ -115,7 +115,6 @@ class MomentDetector:
                 logger.info("Test moment created: preset=%d id=%d", preset_id, moment.id)
 
                 # Run pipeline in background
-                import asyncio
                 from services.shortforge.clip_capture import get_clip_capture
                 from services.shortforge.scheduler import get_shortforge_scheduler
 
