@@ -200,7 +200,7 @@ const ShortForgeSettings: React.FC = () => {
                     />
 
                     {/* Reference + Offset */}
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <select
                         className="bg-dark-600 border border-dark-500 rounded px-2 py-1 text-xs text-gray-200"
                         value={w.reference}
@@ -210,15 +210,31 @@ const ShortForgeSettings: React.FC = () => {
                         <option value="sunset">Sunset</option>
                         <option value="fixed">Fixed time</option>
                       </select>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          className="bg-dark-600 border border-dark-500 rounded px-2 py-1 text-xs text-gray-200 w-20"
-                          value={w.offset_minutes}
-                          onChange={e => updateWindow(i, 'offset_minutes', parseInt(e.target.value) || 0)}
-                        />
-                        <span className="text-xs text-gray-500">min offset</span>
-                      </div>
+                      {w.reference === 'fixed' ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="time"
+                            className="bg-dark-600 border border-dark-500 rounded px-2 py-1 text-xs text-gray-200"
+                            value={`${String(Math.floor((w.offset_minutes + 240) / 60) % 24).padStart(2, '0')}:${String(Math.abs(w.offset_minutes + 240) % 60).padStart(2, '0')}`}
+                            onChange={e => {
+                              const [h, m] = e.target.value.split(':').map(Number);
+                              // Convert local EDT (UTC-4) to minutes-from-midnight-UTC
+                              updateWindow(i, 'offset_minutes', (h + 4) * 60 + m);
+                            }}
+                          />
+                          <span className="text-xs text-gray-500">local time</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            className="bg-dark-600 border border-dark-500 rounded px-2 py-1 text-xs text-gray-200 w-20"
+                            value={w.offset_minutes}
+                            onChange={e => updateWindow(i, 'offset_minutes', parseInt(e.target.value) || 0)}
+                          />
+                          <span className="text-xs text-gray-500">min offset</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1">
                         <input
                           type="number" min="15" max="480"
