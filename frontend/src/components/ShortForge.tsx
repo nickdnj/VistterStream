@@ -206,7 +206,7 @@ const ShortCard: React.FC<{ short: ShortItem; onClick: () => void; onDelete: (id
             <SparklesIcon className="h-8 w-8" />
           </div>
         )}
-        <div className="absolute top-2 left-2">
+        <div className="absolute top-2 left-2 z-10">
           <StatusBadge status={short.status} />
         </div>
         {short.score !== null && (
@@ -215,8 +215,8 @@ const ShortCard: React.FC<{ short: ShortItem; onClick: () => void; onDelete: (id
           </div>
         )}
         <button
-          onClick={(e) => { e.stopPropagation(); onDelete(short.id); }}
-          className="absolute bottom-2 right-2 bg-dark-900/80 hover:bg-red-600 p-1 rounded transition-colors"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDelete(short.id); }}
+          className="absolute bottom-2 right-2 z-10 bg-dark-900/80 hover:bg-red-600 p-1.5 rounded transition-colors"
           title="Delete short"
         >
           <TrashIcon className="h-4 w-4 text-gray-400 hover:text-white" />
