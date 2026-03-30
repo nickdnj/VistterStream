@@ -236,11 +236,19 @@ class ShortForgeScheduler:
     async def _process_moment(self, moment_id: int, frame_path: Optional[str], config: ShortForgeConfig):
         """Run a moment through the full pipeline: capture → headline → render → publish."""
         try:
-            # Stage 1: Capture clip
-            capture = get_clip_capture()
-            clip_id = await capture.capture_clip(moment_id)
+            # Stage 1: Check if clip already exists (test capture creates it upfront)
+            db = SessionLocal()
+            try:
+                existing_clip = db.query(Clip).filter(Clip.moment_id == moment_id).first()
+                clip_id = existing_clip.id if existing_clip else None
+            finally:
+                db.close()
+
             if not clip_id:
-                return
+                capture = get_clip_capture()
+                clip_id = await capture.capture_clip(moment_id)
+                if not clip_id:
+                    return
 
             # Stage 2: Generate headline
             weather = await fetch_weather_data()
