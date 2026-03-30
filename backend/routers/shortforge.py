@@ -448,6 +448,19 @@ async def delete_short(
     return {"message": "Short marked as removed"}
 
 
+@router.get("/scores")
+async def get_score_history(
+    current_user=Depends(get_current_user),
+):
+    """Get recent per-preset detection scores for the dashboard activity monitor."""
+    try:
+        from services.shortforge.moment_detector import get_moment_detector
+        detector = get_moment_detector()
+        return detector.score_history
+    except Exception:
+        return {}
+
+
 @router.get("/stats")
 async def get_stats(
     db: Session = Depends(get_db),

@@ -32,6 +32,9 @@ SNAPSHOTS_DIR = DATA_DIR / "snapshots"
 class MomentDetector:
     """Analyzes camera snapshots per-preset for interesting moments."""
 
+    # Max recent scores to keep in memory per preset
+    MAX_SCORE_HISTORY = 30
+
     def __init__(self):
         # Per-preset state: {preset_id: {"prev_frame": ..., "prev_hist": ...}}
         self._preset_state: dict[int, dict] = {}
@@ -40,6 +43,8 @@ class MomentDetector:
         self._log_counter: int = 0
         # HOG person detector (initialized lazily)
         self._hog: Optional[cv2.HOGDescriptor] = None
+        # Recent score history for dashboard: {preset_id: [{"time": ..., "type": ..., "score": ..., "threshold": ...}]}
+        self.score_history: dict[int, list[dict]] = {}
         # Suppress httpx request logging (snapshot URL contains camera credentials)
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -90,6 +95,21 @@ class MomentDetector:
 
         trigger_type, score = result
         threshold = self._get_threshold(config, trigger_type)
+
+        # Store in score history for dashboard
+        if preset_id not in self.score_history:
+            self.score_history[preset_id] = []
+        self.score_history[preset_id].append({
+            "time": datetime.now(timezone.utc).isoformat(),
+            "preset_id": preset_id,
+            "type": trigger_type,
+            "score": round(score, 4),
+            "threshold": round(threshold, 2),
+            "triggered": score >= threshold,
+        })
+        # Trim to max history
+        if len(self.score_history[preset_id]) > self.MAX_SCORE_HISTORY:
+            self.score_history[preset_id] = self.score_history[preset_id][-self.MAX_SCORE_HISTORY:]
 
         # Log every evaluation (only ~8 per 2-minute timeline loop)
         logger.info(

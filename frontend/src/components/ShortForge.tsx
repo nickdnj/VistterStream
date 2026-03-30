@@ -643,18 +643,22 @@ const ShortForge: React.FC = () => {
   const [selectedShort, setSelectedShort] = useState<ShortItem | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showMoments, setShowMoments] = useState(true);
+  const [showScores, setShowScores] = useState(false);
+  const [scoreHistory, setScoreHistory] = useState<Record<string, Array<{time: string; preset_id: number; type: string; score: number; threshold: number; triggered: boolean}>>>({});
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const [statusRes, shortsRes, momentsRes] = await Promise.all([
+      const [statusRes, shortsRes, momentsRes, scoresRes] = await Promise.all([
         api.get('/shortforge/status'),
         api.get('/shortforge/shorts?limit=12'),
         api.get('/shortforge/moments?limit=30'),
+        api.get('/shortforge/scores').catch(() => ({ data: {} })),
       ]);
       setPipelineStatus(statusRes.data);
       setShorts(shortsRes.data);
       setMoments(momentsRes.data);
+      setScoreHistory(scoresRes.data || {});
     } catch (err) {
       console.error('Failed to fetch ShortForge data:', err);
     } finally {
@@ -796,13 +800,56 @@ const ShortForge: React.FC = () => {
                 Moment Log
                 <span className="ml-2 text-gray-500">({moments.length})</span>
               </h2>
-              <button
-                onClick={() => setShowMoments(!showMoments)}
-                className="text-xs text-gray-500 hover:text-gray-300"
-              >
-                {showMoments ? 'Hide' : 'Show'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowScores(!showScores)}
+                  className={`text-xs ${showScores ? 'text-primary-400' : 'text-gray-500'} hover:text-gray-300`}
+                >
+                  {showScores ? 'Hide Scores' : 'Scores'}
+                </button>
+                <button
+                  onClick={() => setShowMoments(!showMoments)}
+                  className="text-xs text-gray-500 hover:text-gray-300"
+                >
+                  {showMoments ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
+            {showScores && Object.keys(scoreHistory).length > 0 && (
+              <div className="mb-4 space-y-2">
+                {Object.entries(scoreHistory).map(([presetId, scores]) => {
+                  const latest = scores[scores.length - 1];
+                  const maxScore = Math.max(...scores.map(s => s.score));
+                  const avgScore = scores.reduce((sum, s) => sum + s.score, 0) / scores.length;
+                  return (
+                    <div key={presetId} className="bg-dark-700 rounded px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-300">Preset {presetId}</span>
+                        <span className="text-xs text-gray-500">
+                          latest: <span className={`font-mono ${latest?.triggered ? 'text-green-400' : 'text-gray-400'}`}>{latest?.score?.toFixed(4)}</span>
+                          {' / '}thresh: {latest?.threshold?.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-end gap-px h-6">
+                        {scores.slice(-20).map((s, i) => (
+                          <div
+                            key={i}
+                            className={`flex-1 rounded-t ${s.triggered ? 'bg-green-500' : s.score > (s.threshold * 0.5) ? 'bg-yellow-500/60' : 'bg-gray-600'}`}
+                            style={{ height: `${Math.max(2, Math.min(100, (s.score / Math.max(s.threshold, 0.01)) * 100))}%` }}
+                            title={`${s.type}=${s.score.toFixed(4)} @ ${new Date(s.time + 'Z').toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: pipelineStatus?.timezone || 'America/New_York' })}`}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-600 mt-1">
+                        <span>avg: {avgScore.toFixed(4)}</span>
+                        <span>peak: {maxScore.toFixed(4)}</span>
+                        <span>{scores.length} readings</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {showMoments && (
               <div className="flex-1 overflow-y-auto">
                 <table className="w-full text-sm">
