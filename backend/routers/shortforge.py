@@ -601,15 +601,23 @@ async def test_capture(
     db.commit()
     db.refresh(moment)
 
-    # Trigger snapshot-based capture in background (doesn't interfere with live stream)
+    # Trigger snapshot-based capture + full pipeline in background
     import asyncio
-    from services.shortforge.clip_capture import get_clip_capture
-    capture = get_clip_capture()
-    asyncio.create_task(capture.capture_from_snapshot(
-        moment_id=moment.id,
-        snapshot_url=camera.snapshot_url,
-        duration=15,
-    ))
+
+    async def _run_test_pipeline(moment_id: int, snapshot_url: str, config_obj):
+        from services.shortforge.clip_capture import get_clip_capture
+        from services.shortforge.scheduler import get_shortforge_scheduler
+        capture = get_clip_capture()
+        clip_id = await capture.capture_from_snapshot(
+            moment_id=moment_id,
+            snapshot_url=snapshot_url,
+            duration=15,
+        )
+        if clip_id:
+            scheduler = get_shortforge_scheduler()
+            await scheduler._process_moment(moment_id, None, config_obj)
+
+    asyncio.create_task(_run_test_pipeline(moment.id, camera.snapshot_url, config))
 
     logger.info("Test capture triggered: preset=%d moment=%d", preset_id, moment.id)
     return {"message": "Test capture started", "moment_id": moment.id}
