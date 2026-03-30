@@ -30,6 +30,19 @@ interface Camera {
   name: string;
 }
 
+interface TimelineOption {
+  id: number;
+  name: string;
+}
+
+interface PresetInfo {
+  camera_id: number;
+  camera_name: string;
+  preset_id: number;
+  preset_name: string;
+  snapshot_url: string | null;
+}
+
 interface WindowConfig {
   name: string;
   label: string;
@@ -52,32 +65,45 @@ interface CaptureWindowStatus {
 const ShortForgeSettings: React.FC = () => {
   const [config, setConfig] = useState<ShortForgeConfig | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
+  const [timelines, setTimelines] = useState<TimelineOption[]>([]);
+  const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [windowConfigs, setWindowConfigs] = useState<WindowConfig[]>([]);
   const [windowStatuses, setWindowStatuses] = useState<CaptureWindowStatus[]>([]);
-  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string }>({});
+  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string; timeline_id?: number | null }>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testingPreset, setTestingPreset] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([
       api.get('/shortforge/config'),
       api.get('/cameras'),
+      api.get('/timelines'),
       api.get('/shortforge/status'),
       api.get('/shortforge/capture-windows'),
-    ]).then(([configRes, camerasRes, statusRes, windowsRes]) => {
+    ]).then(([configRes, camerasRes, timelinesRes, statusRes, windowsRes]) => {
       setConfig(configRes.data);
       setCameras(camerasRes.data);
+      setTimelines(timelinesRes.data || []);
       setWindowStatuses(statusRes.data.capture_windows || []);
       setWindowConfigs(windowsRes.data || []);
+      const cfg = configRes.data;
       setForm({
-        enabled: configRes.data.enabled,
-        camera_id: configRes.data.camera_id,
-        max_shorts_per_day: configRes.data.max_shorts_per_day,
-        default_tags: configRes.data.default_tags,
-        description_template: configRes.data.description_template,
-        safety_gate_enabled: configRes.data.safety_gate_enabled,
-        ai_model: configRes.data.ai_model,
+        enabled: cfg.enabled,
+        camera_id: cfg.camera_id,
+        timeline_id: cfg.timeline_id,
+        max_shorts_per_day: cfg.max_shorts_per_day,
+        default_tags: cfg.default_tags,
+        description_template: cfg.description_template,
+        safety_gate_enabled: cfg.safety_gate_enabled,
+        ai_model: cfg.ai_model,
       });
+      // Load presets if timeline is set
+      if (cfg.timeline_id) {
+        api.get(`/shortforge/timeline-presets/${cfg.timeline_id}`).then(res => {
+          setPresets(res.data.presets || []);
+        }).catch(() => {});
+      }
     }).catch(console.error);
   }, []);
 
@@ -144,18 +170,61 @@ const ShortForgeSettings: React.FC = () => {
             </button>
           </label>
           <div>
-            <label className="text-sm text-gray-400">Camera</label>
+            <label className="text-sm text-gray-400">Timeline</label>
             <select
               className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
-              value={form.camera_id || ''}
-              onChange={e => setForm(f => ({ ...f, camera_id: e.target.value ? parseInt(e.target.value) : null }))}
+              value={form.timeline_id || ''}
+              onChange={e => {
+                const tid = e.target.value ? parseInt(e.target.value) : null;
+                setForm(f => ({ ...f, timeline_id: tid }));
+                if (tid) {
+                  api.get(`/shortforge/timeline-presets/${tid}`).then(res => {
+                    setPresets(res.data.presets || []);
+                  }).catch(() => setPresets([]));
+                } else {
+                  setPresets([]);
+                }
+              }}
             >
-              <option value="">Select camera...</option>
-              {cameras.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              <option value="">Select timeline...</option>
+              {timelines.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
           </div>
+
+          {/* Presets from selected timeline */}
+          {presets.length > 0 && (
+            <div>
+              <label className="text-sm text-gray-400 mb-2 block">Presets ({presets.length})</label>
+              <div className="space-y-2">
+                {presets.map(p => (
+                  <div key={p.preset_id} className="flex items-center justify-between bg-dark-700 rounded-lg px-3 py-2">
+                    <div>
+                      <span className="text-sm text-gray-200">{p.preset_name}</span>
+                      <span className="text-xs text-gray-500 ml-2">({p.camera_name})</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        setTestingPreset(p.preset_id);
+                        try {
+                          await api.post(`/shortforge/test-capture/${p.preset_id}`);
+                        } catch (err) {
+                          console.error('Test capture failed:', err);
+                        }
+                        setTimeout(() => setTestingPreset(null), 3000);
+                      }}
+                      disabled={testingPreset === p.preset_id}
+                      className={`text-xs px-2 py-1 rounded ${testingPreset === p.preset_id ? 'bg-yellow-600 text-white' : 'bg-dark-600 text-gray-300 hover:bg-primary-600 hover:text-white'}`}
+                    >
+                      {testingPreset === p.preset_id ? 'Capturing...' : 'Test'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="text-sm text-gray-400">Max shorts per day</label>
             <input

@@ -80,6 +80,7 @@ class ConfigRead(BaseModel):
     id: int
     enabled: bool
     camera_id: Optional[int] = None
+    timeline_id: Optional[int] = None
     motion_threshold: float
     brightness_threshold: float
     activity_threshold: float
@@ -104,6 +105,7 @@ class ConfigRead(BaseModel):
 class ConfigUpdate(BaseModel):
     enabled: Optional[bool] = None
     camera_id: Optional[int] = None
+    timeline_id: Optional[int] = None
     motion_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     brightness_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     activity_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
@@ -337,6 +339,7 @@ async def get_config(
         id=config.id,
         enabled=config.enabled,
         camera_id=config.camera_id,
+        timeline_id=config.timeline_id,
         motion_threshold=config.motion_threshold if config.motion_threshold is not None else 0.05,
         brightness_threshold=config.brightness_threshold if config.brightness_threshold is not None else 0.15,
         activity_threshold=config.activity_threshold if config.activity_threshold is not None else 0.10,
@@ -509,6 +512,108 @@ async def update_capture_windows(
 
     logger.info("Capture windows updated by %s", current_user.username)
     return {"message": "Capture windows updated", "count": len(windows)}
+
+
+@router.get("/timeline-presets/{timeline_id}")
+async def get_timeline_presets(
+    timeline_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get all camera/preset combos used in a timeline (for ShortForge config)."""
+    from models.timeline import Timeline, TimelineTrack, TimelineCue
+    from models.database import Preset
+
+    timeline = db.query(Timeline).filter(Timeline.id == timeline_id).first()
+    if not timeline:
+        raise HTTPException(status_code=404, detail="Timeline not found")
+
+    # Get all video cues with camera_id and preset_id
+    cues = (
+        db.query(TimelineCue)
+        .join(TimelineTrack)
+        .filter(
+            TimelineTrack.timeline_id == timeline_id,
+            TimelineTrack.track_type == "video",
+        )
+        .all()
+    )
+
+    seen = set()
+    presets = []
+    for cue in cues:
+        cam_id = cue.action_params.get("camera_id")
+        preset_id = cue.action_params.get("preset_id")
+        if not cam_id or not preset_id:
+            continue
+        key = (cam_id, preset_id)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        camera = db.query(Camera).filter(Camera.id == cam_id).first()
+        preset = db.query(Preset).filter(Preset.id == preset_id).first()
+        presets.append({
+            "camera_id": cam_id,
+            "camera_name": camera.name if camera else f"Camera {cam_id}",
+            "preset_id": preset_id,
+            "preset_name": preset.name if preset else f"Preset {preset_id}",
+            "snapshot_url": camera.snapshot_url if camera else None,
+        })
+
+    return {
+        "timeline_id": timeline_id,
+        "timeline_name": timeline.name,
+        "presets": presets,
+    }
+
+
+@router.post("/test-capture/{preset_id}")
+async def test_capture(
+    preset_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Trigger a test short capture for a specific preset (on-demand)."""
+    config = db.query(ShortForgeConfig).first()
+    if not config or not config.enabled:
+        raise HTTPException(status_code=400, detail="ShortForge is not enabled")
+
+    # Find the camera for this preset
+    from models.database import Preset
+    preset = db.query(Preset).filter(Preset.id == preset_id).first()
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found")
+
+    camera = db.query(Camera).filter(Camera.id == preset.camera_id).first()
+    if not camera or not camera.snapshot_url:
+        raise HTTPException(status_code=400, detail="Camera has no snapshot URL")
+
+    # Create a moment directly
+    moment = Moment(
+        camera_id=camera.id,
+        timestamp=datetime.now(timezone.utc),
+        trigger_type="test",
+        score=1.0,
+        status="detected",
+    )
+    db.add(moment)
+    db.commit()
+    db.refresh(moment)
+
+    # Trigger capture in background
+    import asyncio
+    from services.shortforge.clip_capture import get_clip_capture
+    capture = get_clip_capture()
+    relay_url = f"rtmp://rtmp-relay:1935/live/camera_{camera.id}"
+    asyncio.create_task(capture.capture_direct(
+        moment_id=moment.id,
+        rtsp_url=relay_url,
+        duration=20,
+    ))
+
+    logger.info("Test capture triggered: preset=%d moment=%d", preset_id, moment.id)
+    return {"message": "Test capture started", "moment_id": moment.id}
 
 
 @router.delete("/moments")

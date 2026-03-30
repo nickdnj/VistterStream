@@ -77,6 +77,7 @@ class ShortForgeConfig(Base):
     # Pipeline control
     enabled = Column(Boolean, default=False)
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=True)
+    timeline_id = Column(Integer, nullable=True)  # Timeline to monitor (overrides camera_id)
 
     # Detection thresholds
     motion_threshold = Column(Float, default=0.05)

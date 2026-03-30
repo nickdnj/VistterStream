@@ -274,6 +274,20 @@ def ensure_destination_secrets_encrypted() -> None:
         logger.warning("Could not encrypt destination secrets: %s", e)
 
 
+def ensure_shortforge_timeline_id_column() -> None:
+    """Add timeline_id column to shortforge_config if missing."""
+    try:
+        db = SessionLocal()
+        cols = [r[1] for r in db.execute(text("PRAGMA table_info(shortforge_config)")).fetchall()]
+        if "timeline_id" not in cols:
+            db.execute(text("ALTER TABLE shortforge_config ADD COLUMN timeline_id INTEGER"))
+            db.commit()
+            logger.info("Added timeline_id column to shortforge_config")
+        db.close()
+    except Exception as e:
+        logger.warning("Could not ensure timeline_id: %s", e)
+
+
 def ensure_shortforge_capture_windows_column() -> None:
     """Add capture_windows_json column and seed defaults if missing."""
     import json as _json
@@ -371,6 +385,7 @@ if __name__ == "__main__":
     ensure_tempest_url_port_fix()
     ensure_destination_secrets_encrypted()
     ensure_shortforge_thresholds_fix()
+    ensure_shortforge_timeline_id_column()
     ensure_shortforge_capture_windows_column()
     ensure_default_admin()
 
