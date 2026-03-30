@@ -464,6 +464,53 @@ async def delete_short(
     return {"message": "Short marked as removed"}
 
 
+@router.get("/capture-windows")
+async def get_capture_windows(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get the raw capture window configs from DB."""
+    config = db.query(ShortForgeConfig).first()
+    if not config or not config.capture_windows_json:
+        return []
+    import json
+    if isinstance(config.capture_windows_json, str):
+        return json.loads(config.capture_windows_json)
+    return config.capture_windows_json
+
+
+@router.put("/capture-windows")
+async def update_capture_windows(
+    windows: list,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Update capture window configs."""
+    import json
+    config = db.query(ShortForgeConfig).first()
+    if not config:
+        raise HTTPException(status_code=404, detail="Config not found")
+
+    config.capture_windows_json = json.dumps(windows) if isinstance(windows, list) else windows
+    config.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    # Reload window manager configs
+    try:
+        from services.shortforge.capture_windows import get_capture_window_manager
+        from models.database import Settings
+        settings = db.query(Settings).first()
+        lat = settings.latitude if settings and settings.latitude else 40.338
+        lon = settings.longitude if settings and settings.longitude else -73.977
+        wm = get_capture_window_manager(lat, lon)
+        wm.reload_configs()
+    except Exception:
+        pass
+
+    logger.info("Capture windows updated by %s", current_user.username)
+    return {"message": "Capture windows updated", "count": len(windows)}
+
+
 @router.delete("/moments")
 async def purge_moments(
     db: Session = Depends(get_db),

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
 
 interface ShortForgeConfig {
   id: number;
@@ -29,7 +30,16 @@ interface Camera {
   name: string;
 }
 
-interface CaptureWindow {
+interface WindowConfig {
+  name: string;
+  label: string;
+  reference: 'sunrise' | 'sunset' | 'fixed';
+  offset_minutes: number;
+  duration_minutes: number;
+  enabled: boolean;
+}
+
+interface CaptureWindowStatus {
   name: string;
   label: string;
   start: string;
@@ -42,7 +52,8 @@ interface CaptureWindow {
 const ShortForgeSettings: React.FC = () => {
   const [config, setConfig] = useState<ShortForgeConfig | null>(null);
   const [cameras, setCameras] = useState<Camera[]>([]);
-  const [captureWindows, setCaptureWindows] = useState<CaptureWindow[]>([]);
+  const [windowConfigs, setWindowConfigs] = useState<WindowConfig[]>([]);
+  const [windowStatuses, setWindowStatuses] = useState<CaptureWindowStatus[]>([]);
   const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -52,19 +63,16 @@ const ShortForgeSettings: React.FC = () => {
       api.get('/shortforge/config'),
       api.get('/cameras'),
       api.get('/shortforge/status'),
-    ]).then(([configRes, camerasRes, statusRes]) => {
+      api.get('/shortforge/capture-windows'),
+    ]).then(([configRes, camerasRes, statusRes, windowsRes]) => {
       setConfig(configRes.data);
       setCameras(camerasRes.data);
-      setCaptureWindows(statusRes.data.capture_windows || []);
+      setWindowStatuses(statusRes.data.capture_windows || []);
+      setWindowConfigs(windowsRes.data || []);
       setForm({
         enabled: configRes.data.enabled,
         camera_id: configRes.data.camera_id,
-        motion_threshold: configRes.data.motion_threshold,
-        brightness_threshold: configRes.data.brightness_threshold,
-        activity_threshold: configRes.data.activity_threshold,
-        cooldown_seconds: configRes.data.cooldown_seconds,
         max_shorts_per_day: configRes.data.max_shorts_per_day,
-        min_posting_interval_minutes: configRes.data.min_posting_interval_minutes,
         default_tags: configRes.data.default_tags,
         description_template: configRes.data.description_template,
         safety_gate_enabled: configRes.data.safety_gate_enabled,
@@ -76,7 +84,10 @@ const ShortForgeSettings: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put('/shortforge/config', form);
+      await Promise.all([
+        api.put('/shortforge/config', form),
+        api.put('/shortforge/capture-windows', windowConfigs),
+      ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -84,6 +95,35 @@ const ShortForgeSettings: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const addWindow = () => {
+    const id = Date.now();
+    setWindowConfigs(prev => [...prev, {
+      name: `custom_${id}`,
+      label: 'New Window',
+      reference: 'sunrise',
+      offset_minutes: 120,
+      duration_minutes: 60,
+      enabled: true,
+    }]);
+  };
+
+  const removeWindow = (index: number) => {
+    setWindowConfigs(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateWindow = (index: number, field: string, value: any) => {
+    setWindowConfigs(prev => prev.map((w, i) => i === index ? { ...w, [field]: value } : w));
+  };
+
+  const formatOffset = (ref: string, offset: number): string => {
+    const absMin = Math.abs(offset);
+    const hrs = Math.floor(absMin / 60);
+    const mins = absMin % 60;
+    const timeStr = hrs > 0 ? `${hrs}h${mins > 0 ? ` ${mins}m` : ''}` : `${mins}m`;
+    if (offset === 0) return `At ${ref}`;
+    return offset > 0 ? `${timeStr} after ${ref}` : `${timeStr} before ${ref}`;
   };
 
   if (!config) return <div className="text-gray-400 text-center py-8">Loading ShortForge settings...</div>;
@@ -130,23 +170,91 @@ const ShortForgeSettings: React.FC = () => {
 
       {/* Capture Windows */}
       <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
-        <h2 className="text-xl font-semibold text-white mb-2">Capture Windows</h2>
-        <p className="text-sm text-gray-500 mb-4">Shorts are captured during these windows based on sunrise/sunset at your location. Best-scoring snapshot wins each window.</p>
-        <div className="space-y-2">
-          {captureWindows.map(w => {
-            const start = new Date(w.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-            const end = new Date(w.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Capture Windows</h2>
+            <p className="text-sm text-gray-500 mt-1">Define when shorts are captured based on sunrise/sunset</p>
+          </div>
+          <button
+            onClick={addWindow}
+            className="flex items-center gap-1 px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Add Window
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {windowConfigs.map((w, i) => {
+            const status = windowStatuses.find(s => s.name === w.name);
             return (
-              <div key={w.name} className={`flex items-center justify-between rounded-lg px-4 py-3 ${w.active ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-dark-700'}`}>
-                <div>
-                  <p className="text-sm text-gray-200 font-medium">{w.label}</p>
-                  <p className="text-xs text-gray-500">{start} – {end}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {w.captured && <span className="text-xs text-green-400 font-medium">Captured</span>}
-                  {w.active && <span className="text-xs text-yellow-400 font-medium">Active now</span>}
-                  {w.best_score !== null && <span className="text-xs text-gray-400">Best: {w.best_score.toFixed(3)}</span>}
-                  {!w.active && !w.captured && <span className="text-xs text-gray-600">Scheduled</span>}
+              <div key={w.name} className={`rounded-lg border p-4 ${w.enabled ? 'border-dark-600 bg-dark-700' : 'border-dark-700 bg-dark-800 opacity-60'}`}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 space-y-3">
+                    {/* Label */}
+                    <input
+                      type="text"
+                      className="bg-transparent text-sm font-medium text-gray-200 border-b border-dark-600 focus:border-primary-500 outline-none w-full pb-1"
+                      value={w.label}
+                      onChange={e => updateWindow(i, 'label', e.target.value)}
+                    />
+
+                    {/* Reference + Offset */}
+                    <div className="flex gap-2">
+                      <select
+                        className="bg-dark-600 border border-dark-500 rounded px-2 py-1 text-xs text-gray-200"
+                        value={w.reference}
+                        onChange={e => updateWindow(i, 'reference', e.target.value)}
+                      >
+                        <option value="sunrise">Sunrise</option>
+                        <option value="sunset">Sunset</option>
+                        <option value="fixed">Fixed time</option>
+                      </select>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          className="bg-dark-600 border border-dark-500 rounded px-2 py-1 text-xs text-gray-200 w-20"
+                          value={w.offset_minutes}
+                          onChange={e => updateWindow(i, 'offset_minutes', parseInt(e.target.value) || 0)}
+                        />
+                        <span className="text-xs text-gray-500">min offset</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number" min="15" max="480"
+                          className="bg-dark-600 border border-dark-500 rounded px-2 py-1 text-xs text-gray-200 w-20"
+                          value={w.duration_minutes}
+                          onChange={e => updateWindow(i, 'duration_minutes', parseInt(e.target.value) || 60)}
+                        />
+                        <span className="text-xs text-gray-500">min duration</span>
+                      </div>
+                    </div>
+
+                    {/* Computed info */}
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-gray-500">{formatOffset(w.reference, w.offset_minutes)}</span>
+                      {status && <span className="text-gray-500">Today: {new Date(status.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} – {new Date(status.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
+                      {status?.active && <span className="text-yellow-400 font-medium">Active now</span>}
+                      {status?.captured && <span className="text-green-400 font-medium">Captured</span>}
+                    </div>
+                  </div>
+
+                  {/* Controls */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${w.enabled ? 'bg-primary-600' : 'bg-dark-500'}`}
+                      onClick={() => updateWindow(i, 'enabled', !w.enabled)}
+                    >
+                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${w.enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                    <button
+                      onClick={() => removeWindow(i)}
+                      className="text-gray-500 hover:text-red-400 p-1"
+                      title="Remove window"
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

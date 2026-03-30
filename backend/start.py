@@ -274,6 +274,35 @@ def ensure_destination_secrets_encrypted() -> None:
         logger.warning("Could not encrypt destination secrets: %s", e)
 
 
+def ensure_shortforge_capture_windows_column() -> None:
+    """Add capture_windows_json column and seed defaults if missing."""
+    import json as _json
+    try:
+        db = SessionLocal()
+        # Check if column exists
+        cols = [r[1] for r in db.execute(text("PRAGMA table_info(shortforge_config)")).fetchall()]
+        if "capture_windows_json" not in cols:
+            db.execute(text("ALTER TABLE shortforge_config ADD COLUMN capture_windows_json TEXT"))
+            db.commit()
+            logger.info("Added capture_windows_json column to shortforge_config")
+
+        # Seed defaults if empty
+        row = db.execute(text("SELECT id, capture_windows_json FROM shortforge_config LIMIT 1")).fetchone()
+        if row and not row[1]:
+            defaults = _json.dumps([
+                {"name": "morning_golden", "label": "Morning Golden Hour", "reference": "sunrise", "offset_minutes": 0, "duration_minutes": 60, "enabled": True},
+                {"name": "midday_1", "label": "Late Morning", "reference": "sunrise", "offset_minutes": 180, "duration_minutes": 120, "enabled": True},
+                {"name": "midday_2", "label": "Early Afternoon", "reference": "sunset", "offset_minutes": -240, "duration_minutes": 120, "enabled": True},
+                {"name": "evening_golden", "label": "Evening Golden Hour", "reference": "sunset", "offset_minutes": -60, "duration_minutes": 60, "enabled": True},
+            ])
+            db.execute(text("UPDATE shortforge_config SET capture_windows_json = :val WHERE id = :id"), {"val": defaults, "id": row[0]})
+            db.commit()
+            logger.info("Seeded default capture windows")
+        db.close()
+    except Exception as e:
+        logger.warning("Could not ensure capture_windows_json: %s", e)
+
+
 def ensure_shortforge_thresholds_fix() -> None:
     """Fix ShortForge detection thresholds — original defaults (0.6, 0.5, 0.7) were too high."""
     try:
@@ -342,6 +371,7 @@ if __name__ == "__main__":
     ensure_tempest_url_port_fix()
     ensure_destination_secrets_encrypted()
     ensure_shortforge_thresholds_fix()
+    ensure_shortforge_capture_windows_column()
     ensure_default_admin()
 
     # Start the server

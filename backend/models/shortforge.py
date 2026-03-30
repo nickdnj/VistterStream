@@ -2,7 +2,7 @@
 ShortForge database models — automated YouTube Shorts pipeline
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -95,6 +95,11 @@ class ShortForgeConfig(Base):
     default_tags = Column(String, default="")  # comma-separated
     description_template = Column(Text, default="{{headline}} | {{location}} | {{conditions}}")
     safety_gate_enabled = Column(Boolean, default=True)
+
+    # Capture windows (JSON list of window configs)
+    # Each: {"name": str, "label": str, "reference": "sunrise"|"sunset"|"fixed",
+    #         "offset_minutes": int, "duration_minutes": int, "enabled": bool}
+    capture_windows_json = Column(JSON, nullable=True)
 
     # Storage retention (days)
     raw_clip_retention_days = Column(Integer, default=7)

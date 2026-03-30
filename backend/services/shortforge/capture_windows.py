@@ -118,40 +118,93 @@ class CaptureWindowManager:
         self.longitude = longitude
         self.tz_name = tz_name
 
-        # Best candidate per window: {"window_name": {"score": float, "preset_id": int, "snapshot_url": str, "frame_path": str}}
+        # Best candidate per window
         self._candidates: dict[str, dict] = {}
         # Track which windows have been captured today
         self._captured_today: set[str] = set()
         self._last_date: Optional[str] = None
+        # Custom window configs from DB (loaded on first use)
+        self._window_configs: Optional[list[dict]] = None
 
-    def get_current_window(self) -> Optional[str]:
-        """
-        Determine which capture window we're currently in.
+    def _load_window_configs(self) -> list[dict]:
+        """Load window configs from DB, falling back to defaults."""
+        if self._window_configs is not None:
+            return self._window_configs
 
-        Returns window name ("morning_golden", "midday_1", "midday_2", "evening_golden")
-        or None if outside all windows (dark hours).
-        """
+        try:
+            from models.database import SessionLocal
+            from models.shortforge import ShortForgeConfig
+            db = SessionLocal()
+            try:
+                config = db.query(ShortForgeConfig).first()
+                if config and config.capture_windows_json:
+                    import json
+                    if isinstance(config.capture_windows_json, str):
+                        self._window_configs = json.loads(config.capture_windows_json)
+                    else:
+                        self._window_configs = config.capture_windows_json
+                    return self._window_configs
+            finally:
+                db.close()
+        except Exception:
+            pass
+
+        # Defaults
+        self._window_configs = [
+            {"name": "morning_golden", "label": "Morning Golden Hour", "reference": "sunrise", "offset_minutes": 0, "duration_minutes": 60, "enabled": True},
+            {"name": "midday_1", "label": "Late Morning", "reference": "sunrise", "offset_minutes": 180, "duration_minutes": 120, "enabled": True},
+            {"name": "midday_2", "label": "Early Afternoon", "reference": "sunset", "offset_minutes": -240, "duration_minutes": 120, "enabled": True},
+            {"name": "evening_golden", "label": "Evening Golden Hour", "reference": "sunset", "offset_minutes": -60, "duration_minutes": 60, "enabled": True},
+        ]
+        return self._window_configs
+
+    def reload_configs(self):
+        """Force reload window configs from DB (call after settings change)."""
+        self._window_configs = None
+
+    def _resolve_windows(self) -> dict[str, tuple[datetime, datetime]]:
+        """Resolve window configs into concrete UTC time ranges for today."""
         now = datetime.now(timezone.utc)
-        today_str = now.strftime("%Y-%m-%d")
-
-        # Reset daily tracking
-        if self._last_date != today_str:
-            self._captured_today.clear()
-            self._candidates.clear()
-            self._last_date = today_str
-
         sun = get_sun_times(self.latitude, self.longitude, now)
         sunrise = sun["sunrise"]
         sunset = sun["sunset"]
 
-        # Define windows (all in UTC)
-        windows = {
-            "morning_golden": (sunrise, sunrise + timedelta(minutes=60)),
-            "midday_1": (sunrise + timedelta(hours=3), sunrise + timedelta(hours=5)),
-            "midday_2": (sunset - timedelta(hours=4), sunset - timedelta(hours=2)),
-            "evening_golden": (sunset - timedelta(minutes=60), sunset),
-        }
+        configs = self._load_window_configs()
+        windows = {}
 
+        for wc in configs:
+            if not wc.get("enabled", True):
+                continue
+
+            ref = wc.get("reference", "sunrise")
+            offset = timedelta(minutes=wc.get("offset_minutes", 0))
+            duration = timedelta(minutes=wc.get("duration_minutes", 60))
+
+            if ref == "sunrise":
+                start = sunrise + offset
+            elif ref == "sunset":
+                start = sunset + offset
+            else:
+                # Fixed time: offset_minutes from midnight UTC
+                base = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                start = base + offset
+
+            windows[wc["name"]] = (start, start + duration)
+
+        return windows
+
+    def get_current_window(self) -> Optional[str]:
+        """Determine which capture window we're currently in."""
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+
+        if self._last_date != today_str:
+            self._captured_today.clear()
+            self._candidates.clear()
+            self._last_date = today_str
+            self.reload_configs()  # Refresh configs daily
+
+        windows = self._resolve_windows()
         for name, (start, end) in windows.items():
             if start <= now <= end:
                 return name
@@ -161,25 +214,30 @@ class CaptureWindowManager:
     def get_windows_for_today(self) -> list[dict]:
         """Get all capture windows for today with their times and status."""
         now = datetime.now(timezone.utc)
-        sun = get_sun_times(self.latitude, self.longitude, now)
-        sunrise = sun["sunrise"]
-        sunset = sun["sunset"]
+        resolved = self._resolve_windows()
+        configs = self._load_window_configs()
 
-        windows = [
-            {"name": "morning_golden", "label": "Morning Golden Hour", "start": sunrise, "end": sunrise + timedelta(minutes=60)},
-            {"name": "midday_1", "label": "Late Morning", "start": sunrise + timedelta(hours=3), "end": sunrise + timedelta(hours=5)},
-            {"name": "midday_2", "label": "Early Afternoon", "start": sunset - timedelta(hours=4), "end": sunset - timedelta(hours=2)},
-            {"name": "evening_golden", "label": "Evening Golden Hour", "start": sunset - timedelta(minutes=60), "end": sunset},
-        ]
+        windows = []
+        for wc in configs:
+            name = wc["name"]
+            times = resolved.get(name)
+            if not times:
+                continue
 
-        for w in windows:
-            w["captured"] = w["name"] in self._captured_today
-            w["active"] = w["start"] <= now <= w["end"]
-            best = self._candidates.get(w["name"])
-            w["best_score"] = best["score"] if best else None
-            # Convert to ISO strings for API
-            w["start"] = w["start"].isoformat()
-            w["end"] = w["end"].isoformat()
+            start, end = times
+            windows.append({
+                "name": name,
+                "label": wc.get("label", name),
+                "reference": wc.get("reference", "sunrise"),
+                "offset_minutes": wc.get("offset_minutes", 0),
+                "duration_minutes": wc.get("duration_minutes", 60),
+                "enabled": wc.get("enabled", True),
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "captured": name in self._captured_today,
+                "active": start <= now <= end,
+                "best_score": self._candidates.get(name, {}).get("score"),
+            })
 
         return windows
 
