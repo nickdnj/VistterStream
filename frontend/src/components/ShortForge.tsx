@@ -407,6 +407,42 @@ const ShortDetailSlideOver: React.FC<{
 };
 
 // Settings slide-over
+// Capture windows display for settings
+const CaptureWindowsDisplay: React.FC = () => {
+  const [windows, setWindows] = useState<CaptureWindow[]>([]);
+
+  useEffect(() => {
+    api.get('/shortforge/status').then(res => {
+      setWindows(res.data.capture_windows || []);
+    }).catch(() => {});
+  }, []);
+
+  if (!windows.length) return <p className="text-xs text-gray-500">Loading windows...</p>;
+
+  return (
+    <div className="space-y-2">
+      {windows.map(w => {
+        const start = new Date(w.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const end = new Date(w.end).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return (
+          <div key={w.name} className={`flex items-center justify-between rounded-lg px-3 py-2 ${w.active ? 'bg-yellow-500/10 border border-yellow-500/30' : 'bg-dark-700'}`}>
+            <div>
+              <p className="text-sm text-gray-200">{w.label}</p>
+              <p className="text-xs text-gray-500">{start} – {end}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {w.captured && <span className="text-xs text-green-400">Captured</span>}
+              {w.active && <span className="text-xs text-yellow-400">Active</span>}
+              {w.best_score !== null && <span className="text-xs text-gray-400">Best: {w.best_score.toFixed(3)}</span>}
+              {!w.active && !w.captured && <span className="text-xs text-gray-600">Scheduled</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const SettingsSlideOver: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -564,6 +600,13 @@ const SettingsSlideOver: React.FC<{
                   />
                 </div>
               </div>
+            </section>
+
+            {/* Capture Windows */}
+            <section>
+              <h3 className="text-sm font-medium text-gray-300 mb-3">Capture Windows</h3>
+              <p className="text-xs text-gray-500 mb-3">Shorts are captured during these windows based on sunrise/sunset at your location. Best-scoring snapshot wins each window.</p>
+              <CaptureWindowsDisplay />
             </section>
 
             {/* Content Defaults */}
