@@ -971,8 +971,10 @@ class TimelineExecutor:
                     logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
                 
                 # ShortForge: evaluate this preset for interesting moments
+                # Small delay to let camera settle after PTZ move before snapshotting
                 sf_moment_id = None
                 if preset_id and camera.snapshot_url:
+                    await asyncio.sleep(2)
                     try:
                         from services.shortforge.moment_detector import get_moment_detector
                         sf_detector = get_moment_detector()
