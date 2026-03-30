@@ -242,7 +242,11 @@ class MomentDetector:
     async def _grab_frame(self, snapshot_url: str) -> Optional[np.ndarray]:
         """Grab a frame via HTTP snapshot."""
         try:
-            resp = await self._http_client.get(snapshot_url)
+            # Add cache-buster to prevent camera from returning stale image
+            import time as _time
+            sep = '&' if '?' in snapshot_url else '?'
+            url = f"{snapshot_url}{sep}_t={int(_time.time())}"
+            resp = await self._http_client.get(url)
             if resp.status_code != 200:
                 logger.warning("Snapshot HTTP %d", resp.status_code)
                 return None
