@@ -627,7 +627,7 @@ async def test_capture(
 
     asyncio.create_task(_run_test(moment.id, latest["path"]))
 
-    logger.info("Test capture from snapshot: preset=%d moment=%d", preset_id, moment.id)
+    logger.info("Test capture from snapshot: preset=%d moment=%d file=%s", preset_id, moment.id, latest["path"])
     return {"message": "Test capture started from latest snapshot", "moment_id": moment.id}
 
 

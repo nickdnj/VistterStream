@@ -974,7 +974,7 @@ class TimelineExecutor:
                 # Small delay to let camera settle after PTZ move before snapshotting
                 sf_moment_id = None
                 if preset_id and camera.snapshot_url:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(4)  # let PTZ camera fully settle before snapshot
                     try:
                         from services.shortforge.moment_detector import get_moment_detector
                         sf_detector = get_moment_detector()
