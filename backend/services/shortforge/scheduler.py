@@ -10,7 +10,8 @@ Responsibilities:
 
 import asyncio
 import logging
-from datetime import datetime, timezone, time as dtime
+from datetime import datetime, timezone
+from pathlib import Path, time as dtime
 from pathlib import Path
 from typing import Optional
 
@@ -246,7 +247,11 @@ class ShortForgeScheduler:
 
             if not clip_id:
                 capture = get_clip_capture()
-                clip_id = await capture.capture_clip(moment_id)
+                # Prefer creating clip from saved snapshot (no RTSP needed)
+                if frame_path and Path(frame_path).exists():
+                    clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
+                else:
+                    clip_id = await capture.capture_clip(moment_id)
                 if not clip_id:
                     return
 
