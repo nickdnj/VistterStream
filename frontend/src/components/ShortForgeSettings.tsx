@@ -69,10 +69,11 @@ const ShortForgeSettings: React.FC = () => {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [windowConfigs, setWindowConfigs] = useState<WindowConfig[]>([]);
   const [windowStatuses, setWindowStatuses] = useState<CaptureWindowStatus[]>([]);
-  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string; timeline_id?: number | null }>({});
+  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string; timeline_id?: number | null; narration_voice?: string; narration_speed?: number; narration_persona?: string; narration_prompt?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingPreset, setTestingPreset] = useState<number | null>(null);
+  const [narrationPresets, setNarrationPresets] = useState<Record<string, { label: string; voice: string; prompt: string }>>({});
 
   useEffect(() => {
     Promise.all([
@@ -81,12 +82,14 @@ const ShortForgeSettings: React.FC = () => {
       api.get('/timelines'),
       api.get('/shortforge/status'),
       api.get('/shortforge/capture-windows'),
-    ]).then(([configRes, camerasRes, timelinesRes, statusRes, windowsRes]) => {
+      api.get('/shortforge/narration-presets').catch(() => ({ data: {} })),
+    ]).then(([configRes, camerasRes, timelinesRes, statusRes, windowsRes, presetsRes]) => {
       setConfig(configRes.data);
       setCameras(camerasRes.data);
       setTimelines(timelinesRes.data || []);
       setWindowStatuses(statusRes.data.capture_windows || []);
       setWindowConfigs(windowsRes.data || []);
+      setNarrationPresets(presetsRes.data || {});
       const cfg = configRes.data;
       setForm({
         enabled: cfg.enabled,
@@ -97,6 +100,10 @@ const ShortForgeSettings: React.FC = () => {
         description_template: cfg.description_template,
         safety_gate_enabled: cfg.safety_gate_enabled,
         ai_model: cfg.ai_model,
+        narration_voice: cfg.narration_voice || 'shimmer',
+        narration_speed: cfg.narration_speed ?? 0.95,
+        narration_persona: cfg.narration_persona || 'chill_surfer',
+        narration_prompt: cfg.narration_prompt || '',
       });
       // Load presets if timeline is set
       if (cfg.timeline_id) {
@@ -413,6 +420,74 @@ const ShortForgeSettings: React.FC = () => {
               <option value="gpt-4o-mini">GPT-4o Mini (fast, low cost)</option>
               <option value="gpt-4o">GPT-4o (better quality)</option>
             </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Narration */}
+      <div className="bg-dark-800 rounded-lg p-6 border border-dark-700">
+        <h2 className="text-xl font-semibold text-white mb-4">Narration</h2>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm text-gray-400">Persona</label>
+            <select
+              className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+              value={form.narration_persona || 'chill_surfer'}
+              onChange={e => {
+                const key = e.target.value;
+                const preset = narrationPresets[key];
+                if (preset) {
+                  setForm(f => ({ ...f, narration_persona: key, narration_voice: preset.voice }));
+                } else {
+                  setForm(f => ({ ...f, narration_persona: key }));
+                }
+              }}
+            >
+              {Object.entries(narrationPresets).map(([key, preset]) => (
+                <option key={key} value={key}>{preset.label}</option>
+              ))}
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          {form.narration_persona && form.narration_persona !== 'custom' && narrationPresets[form.narration_persona] && (
+            <p className="text-xs text-gray-500 italic">{narrationPresets[form.narration_persona].prompt}</p>
+          )}
+          {form.narration_persona === 'custom' && (
+            <div>
+              <label className="text-sm text-gray-400">Custom prompt</label>
+              <textarea
+                rows={4}
+                className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+                value={form.narration_prompt || ''}
+                onChange={e => setForm(f => ({ ...f, narration_prompt: e.target.value }))}
+                placeholder="Describe the personality and style for the narration..."
+              />
+            </div>
+          )}
+          <div>
+            <label className="text-sm text-gray-400">Voice</label>
+            <select
+              className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+              value={form.narration_voice || 'shimmer'}
+              onChange={e => setForm(f => ({ ...f, narration_voice: e.target.value }))}
+            >
+              {['alloy', 'echo', 'fable', 'nova', 'onyx', 'shimmer'].map(v => (
+                <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="flex justify-between text-sm text-gray-400 mb-1">
+              <span>Speed</span>
+              <span>{(form.narration_speed || 0.95).toFixed(2)}x</span>
+            </div>
+            <input
+              type="range"
+              min="0.5" max="2.0" step="0.05"
+              value={form.narration_speed || 0.95}
+              onChange={e => setForm(f => ({ ...f, narration_speed: parseFloat(e.target.value) }))}
+              className="w-full accent-primary-600"
+            />
           </div>
         </div>
       </div>
