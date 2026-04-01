@@ -339,6 +339,7 @@ def ensure_narration_config_columns() -> None:
         ("narration_persona", "TEXT DEFAULT 'chill_surfer'"),
         ("narration_prompt", "TEXT"),
         ("text_position", "TEXT DEFAULT 'upper'"),
+        ("image_enhance", "TEXT DEFAULT 'vivid'"),
     ]
     try:
         db = SessionLocal()

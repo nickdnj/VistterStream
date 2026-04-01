@@ -118,6 +118,7 @@ class ShortForgeConfig(Base):
     narration_persona = Column(String, default="chill_surfer")  # preset key or "custom"
     narration_prompt = Column(Text, nullable=True)  # custom prompt (used when persona="custom")
     text_position = Column(String, default="upper")  # upper, center, lower
+    image_enhance = Column(String, default="vivid")  # natural, vivid, cinematic, warm_glow, crisp
 
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

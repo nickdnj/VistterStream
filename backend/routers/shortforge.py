@@ -107,6 +107,7 @@ class ConfigRead(BaseModel):
     narration_persona: str = "chill_surfer"
     narration_prompt: Optional[str] = None
     text_position: str = "upper"
+    image_enhance: str = "vivid"
 
     class Config:
         from_attributes = True
@@ -137,6 +138,7 @@ class ConfigUpdate(BaseModel):
     narration_persona: Optional[str] = None
     narration_prompt: Optional[str] = None
     text_position: Optional[str] = None  # upper, center, lower
+    image_enhance: Optional[str] = None  # natural, vivid, cinematic, warm_glow, crisp
 
 
 # --- Endpoints ---
@@ -398,6 +400,7 @@ async def get_config(
         narration_persona=config.narration_persona or "chill_surfer",
         narration_prompt=config.narration_prompt,
         text_position=config.text_position or "upper",
+        image_enhance=config.image_enhance or "vivid",
     )
 
 
@@ -444,6 +447,15 @@ async def get_narration_presets(
     """Return available narration persona presets."""
     from services.shortforge.narration import PERSONA_PRESETS
     return PERSONA_PRESETS
+
+
+@router.get("/image-enhance-presets")
+async def get_image_enhance_presets(
+    current_user=Depends(get_current_user),
+):
+    """Return available image enhancement presets."""
+    from services.shortforge.clip_capture import IMAGE_ENHANCE_PRESETS
+    return IMAGE_ENHANCE_PRESETS
 
 
 @router.put("/config", response_model=ConfigRead)

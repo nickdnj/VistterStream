@@ -25,6 +25,31 @@ DATA_DIR = Path("/data/shortforge") if Path("/data").exists() else Path("data/sh
 CLIPS_DIR = DATA_DIR / "clips"
 
 
+# Image enhancement presets applied as FFmpeg video filters
+IMAGE_ENHANCE_PRESETS = {
+    "natural": {
+        "label": "Natural",
+        "filters": "",  # no enhancement
+    },
+    "vivid": {
+        "label": "Vivid",
+        "filters": "eq=contrast=1.15:brightness=0.03:saturation=1.4,unsharp=5:5:0.8",
+    },
+    "cinematic": {
+        "label": "Cinematic",
+        "filters": "eq=contrast=1.2:brightness=-0.02:saturation=0.85,unsharp=5:5:0.5,vignette=PI/5",
+    },
+    "warm_glow": {
+        "label": "Warm Glow",
+        "filters": "eq=contrast=1.1:brightness=0.04:saturation=1.2,colorbalance=rs=0.05:gs=0.02:bs=-0.05",
+    },
+    "crisp": {
+        "label": "Crisp",
+        "filters": "eq=contrast=1.1:saturation=1.15,unsharp=7:7:1.2,hqdn3d=3:3:4:4",
+    },
+}
+
+
 class ClipCapture:
     """Per-preset clip capture. One clip per preset, updated each timeline loop."""
 
@@ -32,12 +57,14 @@ class ClipCapture:
         # preset_id → absolute path to clip file
         self.preset_clips: dict[int, str] = {}
 
-    async def capture_for_preset(self, preset_id: int, snapshot_url: str, duration: int = 15):
+    async def capture_for_preset(self, preset_id: int, snapshot_url: str, duration: int = 15, enhance: str = "natural"):
         """
         Capture a clip for this preset from an HTTP snapshot.
         Called by the timeline executor during the segment while the camera
         is at this preset. Uses snapshot (not RTMP relay) because the relay
         only supports one consumer (the main stream).
+
+        enhance: key from IMAGE_ENHANCE_PRESETS (natural, vivid, cinematic, warm_glow, crisp)
         """
         CLIPS_DIR.mkdir(parents=True, exist_ok=True)
         clip_path = CLIPS_DIR / f"preset_{preset_id}.mp4"
@@ -53,13 +80,17 @@ class ClipCapture:
                     return
             snap_path.write_bytes(resp.content)
 
-            # Convert snapshot to video with Ken Burns source material
+            # Build video filter chain: scale + pad + optional enhancement
+            base_vf = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"
+            enhance_filters = IMAGE_ENHANCE_PRESETS.get(enhance, {}).get("filters", "")
+            vf = f"{base_vf},{enhance_filters}" if enhance_filters else base_vf
+
             cmd = [
                 "ffmpeg", "-y",
                 "-loop", "1",
                 "-i", str(snap_path),
                 "-t", str(duration),
-                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+                "-vf", vf,
                 "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "15", "-preset", "fast",
                 str(clip_path),
             ]

@@ -69,7 +69,7 @@ const ShortForgeSettings: React.FC = () => {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [windowConfigs, setWindowConfigs] = useState<WindowConfig[]>([]);
   const [windowStatuses, setWindowStatuses] = useState<CaptureWindowStatus[]>([]);
-  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string; timeline_id?: number | null; narration_voice?: string; narration_speed?: number; narration_persona?: string; narration_prompt?: string; text_position?: string }>({});
+  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string; timeline_id?: number | null; narration_voice?: string; narration_speed?: number; narration_persona?: string; narration_prompt?: string; text_position?: string; image_enhance?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingPreset, setTestingPreset] = useState<number | null>(null);
@@ -107,6 +107,7 @@ const ShortForgeSettings: React.FC = () => {
         narration_persona: cfg.narration_persona || 'chill_surfer',
         narration_prompt: cfg.narration_prompt || '',
         text_position: cfg.text_position || 'upper',
+        image_enhance: cfg.image_enhance || 'vivid',
       });
       // Load presets if timeline is set
       if (cfg.timeline_id) {
@@ -539,6 +540,20 @@ const ShortForgeSettings: React.FC = () => {
               <option value="upper">Upper — near the top of the frame</option>
               <option value="center">Center — middle of the frame</option>
               <option value="lower">Lower — near the bottom of the frame</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-gray-400">Image Enhancement</label>
+            <select
+              className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+              value={form.image_enhance || 'vivid'}
+              onChange={e => setForm(f => ({ ...f, image_enhance: e.target.value }))}
+            >
+              <option value="natural">Natural — no processing, camera output as-is</option>
+              <option value="vivid">Vivid — boosted color and contrast, sharper</option>
+              <option value="cinematic">Cinematic — moody contrast, desaturated, vignette</option>
+              <option value="warm_glow">Warm Glow — golden tones, soft warmth</option>
+              <option value="crisp">Crisp — sharp detail, noise reduction, slight color boost</option>
             </select>
           </div>
         </div>

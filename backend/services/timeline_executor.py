@@ -983,8 +983,17 @@ class TimelineExecutor:
                     try:
                         from services.shortforge.clip_capture import get_clip_capture
                         sf_capture = get_clip_capture()
+                        # Get image enhance setting from ShortForge config
+                        _enhance = "vivid"
+                        try:
+                            from models.shortforge import ShortForgeConfig as _SFC
+                            _sf_cfg = db.query(_SFC).first()
+                            if _sf_cfg and _sf_cfg.image_enhance:
+                                _enhance = _sf_cfg.image_enhance
+                        except Exception:
+                            pass
                         await asyncio.wait_for(
-                            sf_capture.capture_for_preset(preset_id, camera.snapshot_url, duration=15),
+                            sf_capture.capture_for_preset(preset_id, camera.snapshot_url, duration=15, enhance=_enhance),
                             timeout=30
                         )
                         sf_time = 3  # snapshot capture is fast, only a few seconds
