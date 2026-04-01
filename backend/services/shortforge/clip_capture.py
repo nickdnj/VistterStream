@@ -138,6 +138,64 @@ class ClipCapture:
         except Exception:
             logger.exception("Error capturing clip for preset %d", preset_id)
 
+    async def capture_snapshot_only(self, preset_id: int, snapshot_url: str):
+        """Grab and save the snapshot — fast, no processing. Called during segment."""
+        CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+        snap_path = CLIPS_DIR / f"preset_{preset_id}_snap.jpg"
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(snapshot_url)
+                if resp.status_code == 200:
+                    snap_path.write_bytes(resp.content)
+                    logger.info("Preset %d snapshot saved: %s", preset_id, snap_path)
+        except Exception:
+            logger.exception("Error saving snapshot for preset %d", preset_id)
+
+    async def process_snapshot_to_clip(self, preset_id: int, enhance: str = "natural", duration: int = 15):
+        """Process saved snapshot into video clip (background, no timeout pressure)."""
+        clip_path = CLIPS_DIR / f"preset_{preset_id}.mp4"
+        snap_path = CLIPS_DIR / f"preset_{preset_id}_snap.jpg"
+
+        if not snap_path.exists():
+            logger.warning("No snapshot to process for preset %d", preset_id)
+            return
+
+        try:
+            # AI enhancement
+            if enhance == "ai_enhance":
+                enhanced = await self._ai_enhance_image(snap_path)
+                if enhanced:
+                    snap_path = enhanced
+
+            # Build video
+            base_vf = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"
+            enhance_filters = IMAGE_ENHANCE_PRESETS.get(enhance, {}).get("filters", "")
+            vf = f"{base_vf},{enhance_filters}" if enhance_filters else base_vf
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1", "-i", str(snap_path),
+                "-t", str(duration),
+                "-vf", vf,
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "15", "-preset", "fast",
+                str(clip_path),
+            ]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+
+            if proc.returncode == 0 and clip_path.exists():
+                self.preset_clips[preset_id] = str(clip_path)
+                logger.info("Preset %d clip created from AI-enhanced snapshot: %s", preset_id, clip_path)
+            else:
+                error = stderr[-200:].decode(errors="replace") if stderr else ""
+                logger.warning("Preset %d clip encode failed: %s", preset_id, error)
+        except Exception:
+            logger.exception("Error processing snapshot for preset %d", preset_id)
+
     async def _ai_enhance_image(self, snap_path: Path) -> Optional[Path]:
         """
         Enhance an image using OpenAI's image edit API.

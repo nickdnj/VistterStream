@@ -249,9 +249,16 @@ class ShortForgeScheduler:
                 return
 
             # Stage 2: Generate headline
+            # Use the enhanced image for AI vision if available (no people, better colors)
+            headline_image = frame_path or ""
+            if preset_id:
+                from services.shortforge.clip_capture import CLIPS_DIR as _CD
+                enhanced = _CD / f"preset_{preset_id}_snap_enhanced.png"
+                if enhanced.exists():
+                    headline_image = str(enhanced)
             weather = await fetch_weather_data()
             headline_result = await generate_headline(
-                frame_path or "",
+                headline_image,
                 config,
                 weather_data=weather,
             )
