@@ -34,6 +34,7 @@ class ShortForgeScheduler:
 
     def __init__(self):
         self._running = False
+        self._rtsp_url: Optional[str] = None
         self._pipeline_task: Optional[asyncio.Task] = None
         self._cleanup_task: Optional[asyncio.Task] = None
         self._views_task: Optional[asyncio.Task] = None
@@ -77,9 +78,10 @@ class ShortForgeScheduler:
         finally:
             db.close()
 
-        # Start clip capture ring buffer (uses RTSP — may fail if no sessions available)
-        capture = get_clip_capture()
-        await capture.start(rtsp_url)
+        # Store RTSP URL for on-demand direct capture (no background ring buffer).
+        # The ring buffer ran a continuous FFmpeg process 24/7 which added ~10-20% CPU
+        # on the N100 even when no captures were possible (nighttime).
+        self._rtsp_url = rtsp_url
 
         # Moment detection is now driven by the timeline executor (per-preset).
         # The scheduler just runs the pipeline processor and housekeeping.
@@ -98,9 +100,6 @@ class ShortForgeScheduler:
     async def stop(self):
         """Stop all pipeline components."""
         self._running = False
-
-        capture = get_clip_capture()
-        await capture.stop()
 
         detector = get_moment_detector()
         await detector.close()
@@ -246,12 +245,12 @@ class ShortForgeScheduler:
 
             if not clip_id:
                 capture = get_clip_capture()
-                # Prefer ring buffer (real video) over looped snapshot.
-                # Ring buffer gives actual footage with movement; snapshot
-                # creates a static image loop that looks frozen in the short.
-                clip_id = await capture.capture_clip(moment_id)
+                # Direct RTSP capture: records 25s of live video on demand.
+                # No background ring buffer needed — saves CPU on the N100.
+                if self._rtsp_url:
+                    clip_id = await capture.capture_direct(moment_id, self._rtsp_url, duration=25)
                 if not clip_id and frame_path and Path(frame_path).exists():
-                    logger.info("Ring buffer capture failed, falling back to snapshot")
+                    logger.info("Direct capture failed, falling back to snapshot")
                     clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
                 if not clip_id:
                     return
