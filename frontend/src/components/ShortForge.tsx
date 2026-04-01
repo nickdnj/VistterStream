@@ -97,6 +97,15 @@ interface ShortForgeConfig {
   snapshot_retention_days: number;
   ai_model: string;
   has_openai_key: boolean;
+  timeline_id: number | null;
+}
+
+interface PresetInfo {
+  camera_id: number;
+  camera_name: string;
+  preset_id: number;
+  preset_name: string;
+  snapshot_url: string | null;
 }
 
 interface Camera {
@@ -742,20 +751,32 @@ const ShortForge: React.FC = () => {
   const [showMoments, setShowMoments] = useState(true);
   const [showScores, setShowScores] = useState(false);
   const [scoreHistory, setScoreHistory] = useState<Record<string, Array<{time: string; preset_id: number; type: string; score: number; threshold: number; triggered: boolean}>>>({});
+  const [presets, setPresets] = useState<PresetInfo[]>([]);
+  const [testingPreset, setTestingPreset] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const [statusRes, shortsRes, momentsRes, scoresRes] = await Promise.all([
+      const [statusRes, shortsRes, momentsRes, scoresRes, configRes] = await Promise.all([
         api.get('/shortforge/status'),
         api.get('/shortforge/shorts?limit=12'),
         api.get('/shortforge/moments?limit=50'),
         api.get('/shortforge/scores').catch(() => ({ data: {} })),
+        api.get('/shortforge/config').catch(() => ({ data: null })),
       ]);
       setPipelineStatus(statusRes.data);
       setShorts(shortsRes.data);
       setMoments(momentsRes.data);
       setScoreHistory(scoresRes.data || {});
+      if (configRes.data) {
+        setConfig(configRes.data);
+        if (configRes.data.timeline_id) {
+          try {
+            const presetsRes = await api.get(`/shortforge/timeline-presets/${configRes.data.timeline_id}`);
+            setPresets(presetsRes.data.presets || []);
+          } catch { setPresets([]); }
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch ShortForge data:', err);
     } finally {
@@ -845,14 +866,40 @@ const ShortForge: React.FC = () => {
           <SparklesIcon className="h-6 w-6 text-primary-400" />
           <h1 className="text-xl font-bold text-white">ShortForge</h1>
         </div>
-        <a
-          href="/settings"
-          onClick={(e) => { e.preventDefault(); window.location.href = '/settings?tab=shortforge'; }}
-          className="flex items-center gap-2 px-3 py-1.5 bg-dark-700 text-gray-300 rounded-lg hover:bg-dark-600 text-sm"
-        >
-          <Cog6ToothIcon className="h-4 w-4" />
-          Settings
-        </a>
+        <div className="flex items-center gap-2">
+          {presets.length > 0 && presets.map(p => (
+            <button
+              key={p.preset_id}
+              onClick={async () => {
+                setTestingPreset(p.preset_id);
+                try {
+                  await api.post(`/shortforge/test-capture/${p.preset_id}`);
+                  setTimeout(() => { setTestingPreset(null); fetchData(); }, 5000);
+                } catch (err: any) {
+                  alert(err?.response?.data?.detail || 'Test capture failed');
+                  setTestingPreset(null);
+                }
+              }}
+              disabled={testingPreset === p.preset_id}
+              className={`text-xs px-2.5 py-1.5 rounded font-medium ${
+                testingPreset === p.preset_id
+                  ? 'bg-green-600/80 text-green-100'
+                  : 'bg-dark-700 text-gray-300 hover:bg-primary-600 hover:text-white'
+              }`}
+              title={`Test capture from ${p.camera_name} - ${p.preset_name}`}
+            >
+              {testingPreset === p.preset_id ? 'Building...' : `Test ${p.preset_name}`}
+            </button>
+          ))}
+          <a
+            href="/settings"
+            onClick={(e) => { e.preventDefault(); window.location.href = '/settings?tab=shortforge'; }}
+            className="flex items-center gap-2 px-3 py-1.5 bg-dark-700 text-gray-300 rounded-lg hover:bg-dark-600 text-sm"
+          >
+            <Cog6ToothIcon className="h-4 w-4" />
+            Settings
+          </a>
+        </div>
       </div>
 
       {/* Pipeline Status Bar */}
