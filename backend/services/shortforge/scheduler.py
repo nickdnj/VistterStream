@@ -204,6 +204,7 @@ class ShortForgeScheduler:
                         try:
                             moment = Moment(
                                 camera_id=config.camera_id,
+                                preset_id=candidate.get("preset_id"),
                                 timestamp=datetime.now(timezone.utc),
                                 trigger_type="window",
                                 score=round(candidate["score"], 3),

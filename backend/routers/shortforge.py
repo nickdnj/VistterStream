@@ -54,6 +54,8 @@ class ShortRead(BaseModel):
     safe_to_publish: Optional[bool] = None
     # From moment
     moment_id: Optional[int] = None
+    preset_id: Optional[int] = None
+    preset_name: Optional[str] = None
     trigger_type: Optional[str] = None
     score: Optional[float] = None
     frame_path: Optional[str] = None
@@ -65,6 +67,8 @@ class ShortRead(BaseModel):
 class MomentRead(BaseModel):
     id: int
     camera_id: int
+    preset_id: Optional[int] = None
+    preset_name: Optional[str] = None
     timestamp: datetime
     trigger_type: str
     score: float
@@ -257,11 +261,21 @@ async def list_shorts(
             duration_seconds=clip.duration_seconds if clip else None,
             safe_to_publish=clip.safe_to_publish if clip else None,
             moment_id=moment.id if moment else None,
+            preset_id=moment.preset_id if moment else None,
             trigger_type=moment.trigger_type if moment else None,
             score=moment.score if moment else None,
             frame_path=moment.frame_path if moment else None,
             moment_timestamp=moment.timestamp if moment else None,
         ))
+
+    # Resolve preset names
+    from models.database import Preset
+    preset_ids = {r.preset_id for r in results if r.preset_id}
+    if preset_ids:
+        presets = db.query(Preset).filter(Preset.id.in_(preset_ids)).all()
+        pn = {p.id: p.name for p in presets}
+        for r in results:
+            r.preset_name = pn.get(r.preset_id)
 
     return results
 
@@ -312,6 +326,7 @@ async def list_moments(
     current_user=Depends(get_current_user),
 ):
     """List detected moments for the moment log table."""
+    from models.database import Preset
     moments = (
         db.query(Moment)
         .order_by(Moment.timestamp.desc())
@@ -319,7 +334,18 @@ async def list_moments(
         .limit(limit)
         .all()
     )
-    return [MomentRead.model_validate(m) for m in moments]
+    # Build preset name lookup
+    preset_ids = {m.preset_id for m in moments if m.preset_id}
+    preset_names = {}
+    if preset_ids:
+        presets = db.query(Preset).filter(Preset.id.in_(preset_ids)).all()
+        preset_names = {p.id: p.name for p in presets}
+    result = []
+    for m in moments:
+        data = MomentRead.model_validate(m)
+        data.preset_name = preset_names.get(m.preset_id) if m.preset_id else None
+        result.append(data)
+    return result
 
 
 @router.get("/config", response_model=ConfigRead)
@@ -593,6 +619,7 @@ async def test_capture(
     # Create moment from the saved snapshot
     moment = Moment(
         camera_id=latest.get("camera_id"),
+        preset_id=preset_id,
         timestamp=datetime.now(timezone.utc),
         trigger_type="test",
         score=1.0,

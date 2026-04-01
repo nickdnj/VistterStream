@@ -15,8 +15,9 @@ class Moment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=False)
+    preset_id = Column(Integer, nullable=True)  # PTZ preset that was active
     timestamp = Column(DateTime, nullable=False)
-    trigger_type = Column(String, nullable=False)  # 'motion', 'brightness', 'activity'
+    trigger_type = Column(String, nullable=False)  # 'motion', 'brightness', 'activity', 'window', 'test'
     score = Column(Float, nullable=False)
     frame_path = Column(String)  # snapshot at trigger time
     status = Column(String, default="detected")  # detected, captured, rendered, published, skipped, failed

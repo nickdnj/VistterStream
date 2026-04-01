@@ -59,6 +59,8 @@ interface ShortItem {
   duration_seconds: number | null;
   safe_to_publish: boolean | null;
   moment_id: number | null;
+  preset_id: number | null;
+  preset_name: string | null;
   trigger_type: string | null;
   score: number | null;
   frame_path: string | null;
@@ -68,6 +70,8 @@ interface ShortItem {
 interface MomentItem {
   id: number;
   camera_id: number;
+  preset_id: number | null;
+  preset_name: string | null;
   timestamp: string;
   trigger_type: string;
   score: number;
@@ -275,6 +279,9 @@ const ShortCard: React.FC<{ short: ShortItem; onClick: () => void; onDelete: (id
         </button>
       </div>
       <div className="p-3">
+        {short.preset_name && (
+          <p className="text-xs text-primary-400 font-medium mb-0.5">{short.preset_name}</p>
+        )}
         <p className="text-sm text-gray-200 line-clamp-2 mb-1">{short.headline || short.title || 'Untitled'}</p>
         <div className="text-xs text-gray-400">
           {(() => {
@@ -1001,6 +1008,7 @@ const ShortForge: React.FC = () => {
                   <thead className="sticky top-0 bg-dark-800">
                     <tr className="text-gray-500 text-xs uppercase">
                       <th className="px-4 py-2 text-left">Time</th>
+                      <th className="px-2 py-2 text-left">Shot</th>
                       <th className="px-2 py-2 text-left">Type</th>
                       <th className="px-2 py-2 text-right">Score</th>
                       <th className="px-2 py-2 text-left">Status</th>
@@ -1010,6 +1018,7 @@ const ShortForge: React.FC = () => {
                     {moments.map(m => (
                       <tr key={m.id} className={`${m.status === 'failed' ? 'bg-red-900/10' : ''} ${m.status === 'skipped' ? 'text-gray-500' : ''}`}>
                         <td className="px-4 py-2 text-gray-300">{formatTime(m.timestamp)}</td>
+                        <td className="px-2 py-2 text-xs text-gray-300">{m.preset_name || '—'}</td>
                         <td className="px-2 py-2"><TriggerBadge type={m.trigger_type} /></td>
                         <td className={`px-2 py-2 text-right font-mono ${m.score >= 0.8 ? 'text-green-400' : m.score >= 0.5 ? 'text-yellow-400' : 'text-gray-500'}`}>
                           {m.score.toFixed(2)}

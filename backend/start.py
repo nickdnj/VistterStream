@@ -317,6 +317,20 @@ def ensure_shortforge_capture_windows_column() -> None:
         logger.warning("Could not ensure capture_windows_json: %s", e)
 
 
+def ensure_moment_preset_id_column() -> None:
+    """Add preset_id column to moments if missing."""
+    try:
+        db = SessionLocal()
+        cols = [r[1] for r in db.execute(text("PRAGMA table_info(moments)")).fetchall()]
+        if "preset_id" not in cols:
+            db.execute(text("ALTER TABLE moments ADD COLUMN preset_id INTEGER"))
+            db.commit()
+            logger.info("Added preset_id column to moments")
+        db.close()
+    except Exception as exc:
+        logger.warning("ensure_moment_preset_id_column: %s", exc)
+
+
 def ensure_shortforge_thresholds_fix() -> None:
     """Fix ShortForge detection thresholds — original defaults (0.6, 0.5, 0.7) were too high."""
     try:
@@ -387,6 +401,7 @@ if __name__ == "__main__":
     ensure_shortforge_thresholds_fix()
     ensure_shortforge_timeline_id_column()
     ensure_shortforge_capture_windows_column()
+    ensure_moment_preset_id_column()
     ensure_default_admin()
 
     # Start the server
