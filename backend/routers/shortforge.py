@@ -603,27 +603,23 @@ async def test_capture(
     db.commit()
     db.refresh(moment)
 
-    # Run clip creation + pipeline in background
+    # Run pipeline in background — _process_moment handles capture
+    # (direct RTSP for real video, snapshot fallback if RTSP fails)
     import asyncio
 
     async def _run_test(moment_id, frame_path):
-        from services.shortforge.clip_capture import get_clip_capture
         from services.shortforge.scheduler import get_shortforge_scheduler
         from models.database import SessionLocal as SL
         from models.shortforge import ShortForgeConfig as SFC
 
-        # Create video from the snapshot image
-        capture = get_clip_capture()
-        clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
-        if clip_id:
-            db2 = SL()
-            try:
-                cfg = db2.query(SFC).first()
-            finally:
-                db2.close()
-            if cfg:
-                sched = get_shortforge_scheduler()
-                await sched._process_moment(moment_id, frame_path, cfg)
+        db2 = SL()
+        try:
+            cfg = db2.query(SFC).first()
+        finally:
+            db2.close()
+        if cfg:
+            sched = get_shortforge_scheduler()
+            await sched._process_moment(moment_id, frame_path, cfg)
 
     asyncio.create_task(_run_test(moment.id, latest["path"]))
 
