@@ -161,28 +161,23 @@ class ClipCapture:
 
             enhanced_path = snap_path.parent / f"{snap_path.stem}_enhanced.png"
 
-            # Encode image as base64 for the API
-            img_b64 = base64.b64encode(snap_path.read_bytes()).decode()
-
-            # Use the REST API directly for gpt-image-1 generation with image input
-            async with _httpx.AsyncClient(timeout=60.0) as http:
-                resp = await http.post(
-                    "https://api.openai.com/v1/images/generations",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "gpt-image-1",
-                        "prompt": AI_ENHANCE_PROMPT,
-                        "n": 1,
-                        "size": "1536x1024",
-                        "image": [{"type": "base64", "data": img_b64}],
-                    },
-                )
+            # gpt-image-1 edit requires multipart form upload
+            async with _httpx.AsyncClient(timeout=90.0) as http:
+                with open(snap_path, "rb") as img_file:
+                    resp = await http.post(
+                        "https://api.openai.com/v1/images/edits",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        data={
+                            "model": "gpt-image-1",
+                            "prompt": AI_ENHANCE_PROMPT,
+                            "n": "1",
+                            "size": "1536x1024",
+                        },
+                        files={"image": ("snapshot.png", img_file, "image/png")},
+                    )
 
             if resp.status_code != 200:
-                logger.warning("AI enhance API error %d: %s", resp.status_code, resp.text[:200])
+                logger.warning("AI enhance API error %d: %s", resp.status_code, resp.text[:300])
                 return None
 
             data = resp.json()
@@ -192,7 +187,6 @@ class ClipCapture:
                 logger.info("AI enhanced image: %s (%d bytes)", enhanced_path, len(img_bytes))
                 return enhanced_path
             elif data.get("data") and data["data"][0].get("url"):
-                # Download from URL
                 async with _httpx.AsyncClient(timeout=30.0) as http:
                     img_resp = await http.get(data["data"][0]["url"])
                     if img_resp.status_code == 200:
