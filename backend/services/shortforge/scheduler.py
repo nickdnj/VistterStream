@@ -235,29 +235,21 @@ class ShortForgeScheduler:
     async def _process_moment(self, moment_id: int, frame_path: Optional[str], config: ShortForgeConfig, preset_id: Optional[int] = None):
         """Run a moment through the full pipeline: capture → headline → render → publish."""
         try:
-            # Stage 1: Check if clip already exists
-            db = SessionLocal()
-            try:
-                existing_clip = db.query(Clip).filter(Clip.moment_id == moment_id).first()
-                clip_id = existing_clip.id if existing_clip else None
-            finally:
-                db.close()
-
+            # Stage 1: Create clip from the rolling preset clip (fresh, correct angle)
+            clip_id = None
+            capture = get_clip_capture()
+            if preset_id:
+                clip_id = await capture.create_clip_from_preset(moment_id, preset_id)
+            # Fall back to direct RTSP capture
+            if not clip_id and self._rtsp_url:
+                logger.info("No preset clip for preset %s, trying direct RTSP", preset_id)
+                clip_id = await capture.capture_direct(moment_id, self._rtsp_url, duration=25)
+            # Last resort: looped snapshot
+            if not clip_id and frame_path and Path(frame_path).exists():
+                logger.info("Direct capture failed, falling back to snapshot")
+                clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
             if not clip_id:
-                capture = get_clip_capture()
-                # Use rolling preset clip if available (captured during timeline segment)
-                if preset_id:
-                    clip_id = await capture.create_clip_from_preset(moment_id, preset_id)
-                # Fall back to direct RTSP capture
-                if not clip_id and self._rtsp_url:
-                    logger.info("No preset clip, trying direct RTSP capture")
-                    clip_id = await capture.capture_direct(moment_id, self._rtsp_url, duration=25)
-                # Last resort: looped snapshot
-                if not clip_id and frame_path and Path(frame_path).exists():
-                    logger.info("Direct capture failed, falling back to snapshot")
-                    clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
-                if not clip_id:
-                    return
+                return
 
             # Stage 2: Generate headline
             weather = await fetch_weather_data()
