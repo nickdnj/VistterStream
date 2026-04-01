@@ -47,7 +47,18 @@ IMAGE_ENHANCE_PRESETS = {
         "label": "Crisp",
         "filters": "eq=contrast=1.1:saturation=1.15,unsharp=7:7:1.2,hqdn3d=3:3:4:4",
     },
+    "ai_enhance": {
+        "label": "AI Enhanced",
+        "filters": "",  # handled separately via OpenAI image edit API
+    },
 }
+
+AI_ENHANCE_PROMPT = (
+    "Enhance this waterfront marina photo. Make the colors more vivid and natural, "
+    "improve clarity and sharpness, enhance the sky and water. Keep it photorealistic — "
+    "this should look like a professional photograph, not AI-generated. "
+    "Preserve the exact composition and scene."
+)
 
 
 class ClipCapture:
@@ -80,7 +91,13 @@ class ClipCapture:
                     return
             snap_path.write_bytes(resp.content)
 
-            # Build video filter chain: scale + pad + optional enhancement
+            # AI enhancement: send to OpenAI image edit API
+            if enhance == "ai_enhance":
+                enhanced = await self._ai_enhance_image(snap_path)
+                if enhanced:
+                    snap_path = enhanced
+
+            # Build video filter chain: scale + pad + optional FFmpeg enhancement
             base_vf = "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2"
             enhance_filters = IMAGE_ENHANCE_PRESETS.get(enhance, {}).get("filters", "")
             vf = f"{base_vf},{enhance_filters}" if enhance_filters else base_vf
@@ -118,6 +135,53 @@ class ClipCapture:
                 logger.warning("Preset %d clip encode failed: %s", preset_id, error)
         except Exception:
             logger.exception("Error capturing clip for preset %d", preset_id)
+
+    async def _ai_enhance_image(self, snap_path: Path) -> Optional[Path]:
+        """
+        Enhance an image using OpenAI's image edit API.
+        Returns path to the enhanced image, or None on failure.
+        """
+        try:
+            from models.shortforge import ShortForgeConfig
+            from utils.crypto import decrypt
+
+            db = SessionLocal()
+            try:
+                config = db.query(ShortForgeConfig).first()
+                if not config or not config.openai_api_key_enc:
+                    return None
+                api_key = decrypt(config.openai_api_key_enc)
+            finally:
+                db.close()
+
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=api_key)
+
+            enhanced_path = snap_path.parent / f"{snap_path.stem}_enhanced.png"
+
+            with open(snap_path, "rb") as f:
+                response = await client.images.edit(
+                    image=f,
+                    prompt=AI_ENHANCE_PROMPT,
+                    model="gpt-image-1",
+                    size="1536x1024",
+                    quality="medium",
+                    response_format="b64_json",
+                )
+
+            if response.data and response.data[0].b64_json:
+                import base64
+                img_bytes = base64.b64decode(response.data[0].b64_json)
+                enhanced_path.write_bytes(img_bytes)
+                logger.info("AI enhanced image: %s (%d bytes)", enhanced_path, len(img_bytes))
+                return enhanced_path
+            else:
+                logger.warning("AI enhance returned no data")
+                return None
+
+        except Exception:
+            logger.exception("AI image enhancement failed")
+            return None
 
     async def create_clip_for_moment(self, moment_id: int, preset_id: int) -> Optional[int]:
         """

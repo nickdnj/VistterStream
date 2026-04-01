@@ -554,6 +554,7 @@ const ShortForgeSettings: React.FC = () => {
               <option value="cinematic">Cinematic — moody contrast, desaturated, vignette</option>
               <option value="warm_glow">Warm Glow — golden tones, soft warmth</option>
               <option value="crisp">Crisp — sharp detail, noise reduction, slight color boost</option>
+              <option value="ai_enhance">AI Enhanced — OpenAI processes the photo (uses API credits)</option>
             </select>
           </div>
         </div>
