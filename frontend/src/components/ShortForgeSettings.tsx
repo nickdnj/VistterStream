@@ -69,7 +69,7 @@ const ShortForgeSettings: React.FC = () => {
   const [presets, setPresets] = useState<PresetInfo[]>([]);
   const [windowConfigs, setWindowConfigs] = useState<WindowConfig[]>([]);
   const [windowStatuses, setWindowStatuses] = useState<CaptureWindowStatus[]>([]);
-  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string; timeline_id?: number | null; narration_voice?: string; narration_speed?: number; narration_persona?: string; narration_prompt?: string }>({});
+  const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string; timeline_id?: number | null; narration_voice?: string; narration_speed?: number; narration_persona?: string; narration_prompt?: string; text_position?: string }>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testingPreset, setTestingPreset] = useState<number | null>(null);
