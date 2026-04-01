@@ -102,6 +102,10 @@ class ConfigRead(BaseModel):
     snapshot_retention_days: int
     ai_model: str
     has_openai_key: bool = False
+    narration_voice: str = "shimmer"
+    narration_speed: float = 0.95
+    narration_persona: str = "chill_surfer"
+    narration_prompt: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -127,6 +131,10 @@ class ConfigUpdate(BaseModel):
     snapshot_retention_days: Optional[int] = Field(None, ge=1, le=365)
     openai_api_key: Optional[str] = None  # plaintext, will be encrypted
     ai_model: Optional[str] = None
+    narration_voice: Optional[str] = None
+    narration_speed: Optional[float] = Field(None, ge=0.25, le=4.0)
+    narration_persona: Optional[str] = None
+    narration_prompt: Optional[str] = None
 
 
 # --- Endpoints ---
@@ -383,7 +391,20 @@ async def get_config(
         snapshot_retention_days=config.snapshot_retention_days or 3,
         ai_model=config.ai_model or "gpt-4o-mini",
         has_openai_key=bool(config.openai_api_key_enc),
+        narration_voice=config.narration_voice or "shimmer",
+        narration_speed=config.narration_speed if config.narration_speed is not None else 0.95,
+        narration_persona=config.narration_persona or "chill_surfer",
+        narration_prompt=config.narration_prompt,
     )
+
+
+@router.get("/narration-presets")
+async def get_narration_presets(
+    current_user=Depends(get_current_user),
+):
+    """Return available narration persona presets."""
+    from services.shortforge.narration import PERSONA_PRESETS
+    return PERSONA_PRESETS
 
 
 @router.put("/config", response_model=ConfigRead)

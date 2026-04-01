@@ -112,6 +112,12 @@ class ShortForgeConfig(Base):
     openai_api_key_enc = Column(String)  # encrypted
     ai_model = Column(String, default="gpt-4o-mini")
 
+    # Narration config
+    narration_voice = Column(String, default="shimmer")  # OpenAI TTS voice
+    narration_speed = Column(Float, default=0.95)  # 0.25 to 4.0
+    narration_persona = Column(String, default="chill_surfer")  # preset key or "custom"
+    narration_prompt = Column(Text, nullable=True)  # custom prompt (used when persona="custom")
+
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),

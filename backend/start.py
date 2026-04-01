@@ -331,6 +331,27 @@ def ensure_moment_preset_id_column() -> None:
         logger.warning("ensure_moment_preset_id_column: %s", exc)
 
 
+def ensure_narration_config_columns() -> None:
+    """Add narration config columns to shortforge_config if missing."""
+    columns_to_add = [
+        ("narration_voice", "TEXT DEFAULT 'shimmer'"),
+        ("narration_speed", "REAL DEFAULT 0.95"),
+        ("narration_persona", "TEXT DEFAULT 'chill_surfer'"),
+        ("narration_prompt", "TEXT"),
+    ]
+    try:
+        db = SessionLocal()
+        cols = [r[1] for r in db.execute(text("PRAGMA table_info(shortforge_config)")).fetchall()]
+        for column_name, column_type in columns_to_add:
+            if column_name not in cols:
+                db.execute(text(f"ALTER TABLE shortforge_config ADD COLUMN {column_name} {column_type}"))
+                logger.info("Added %s column to shortforge_config", column_name)
+        db.commit()
+        db.close()
+    except Exception as e:
+        logger.warning("Could not ensure narration config columns: %s", e)
+
+
 def ensure_shortforge_thresholds_fix() -> None:
     """Fix ShortForge detection thresholds — original defaults (0.6, 0.5, 0.7) were too high."""
     try:
@@ -402,6 +423,7 @@ if __name__ == "__main__":
     ensure_shortforge_timeline_id_column()
     ensure_shortforge_capture_windows_column()
     ensure_moment_preset_id_column()
+    ensure_narration_config_columns()
     ensure_default_admin()
 
     # Start the server

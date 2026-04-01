@@ -22,6 +22,38 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path("/data/shortforge") if Path("/data").exists() else Path("data/shortforge")
 AUDIO_DIR = DATA_DIR / "audio"
 
+# --- Persona Presets ---
+
+PERSONA_PRESETS = {
+    "chill_surfer": {
+        "label": "Chill Surfer",
+        "voice": "shimmer",
+        "prompt": "You're a laid-back surfer sharing the vibes from the shore. Casual, warm, stoked about the ocean. Use words like 'stoked', 'gnarly', 'rad' naturally. Keep it breezy and fun.",
+    },
+    "local_guide": {
+        "label": "Local Guide",
+        "voice": "nova",
+        "prompt": "You're a friendly local who knows every dock, bar, and tide pattern. Conversational, knowledgeable, like you're showing a friend around. Reference the area naturally.",
+    },
+    "captains_log": {
+        "label": "Captain's Log",
+        "voice": "onyx",
+        "prompt": "You're a weathered boat captain making observations from the helm. Nautical vocabulary, observational, a touch poetic. Think Hemingway meets the Weather Channel.",
+    },
+    "weather_anchor": {
+        "label": "Weather Anchor",
+        "voice": "alloy",
+        "prompt": "You're a professional but personable weather presenter. Clean, informative, with a warm delivery. Lead with conditions, add a human touch.",
+    },
+    "shore_poet": {
+        "label": "Shore Poet",
+        "voice": "fable",
+        "prompt": "You're a contemplative observer, finding beauty in the everyday waterfront. Evocative imagery, gentle rhythm, like a haiku expanded. Paint pictures with words.",
+    },
+}
+
+# --- Base narration prompt (persona prompt gets prepended) ---
+
 NARRATION_PROMPT = """You write short, punchy voiceover scripts for 15-second YouTube Shorts filmed at a waterfront marina.
 
 Your style is:
@@ -90,12 +122,25 @@ async def generate_narration(
 
     context += "\nWrite a fun voiceover script for this moment."
 
+    # Build system prompt: persona prompt (or custom) prepended to base narration prompt
+    persona_key = getattr(config, "narration_persona", None) or "chill_surfer"
+    if persona_key == "custom":
+        persona_prompt = getattr(config, "narration_prompt", None) or ""
+    else:
+        preset = PERSONA_PRESETS.get(persona_key, PERSONA_PRESETS["chill_surfer"])
+        persona_prompt = preset["prompt"]
+
+    if persona_prompt:
+        system_prompt = f"{persona_prompt}\n\n{NARRATION_PROMPT}"
+    else:
+        system_prompt = NARRATION_PROMPT
+
     try:
         client = AsyncOpenAI(api_key=api_key)
         response = await client.chat.completions.create(
             model=config.ai_model or "gpt-4o-mini",
             messages=[
-                {"role": "system", "content": NARRATION_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": context},
             ],
             response_format={"type": "json_object"},
@@ -121,6 +166,9 @@ async def generate_tts(
     """
     Generate TTS audio from narration text using OpenAI.
 
+    Uses config.narration_voice and config.narration_speed if available,
+    falling back to the ``voice`` parameter and 0.95 speed.
+
     Returns path to the audio file, or None on failure.
     """
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
@@ -136,18 +184,22 @@ async def generate_tts(
         logger.warning("No OpenAI API key for TTS")
         return None
 
+    # Resolve voice: config > explicit param > default
+    tts_voice = getattr(config, "narration_voice", None) or voice
+    tts_speed = getattr(config, "narration_speed", None) or 0.95
+
     try:
         client = AsyncOpenAI(api_key=api_key)
         response = await client.audio.speech.create(
             model="tts-1-hd",
-            voice=voice,
+            voice=tts_voice,
             input=text,
-            speed=0.95,  # natural, unhurried delivery
+            speed=tts_speed,
         )
 
         audio_path = AUDIO_DIR / f"narration_{clip_id}.mp3"
         response.stream_to_file(str(audio_path))
-        logger.info("TTS generated: %s (voice=%s)", audio_path, voice)
+        logger.info("TTS generated: %s (voice=%s, speed=%.2f)", audio_path, tts_voice, tts_speed)
         return str(audio_path)
 
     except Exception:

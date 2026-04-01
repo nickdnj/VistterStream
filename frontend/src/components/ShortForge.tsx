@@ -102,6 +102,10 @@ interface ShortForgeConfig {
   ai_model: string;
   has_openai_key: boolean;
   timeline_id: number | null;
+  narration_voice: string;
+  narration_speed: number;
+  narration_persona: string;
+  narration_prompt: string | null;
 }
 
 interface PresetInfo {
@@ -116,6 +120,14 @@ interface Camera {
   id: number;
   name: string;
 }
+
+interface NarrationPreset {
+  label: string;
+  voice: string;
+  prompt: string;
+}
+
+const OPENAI_VOICES = ['alloy', 'echo', 'fable', 'nova', 'onyx', 'shimmer'] as const;
 
 // Status badge component
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -467,6 +479,7 @@ const SettingsSlideOver: React.FC<{
   onSave: (update: Partial<ShortForgeConfig> & { openai_api_key?: string }) => void;
 }> = ({ isOpen, onClose, config, cameras, onSave }) => {
   const [form, setForm] = useState<Partial<ShortForgeConfig> & { openai_api_key?: string }>({});
+  const [narrationPresets, setNarrationPresets] = useState<Record<string, NarrationPreset>>({});
 
   useEffect(() => {
     if (config) {
@@ -485,9 +498,21 @@ const SettingsSlideOver: React.FC<{
         description_template: config.description_template,
         safety_gate_enabled: config.safety_gate_enabled,
         ai_model: config.ai_model,
+        narration_voice: config.narration_voice,
+        narration_speed: config.narration_speed,
+        narration_persona: config.narration_persona,
+        narration_prompt: config.narration_prompt,
       });
     }
   }, [config]);
+
+  useEffect(() => {
+    if (isOpen) {
+      api.get('/shortforge/narration-presets').then(res => {
+        setNarrationPresets(res.data);
+      }).catch(() => {});
+    }
+  }, [isOpen]);
 
   const handleSave = () => {
     onSave(form);
@@ -534,6 +559,80 @@ const SettingsSlideOver: React.FC<{
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+            </section>
+
+            {/* Narration */}
+            <section>
+              <h3 className="text-sm font-medium text-gray-300 mb-3">Narration</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-400">Persona</label>
+                  <select
+                    className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+                    value={form.narration_persona || 'chill_surfer'}
+                    onChange={e => {
+                      const key = e.target.value;
+                      const preset = narrationPresets[key];
+                      if (preset) {
+                        setForm(f => ({ ...f, narration_persona: key, narration_voice: preset.voice }));
+                      } else {
+                        setForm(f => ({ ...f, narration_persona: key }));
+                      }
+                    }}
+                  >
+                    {Object.entries(narrationPresets).map(([key, preset]) => (
+                      <option key={key} value={key}>{preset.label}</option>
+                    ))}
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                {form.narration_persona && form.narration_persona !== 'custom' && narrationPresets[form.narration_persona] && (
+                  <p className="text-xs text-gray-500 italic">
+                    {narrationPresets[form.narration_persona].prompt}
+                  </p>
+                )}
+                {form.narration_persona === 'custom' && (
+                  <div>
+                    <label className="text-xs text-gray-400">Custom persona prompt</label>
+                    <textarea
+                      rows={4}
+                      className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+                      value={form.narration_prompt || ''}
+                      onChange={e => setForm(f => ({ ...f, narration_prompt: e.target.value }))}
+                      placeholder="Describe the narrator's personality, tone, and style..."
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-gray-400">Voice</label>
+                  <select
+                    className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+                    value={form.narration_voice || 'shimmer'}
+                    onChange={e => setForm(f => ({ ...f, narration_voice: e.target.value }))}
+                  >
+                    {OPENAI_VOICES.map(v => (
+                      <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Speed</span>
+                    <span>{(form.narration_speed ?? 0.95).toFixed(2)}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5" max="2.0" step="0.05"
+                    value={form.narration_speed ?? 0.95}
+                    onChange={e => setForm(f => ({ ...f, narration_speed: parseFloat(e.target.value) }))}
+                    className="w-full accent-primary-600"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-0.5">
+                    <span>Slow</span>
+                    <span>Fast</span>
+                  </div>
                 </div>
               </div>
             </section>
