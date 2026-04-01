@@ -471,8 +471,15 @@ const ShortForgeSettings: React.FC = () => {
               value={form.narration_voice || 'shimmer'}
               onChange={e => setForm(f => ({ ...f, narration_voice: e.target.value }))}
             >
-              {['alloy', 'echo', 'fable', 'nova', 'onyx', 'shimmer'].map(v => (
-                <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+              {[
+                { id: 'alloy', desc: 'Neutral, balanced — great for weather anchor' },
+                { id: 'echo', desc: 'Warm, smooth male — relaxed and conversational' },
+                { id: 'fable', desc: 'Expressive, storytelling — British-accented' },
+                { id: 'nova', desc: 'Friendly, upbeat female — energetic and clear' },
+                { id: 'onyx', desc: 'Deep, authoritative male — captain vibes' },
+                { id: 'shimmer', desc: 'Soft, pleasant female — calm and inviting' },
+              ].map(v => (
+                <option key={v.id} value={v.id}>{v.id.charAt(0).toUpperCase() + v.id.slice(1)} — {v.desc}</option>
               ))}
             </select>
           </div>

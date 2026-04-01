@@ -127,7 +127,14 @@ interface NarrationPreset {
   prompt: string;
 }
 
-const OPENAI_VOICES = ['alloy', 'echo', 'fable', 'nova', 'onyx', 'shimmer'] as const;
+const OPENAI_VOICES = [
+  { id: 'alloy', desc: 'Neutral, balanced' },
+  { id: 'echo', desc: 'Warm, smooth male' },
+  { id: 'fable', desc: 'Expressive, storytelling' },
+  { id: 'nova', desc: 'Friendly, upbeat female' },
+  { id: 'onyx', desc: 'Deep, authoritative male' },
+  { id: 'shimmer', desc: 'Soft, pleasant female' },
+];
 
 // Status badge component
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
@@ -613,7 +620,7 @@ const SettingsSlideOver: React.FC<{
                     onChange={e => setForm(f => ({ ...f, narration_voice: e.target.value }))}
                   >
                     {OPENAI_VOICES.map(v => (
-                      <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+                      <option key={v.id} value={v.id}>{v.id.charAt(0).toUpperCase() + v.id.slice(1)} — {v.desc}</option>
                     ))}
                   </select>
                 </div>
