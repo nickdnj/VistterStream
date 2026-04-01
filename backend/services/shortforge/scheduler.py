@@ -235,20 +235,16 @@ class ShortForgeScheduler:
     async def _process_moment(self, moment_id: int, frame_path: Optional[str], config: ShortForgeConfig, preset_id: Optional[int] = None):
         """Run a moment through the full pipeline: capture → headline → render → publish."""
         try:
-            # Stage 1: Create clip from the rolling preset clip (fresh, correct angle)
+            # Stage 1: Get clip — use the preset clip captured during the timeline segment
             clip_id = None
             capture = get_clip_capture()
             if preset_id:
-                clip_id = await capture.create_clip_from_preset(moment_id, preset_id)
-            # Fall back to direct RTSP capture
-            if not clip_id and self._rtsp_url:
-                logger.info("No preset clip for preset %s, trying direct RTSP", preset_id)
-                clip_id = await capture.capture_direct(moment_id, self._rtsp_url, duration=25)
-            # Last resort: looped snapshot
+                clip_id = await capture.create_clip_for_moment(moment_id, preset_id)
             if not clip_id and frame_path and Path(frame_path).exists():
-                logger.info("Direct capture failed, falling back to snapshot")
-                clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
+                logger.info("No preset clip for %s, falling back to snapshot", preset_id)
+                clip_id = await capture.create_clip_from_snapshot(moment_id, frame_path, duration=15)
             if not clip_id:
+                logger.error("No clip available for moment %d — skipping", moment_id)
                 return
 
             # Stage 2: Generate headline
