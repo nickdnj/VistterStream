@@ -32,26 +32,38 @@ class ClipCapture:
         # preset_id → absolute path to clip file
         self.preset_clips: dict[int, str] = {}
 
-    async def capture_for_preset(self, preset_id: int, relay_url: str, duration: int = 10):
+    async def capture_for_preset(self, preset_id: int, snapshot_url: str, duration: int = 15):
         """
-        Capture a clip from the RTMP relay for this preset.
-        Called SYNCHRONOUSLY (awaited) by the timeline executor during the segment,
-        so the camera is guaranteed to be at this preset.
+        Capture a clip for this preset from an HTTP snapshot.
+        Called by the timeline executor during the segment while the camera
+        is at this preset. Uses snapshot (not RTMP relay) because the relay
+        only supports one consumer (the main stream).
         """
         CLIPS_DIR.mkdir(parents=True, exist_ok=True)
         clip_path = CLIPS_DIR / f"preset_{preset_id}.mp4"
-
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", relay_url,
-            "-t", str(duration),
-            "-c:v", "copy",
-            "-an",
-            "-movflags", "+faststart",
-            str(clip_path),
-        ]
+        snap_path = CLIPS_DIR / f"preset_{preset_id}_snap.jpg"
 
         try:
+            # Grab snapshot via HTTP (fast, no competing connections)
+            import httpx
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(snapshot_url)
+                if resp.status_code != 200:
+                    logger.warning("Preset %d snapshot HTTP %d", preset_id, resp.status_code)
+                    return
+            snap_path.write_bytes(resp.content)
+
+            # Convert snapshot to video with Ken Burns source material
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-i", str(snap_path),
+                "-t", str(duration),
+                "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "15", "-preset", "fast",
+                str(clip_path),
+            ]
+
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.DEVNULL,
@@ -62,15 +74,17 @@ class ClipCapture:
             except asyncio.TimeoutError:
                 proc.kill()
                 await proc.wait()
-                logger.warning("Preset %d clip capture timed out after %ds", preset_id, duration + 10)
+                logger.warning("Preset %d clip encode timed out", preset_id)
                 return
+
+            snap_path.unlink(missing_ok=True)
 
             if proc.returncode == 0 and clip_path.exists():
                 self.preset_clips[preset_id] = str(clip_path)
-                logger.info("Preset %d clip captured (%ds): %s", preset_id, duration, clip_path)
+                logger.info("Preset %d clip captured: %s", preset_id, clip_path)
             else:
                 error = stderr[-200:].decode(errors="replace") if stderr else ""
-                logger.warning("Preset %d clip capture failed: %s", preset_id, error)
+                logger.warning("Preset %d clip encode failed: %s", preset_id, error)
         except Exception:
             logger.exception("Error capturing clip for preset %d", preset_id)
 

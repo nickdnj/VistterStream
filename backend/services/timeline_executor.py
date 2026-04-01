@@ -979,17 +979,15 @@ class TimelineExecutor:
                 # Clip capture is synchronous (awaited) so it completes before we move on.
                 # ShortForge: clip capture + snapshot (with hard timeout so it can't stall the timeline)
                 sf_time = 0
-                if preset_id:
-                    clip_dur = min(20, max(5, int(duration) - 3))
+                if preset_id and camera.snapshot_url:
                     try:
                         from services.shortforge.clip_capture import get_clip_capture
                         sf_capture = get_clip_capture()
-                        relay_url = f"rtmp://rtmp-relay:1935/live/camera_{camera.id}"
                         await asyncio.wait_for(
-                            sf_capture.capture_for_preset(preset_id, relay_url, clip_dur),
-                            timeout=clip_dur + 15
+                            sf_capture.capture_for_preset(preset_id, camera.snapshot_url, duration=15),
+                            timeout=30
                         )
-                        sf_time = clip_dur
+                        sf_time = 3  # snapshot capture is fast, only a few seconds
                     except asyncio.TimeoutError:
                         logger.warning("ShortForge clip capture timed out for preset %d", preset_id)
                     except Exception:
