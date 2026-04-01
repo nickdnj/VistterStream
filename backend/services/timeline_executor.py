@@ -973,6 +973,23 @@ class TimelineExecutor:
                     # Same camera, same overlays - just log that we're continuing
                     logger.info(f"📹 Continuing stream (same camera, preset changed to '{preset.name if preset else 'none'}')")
                 
+                # ShortForge: start rolling clip capture NOW while camera is on this preset.
+                # Must start early so it finishes before the segment ends and camera moves.
+                sf_clip_task = None
+                if preset_id:
+                    try:
+                        from services.shortforge.clip_capture import get_clip_capture
+                        capture = get_clip_capture()
+                        relay_url = f"rtmp://rtmp-relay:1935/live/camera_{camera.id}"
+                        clip_dur = min(15, max(5, int(duration) - 5))
+                        sf_clip_task = asyncio.create_task(capture.capture_preset_clip(
+                            preset_id=preset_id,
+                            source_url=relay_url,
+                            duration=clip_dur,
+                        ))
+                    except Exception:
+                        logger.exception("ShortForge preset clip capture failed")
+
                 # Wait for first half of segment (camera fully settled by now)
                 half = max(3, duration / 2)
                 logger.info(f"⏱️  Waiting {duration}s for segment to complete...")
@@ -997,20 +1014,12 @@ class TimelineExecutor:
                 if remaining > 0:
                     await asyncio.sleep(remaining)
 
-                # ShortForge: capture rolling clip for this preset (background, non-blocking)
-                # This runs every segment so each preset always has a recent clip available
-                if preset_id:
+                # Ensure clip capture finished before segment ends
+                if sf_clip_task and not sf_clip_task.done():
                     try:
-                        from services.shortforge.clip_capture import get_clip_capture
-                        capture = get_clip_capture()
-                        rtsp_url = build_rtsp_url(camera.address, camera.port, camera.username, password, camera.stream_path)
-                        asyncio.create_task(capture.capture_preset_clip(
-                            preset_id=preset_id,
-                            rtsp_url=rtsp_url,
-                            duration=min(15, max(5, int(duration) - 3)),
-                        ))
-                    except Exception:
-                        logger.exception("ShortForge preset clip capture failed")
+                        await asyncio.wait_for(sf_clip_task, timeout=5)
+                    except asyncio.TimeoutError:
+                        logger.warning("Preset %d clip capture didn't finish in time", preset_id)
                 logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
                 
                 # Update heartbeat for stall detection

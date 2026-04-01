@@ -406,25 +406,20 @@ class ClipCapture:
             logger.exception("Error in direct capture for moment %d", moment_id)
             return await self._mark_moment_failed(moment_id, "Direct capture exception")
 
-    async def capture_preset_clip(self, preset_id: int, rtsp_url: str, duration: int = 20):
+    async def capture_preset_clip(self, preset_id: int, source_url: str, duration: int = 20):
         """
-        Capture a rolling clip for a preset. Called by the timeline executor
-        during each segment while the camera is at this preset. Overwrites the
-        previous clip for this preset.
+        Capture a rolling clip for a preset from a video source (RTMP relay).
+        Called by the timeline executor during each segment while the
+        camera is at this preset. Uses the RTMP relay to avoid opening
+        a competing RTSP connection on the camera.
         """
         try:
             CLIPS_DIR.mkdir(parents=True, exist_ok=True)
             clip_path = CLIPS_DIR / f"preset_{preset_id}_rolling.mp4"
 
-            # Remove old clip first
-            old_path = self.preset_clips.get(preset_id)
-            if old_path and Path(old_path).exists() and str(old_path) != str(clip_path):
-                Path(old_path).unlink(missing_ok=True)
-
             cmd = [
                 "ffmpeg", "-y",
-                "-rtsp_transport", "tcp",
-                "-i", rtsp_url,
+                "-i", source_url,
                 "-t", str(duration),
                 "-c:v", "copy",
                 "-an",
