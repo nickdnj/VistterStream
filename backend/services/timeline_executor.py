@@ -980,7 +980,7 @@ class TimelineExecutor:
                 # ShortForge: clip capture + snapshot (with hard timeout so it can't stall the timeline)
                 sf_time = 0
                 if preset_id:
-                    clip_dur = min(8, max(3, int(duration) - 5))
+                    clip_dur = min(20, max(5, int(duration) - 3))
                     try:
                         from services.shortforge.clip_capture import get_clip_capture
                         sf_capture = get_clip_capture()

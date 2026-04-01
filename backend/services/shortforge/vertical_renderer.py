@@ -55,9 +55,18 @@ async def render_vertical(
             logger.error("Clip file missing: %s", input_path)
             return None
 
-        duration = clip.duration_seconds or 25.0
+        clip_duration = clip.duration_seconds or 25.0
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         output_path = RENDERED_DIR / f"short_{clip_id}_{ts}.mp4"
+
+        # Get audio duration — this is the master duration for the short.
+        # The pan effect, overlays, and output all match the narration length.
+        audio_duration = None
+        if audio_path and Path(audio_path).exists():
+            audio_duration = await _get_duration(audio_path)
+        render_duration = audio_duration or clip_duration
+        logger.info("Render durations: clip=%.1fs, audio=%.1fs, render=%.1fs",
+                     clip_duration, audio_duration or 0, render_duration)
 
         # Escape text for FFmpeg drawtext
         safe_weather = _escape_ffmpeg_text(weather_text)
@@ -68,7 +77,8 @@ async def render_vertical(
 
         filters = [
             # Animated horizontal pan: crop window slides left-to-right
-            f"crop=ih*9/16:ih:'min({pan_range},({pan_range})*t/{duration:.1f})':0",
+            # Speed based on render_duration (audio length) not clip length
+            f"crop=ih*9/16:ih:'min({pan_range},({pan_range})*t/{render_duration:.1f})':0",
             # Scale to output resolution
             "scale=1080:1920:flags=lanczos",
         ]
@@ -98,10 +108,11 @@ async def render_vertical(
         filter_chain = ",".join(filters)
 
         # Build FFmpeg command
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(input_path),
-        ]
+        # If clip is shorter than audio, loop the video input
+        cmd = ["ffmpeg", "-y"]
+        if clip_duration < render_duration:
+            cmd.extend(["-stream_loop", "-1"])  # loop video indefinitely
+        cmd.extend(["-i", str(input_path)])
 
         # Add audio input: narration file or silent track
         if audio_path and Path(audio_path).exists():
@@ -114,18 +125,18 @@ async def render_vertical(
         cmd.extend([
             "-vf", filter_chain,
             "-map", "0:v:0", "-map", audio_map,
+            "-t", f"{render_duration:.1f}",  # explicit duration from audio
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "23",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac",
-            "-shortest",
             "-movflags", "+faststart",
             str(output_path),
         ])
 
         logger.info("Rendering vertical short for clip %d (pan over %.1fs, audio=%s)",
-                     clip_id, duration, "narration" if audio_path else "silent")
+                     clip_id, render_duration, "narration" if audio_path else "silent")
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.DEVNULL,
@@ -152,6 +163,24 @@ async def render_vertical(
         return None
     finally:
         db.close()
+
+
+async def _get_duration(path) -> Optional[float]:
+    """Get media duration via ffprobe."""
+    try:
+        import json
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "quiet",
+            "-print_format", "json",
+            "-show_format", str(path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+        data = json.loads(stdout)
+        return float(data.get("format", {}).get("duration", 0))
+    except Exception:
+        return None
 
 
 def _escape_ffmpeg_text(text: str) -> str:
