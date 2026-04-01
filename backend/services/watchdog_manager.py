@@ -240,6 +240,19 @@ class WatchdogManager:
             for dest_id in self.watchdogs.keys()
         }
     
+    def notify_intentional_restart(self, stream_id: int, duration_seconds: int = 30):
+        """
+        Suppress watchdog checks for all watchdogs monitoring a given stream.
+        Call this before intentional FFmpeg restarts (e.g. overlay refresh).
+
+        Args:
+            stream_id: Stream being intentionally restarted
+            duration_seconds: How long to suppress checks
+        """
+        for dest_id, watchdog in self.watchdogs.items():
+            if watchdog.stream_id == stream_id:
+                watchdog.suppress_checks(duration_seconds)
+
     async def notify_stream_started(self, destination_ids: List[int], stream_id: int, db_session: Session):
         """
         Notify watchdog manager that a stream has started streaming to destination(s).

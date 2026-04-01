@@ -239,6 +239,9 @@ class TimelineExecutor:
                         # Stop FFmpeg so it restarts with fresh overlay images
                         if timeline_id in ffmpeg_manager.processes:
                             logger.info(f"🔄 Overlays refreshed - restarting FFmpeg for fresh images")
+                            # Suppress watchdog checks during intentional restart
+                            from services.watchdog_manager import get_watchdog_manager
+                            get_watchdog_manager().notify_intentional_restart(timeline_id, duration_seconds=30)
                             try:
                                 ffmpeg_manager.unregister_stream_died_callback(timeline_id)
                                 await ffmpeg_manager.stop_stream(timeline_id)

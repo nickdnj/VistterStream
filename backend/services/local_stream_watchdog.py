@@ -14,7 +14,7 @@ import asyncio
 import logging
 import psutil
 import aiohttp
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -77,10 +77,10 @@ class StreamHealthState:
 class LocalStreamWatchdog:
     """
     Local watchdog service for monitoring FFmpeg encoder health
-    
+
     This version monitors the local encoder process without needing YouTube API.
     """
-    
+
     def __init__(
         self,
         destination_id: int,
@@ -91,7 +91,7 @@ class LocalStreamWatchdog:
     ):
         """
         Initialize the local watchdog
-        
+
         Args:
             destination_id: ID of the streaming destination
             destination_name: Name of the destination
@@ -104,11 +104,21 @@ class LocalStreamWatchdog:
         self.stream_id = stream_id
         self.check_interval = check_interval
         self.youtube_channel_live_url = youtube_channel_live_url
-        
+
         self.health_state = StreamHealthState(unhealthy_threshold=3)
         self.running = False
-        
+        self._suppress_until: Optional[datetime] = None
+
         self.logger = logging.getLogger(f'watchdog.dest{destination_id}')
+
+    def suppress_checks(self, duration_seconds: int = 30):
+        """
+        Suppress health checks for a duration (e.g. during intentional FFmpeg restarts).
+        Also resets the consecutive unhealthy counter to prevent stale state.
+        """
+        self._suppress_until = datetime.now(timezone.utc) + timedelta(seconds=duration_seconds)
+        self.health_state.consecutive_unhealthy = 0
+        self.logger.info(f"Health checks suppressed for {duration_seconds}s (intentional restart)")
     
     async def start(self):
         """Start the watchdog service"""
@@ -144,6 +154,12 @@ class LocalStreamWatchdog:
     
     async def check_and_recover(self):
         """Main health check and recovery logic"""
+        # Skip checks during intentional restart window
+        if self._suppress_until and datetime.now(timezone.utc) < self._suppress_until:
+            self.logger.debug("Health check suppressed (intentional restart in progress)")
+            return
+        self._suppress_until = None  # Clear expired suppression
+
         try:
             # Import here to avoid circular imports
             from services.timeline_executor import get_timeline_executor
