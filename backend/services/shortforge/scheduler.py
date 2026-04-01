@@ -246,11 +246,13 @@ class ShortForgeScheduler:
 
             if not clip_id:
                 capture = get_clip_capture()
-                # Prefer creating clip from saved snapshot (no RTSP needed)
-                if frame_path and Path(frame_path).exists():
+                # Prefer ring buffer (real video) over looped snapshot.
+                # Ring buffer gives actual footage with movement; snapshot
+                # creates a static image loop that looks frozen in the short.
+                clip_id = await capture.capture_clip(moment_id)
+                if not clip_id and frame_path and Path(frame_path).exists():
+                    logger.info("Ring buffer capture failed, falling back to snapshot")
                     clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)
-                else:
-                    clip_id = await capture.capture_clip(moment_id)
                 if not clip_id:
                     return
 
