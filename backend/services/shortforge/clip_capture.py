@@ -165,7 +165,6 @@ class ClipCapture:
                     prompt=AI_ENHANCE_PROMPT,
                     model="gpt-image-1",
                     size="1536x1024",
-                    quality="medium",
                     response_format="b64_json",
                 )
 
