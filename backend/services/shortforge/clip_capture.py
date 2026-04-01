@@ -154,29 +154,51 @@ class ClipCapture:
             finally:
                 db.close()
 
-            from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=api_key)
+            import base64
+            import httpx as _httpx
 
             enhanced_path = snap_path.parent / f"{snap_path.stem}_enhanced.png"
 
-            with open(snap_path, "rb") as f:
-                response = await client.images.edit(
-                    image=f,
-                    prompt=AI_ENHANCE_PROMPT,
-                    model="gpt-image-1",
-                    size="1536x1024",
-                    response_format="b64_json",
+            # Encode image as base64 for the API
+            img_b64 = base64.b64encode(snap_path.read_bytes()).decode()
+
+            # Use the REST API directly for gpt-image-1 generation with image input
+            async with _httpx.AsyncClient(timeout=60.0) as http:
+                resp = await http.post(
+                    "https://api.openai.com/v1/images/generations",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "gpt-image-1",
+                        "prompt": AI_ENHANCE_PROMPT,
+                        "n": 1,
+                        "size": "1536x1024",
+                        "image": [{"type": "base64", "data": img_b64}],
+                    },
                 )
 
-            if response.data and response.data[0].b64_json:
-                import base64
-                img_bytes = base64.b64decode(response.data[0].b64_json)
+            if resp.status_code != 200:
+                logger.warning("AI enhance API error %d: %s", resp.status_code, resp.text[:200])
+                return None
+
+            data = resp.json()
+            if data.get("data") and data["data"][0].get("b64_json"):
+                img_bytes = base64.b64decode(data["data"][0]["b64_json"])
                 enhanced_path.write_bytes(img_bytes)
                 logger.info("AI enhanced image: %s (%d bytes)", enhanced_path, len(img_bytes))
                 return enhanced_path
-            else:
-                logger.warning("AI enhance returned no data")
-                return None
+            elif data.get("data") and data["data"][0].get("url"):
+                # Download from URL
+                async with _httpx.AsyncClient(timeout=30.0) as http:
+                    img_resp = await http.get(data["data"][0]["url"])
+                    if img_resp.status_code == 200:
+                        enhanced_path.write_bytes(img_resp.content)
+                        logger.info("AI enhanced image (url): %s", enhanced_path)
+                        return enhanced_path
+            logger.warning("AI enhance returned no usable data")
+            return None
 
         except Exception:
             logger.exception("AI image enhancement failed")
