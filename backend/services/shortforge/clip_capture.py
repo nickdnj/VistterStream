@@ -57,7 +57,13 @@ class ClipCapture:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.PIPE,
             )
-            _, stderr = await proc.communicate()
+            try:
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=duration + 10)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                logger.warning("Preset %d clip capture timed out after %ds", preset_id, duration + 10)
+                return
 
             if proc.returncode == 0 and clip_path.exists():
                 self.preset_clips[preset_id] = str(clip_path)

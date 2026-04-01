@@ -977,32 +977,39 @@ class TimelineExecutor:
 
                 # ShortForge: capture clip + snapshot while camera is at this preset.
                 # Clip capture is synchronous (awaited) so it completes before we move on.
+                # ShortForge: clip capture + snapshot (with hard timeout so it can't stall the timeline)
+                sf_time = 0
                 if preset_id:
+                    clip_dur = min(8, max(3, int(duration) - 5))
                     try:
                         from services.shortforge.clip_capture import get_clip_capture
                         sf_capture = get_clip_capture()
                         relay_url = f"rtmp://rtmp-relay:1935/live/camera_{camera.id}"
-                        clip_dur = min(10, max(5, int(duration) - 3))
-                        await sf_capture.capture_for_preset(preset_id, relay_url, clip_dur)
+                        await asyncio.wait_for(
+                            sf_capture.capture_for_preset(preset_id, relay_url, clip_dur),
+                            timeout=clip_dur + 15
+                        )
+                        sf_time = clip_dur
+                    except asyncio.TimeoutError:
+                        logger.warning("ShortForge clip capture timed out for preset %d", preset_id)
                     except Exception:
                         logger.exception("ShortForge clip capture failed")
 
-                # Snapshot for moment detection (remaining segment time)
-                if preset_id and camera.snapshot_url:
-                    try:
-                        from services.shortforge.moment_detector import get_moment_detector
-                        sf_detector = get_moment_detector()
-                        await sf_detector.evaluate(
-                            camera_id=camera.id,
-                            preset_id=preset_id,
-                            snapshot_url=camera.snapshot_url,
-                        )
-                    except Exception:
-                        logger.exception("ShortForge evaluate failed")
+                    # Snapshot for moment detection
+                    if camera.snapshot_url:
+                        try:
+                            from services.shortforge.moment_detector import get_moment_detector
+                            sf_detector = get_moment_detector()
+                            await sf_detector.evaluate(
+                                camera_id=camera.id,
+                                preset_id=preset_id,
+                                snapshot_url=camera.snapshot_url,
+                            )
+                        except Exception:
+                            logger.exception("ShortForge evaluate failed")
 
-                # Wait any remaining segment time
-                clip_time = min(10, max(5, int(duration) - 3)) if preset_id else 0
-                remaining = max(0, duration - clip_time - 2)
+                # Wait remaining segment time
+                remaining = max(0, duration - sf_time - 2)
                 if remaining > 0:
                     await asyncio.sleep(remaining)
                 logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
