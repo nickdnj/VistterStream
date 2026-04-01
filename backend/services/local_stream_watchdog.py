@@ -223,14 +223,17 @@ class LocalStreamWatchdog:
                             self.logger.error(f"Error checking process health: {e}")
                             is_healthy = False
             
-            # Optional: Check if YouTube actually shows the stream as live
+            # Optional: Check if YouTube actually shows the stream as live (informational only)
+            # YouTube status does NOT override local health — only local FFmpeg health
+            # triggers recovery. YouTube can be slow to reflect live status, especially
+            # with marginal upload bandwidth.
             if is_healthy and self.youtube_channel_live_url:
                 youtube_live = await self._check_youtube_live()
                 if not youtube_live:
-                    self.logger.warning(
-                        f"FFmpeg is running but YouTube shows stream as offline at {self.youtube_channel_live_url}"
+                    self.logger.info(
+                        f"YouTube shows stream as offline at {self.youtube_channel_live_url} "
+                        f"(informational only — local encoder is healthy)"
                     )
-                    is_healthy = False
             
             # Check timeline progress (detect stalled timeline even if FFmpeg is healthy)
             if is_healthy:
