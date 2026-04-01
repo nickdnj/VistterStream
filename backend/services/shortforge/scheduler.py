@@ -317,7 +317,7 @@ class ShortForgeScheduler:
                         audio_dur = await self._get_audio_duration(audio_path)
                         if audio_dur and audio_dur > 0:
                             timings = compute_word_timings(narration_text, audio_dur)
-                            word_filter = build_word_overlay_filter(timings)
+                            word_filter = build_word_overlay_filter(timings, text_position=config.text_position or "upper")
 
                     logger.info("Narration: '%s' (audio=%s)", narration_text[:80], bool(audio_path))
             except Exception:

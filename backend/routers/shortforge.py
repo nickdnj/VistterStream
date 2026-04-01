@@ -106,6 +106,7 @@ class ConfigRead(BaseModel):
     narration_speed: float = 0.95
     narration_persona: str = "chill_surfer"
     narration_prompt: Optional[str] = None
+    text_position: str = "upper"
 
     class Config:
         from_attributes = True
@@ -135,6 +136,7 @@ class ConfigUpdate(BaseModel):
     narration_speed: Optional[float] = Field(None, ge=0.25, le=4.0)
     narration_persona: Optional[str] = None
     narration_prompt: Optional[str] = None
+    text_position: Optional[str] = None  # upper, center, lower
 
 
 # --- Endpoints ---
@@ -395,6 +397,7 @@ async def get_config(
         narration_speed=config.narration_speed if config.narration_speed is not None else 0.95,
         narration_persona=config.narration_persona or "chill_surfer",
         narration_prompt=config.narration_prompt,
+        text_position=config.text_position or "upper",
     )
 
 

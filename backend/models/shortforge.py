@@ -117,6 +117,7 @@ class ShortForgeConfig(Base):
     narration_speed = Column(Float, default=0.95)  # 0.25 to 4.0
     narration_persona = Column(String, default="chill_surfer")  # preset key or "custom"
     narration_prompt = Column(Text, nullable=True)  # custom prompt (used when persona="custom")
+    text_position = Column(String, default="upper")  # upper, center, lower
 
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

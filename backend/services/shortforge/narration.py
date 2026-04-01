@@ -245,27 +245,33 @@ def compute_word_timings(text: str, audio_duration: float) -> list[dict]:
     return timings
 
 
-def build_word_overlay_filter(timings: list[dict], font: str = "DejaVu Sans") -> str:
+def build_word_overlay_filter(timings: list[dict], font: str = "DejaVu Sans", text_position: str = "upper") -> str:
     """
     Build FFmpeg drawtext filter chain for word-by-word TikTok-style overlay.
 
-    Each word pops on screen at its start time and stays until the next word appears.
-    Words are displayed one at a time, centered near the top of the frame.
+    text_position: "upper" (top area), "center" (middle), "lower" (bottom area)
     """
     if not timings:
         return ""
+
+    # y position on 1920px tall vertical frame
+    y_map = {
+        "upper": "160",
+        "center": "(h-text_h)/2",
+        "lower": "h-280",
+    }
+    y_expr = y_map.get(text_position, "160")
 
     parts = []
     for i, t in enumerate(timings):
         word = t["word"].replace("'", "'\\\\\\''").replace(":", "\\:").replace("%", "%%")
         start = t["start"]
-        # Word stays visible until next word starts (or end of its own duration + 0.1)
         end = timings[i + 1]["start"] if i + 1 < len(timings) else t["end"] + 0.5
 
         parts.append(
             f"drawtext=text='{word}'"
             f":fontsize=84:fontcolor=white:borderw=5:bordercolor=black"
-            f":x=(w-text_w)/2:y=160"
+            f":x=(w-text_w)/2:y={y_expr}"
             f":font={font}"
             f":enable='between(t,{start:.3f},{end:.3f})'"
         )

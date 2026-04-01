@@ -106,6 +106,7 @@ const ShortForgeSettings: React.FC = () => {
         narration_speed: cfg.narration_speed ?? 0.95,
         narration_persona: cfg.narration_persona || 'chill_surfer',
         narration_prompt: cfg.narration_prompt || '',
+        text_position: cfg.text_position || 'upper',
       });
       // Load presets if timeline is set
       if (cfg.timeline_id) {
@@ -528,6 +529,18 @@ const ShortForgeSettings: React.FC = () => {
           >
             {previewLoading ? 'Generating preview...' : previewAudio ? 'Playing...' : 'Preview Voice'}
           </button>
+          <div>
+            <label className="text-sm text-gray-400">Text Position</label>
+            <select
+              className="w-full mt-1 bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-sm text-gray-200"
+              value={form.text_position || 'upper'}
+              onChange={e => setForm(f => ({ ...f, text_position: e.target.value }))}
+            >
+              <option value="upper">Upper — near the top of the frame</option>
+              <option value="center">Center — middle of the frame</option>
+              <option value="lower">Lower — near the bottom of the frame</option>
+            </select>
+          </div>
         </div>
       </div>
 
