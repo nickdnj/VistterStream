@@ -219,7 +219,7 @@ class ShortForgeScheduler:
                             db.close()
 
                         wm.mark_captured(last_window)
-                        await self._process_moment(moment_id, frame_path, config)
+                        await self._process_moment(moment_id, frame_path, config, preset_id=candidate["preset_id"])
                     else:
                         logger.info("Window '%s' ended with no candidates", last_window)
 
@@ -232,10 +232,10 @@ class ShortForgeScheduler:
                 logger.exception("Error in pipeline loop")
                 await asyncio.sleep(10)
 
-    async def _process_moment(self, moment_id: int, frame_path: Optional[str], config: ShortForgeConfig):
+    async def _process_moment(self, moment_id: int, frame_path: Optional[str], config: ShortForgeConfig, preset_id: Optional[int] = None):
         """Run a moment through the full pipeline: capture → headline → render → publish."""
         try:
-            # Stage 1: Check if clip already exists (test capture creates it upfront)
+            # Stage 1: Check if clip already exists
             db = SessionLocal()
             try:
                 existing_clip = db.query(Clip).filter(Clip.moment_id == moment_id).first()
@@ -245,10 +245,14 @@ class ShortForgeScheduler:
 
             if not clip_id:
                 capture = get_clip_capture()
-                # Direct RTSP capture: records 25s of live video on demand.
-                # No background ring buffer needed — saves CPU on the N100.
-                if self._rtsp_url:
+                # Use rolling preset clip if available (captured during timeline segment)
+                if preset_id:
+                    clip_id = await capture.create_clip_from_preset(moment_id, preset_id)
+                # Fall back to direct RTSP capture
+                if not clip_id and self._rtsp_url:
+                    logger.info("No preset clip, trying direct RTSP capture")
                     clip_id = await capture.capture_direct(moment_id, self._rtsp_url, duration=25)
+                # Last resort: looped snapshot
                 if not clip_id and frame_path and Path(frame_path).exists():
                     logger.info("Direct capture failed, falling back to snapshot")
                     clip_id = await capture.capture_from_snapshot_file(moment_id, frame_path, duration=15)

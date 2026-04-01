@@ -607,7 +607,7 @@ async def test_capture(
     # (direct RTSP for real video, snapshot fallback if RTSP fails)
     import asyncio
 
-    async def _run_test(moment_id, frame_path):
+    async def _run_test(moment_id, frame_path, p_id):
         from services.shortforge.scheduler import get_shortforge_scheduler
         from models.database import SessionLocal as SL
         from models.shortforge import ShortForgeConfig as SFC
@@ -619,9 +619,9 @@ async def test_capture(
             db2.close()
         if cfg:
             sched = get_shortforge_scheduler()
-            await sched._process_moment(moment_id, frame_path, cfg)
+            await sched._process_moment(moment_id, frame_path, cfg, preset_id=p_id)
 
-    asyncio.create_task(_run_test(moment.id, latest["path"]))
+    asyncio.create_task(_run_test(moment.id, latest["path"], preset_id))
 
     logger.info("Test capture from snapshot: preset=%d moment=%d file=%s", preset_id, moment.id, latest["path"])
     return {"message": "Test capture started from latest snapshot", "moment_id": moment.id}

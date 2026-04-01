@@ -26,13 +26,15 @@ CLIPS_DIR = DATA_DIR / "clips"
 
 
 class ClipCapture:
-    """Manages the FFmpeg segment ring buffer and clip extraction."""
+    """Manages clip extraction and per-preset rolling clips."""
 
     def __init__(self):
         self._running = False
         self._segment_process: Optional[asyncio.subprocess.Process] = None
         self._task: Optional[asyncio.Task] = None
         self._rtsp_url: Optional[str] = None
+        # Rolling clips: one per preset, updated each timeline loop
+        self.preset_clips: dict[int, str] = {}  # preset_id → clip file path
 
     async def start(self, rtsp_url: str):
         """Start the segment ring buffer."""
@@ -403,6 +405,91 @@ class ClipCapture:
         except Exception:
             logger.exception("Error in direct capture for moment %d", moment_id)
             return await self._mark_moment_failed(moment_id, "Direct capture exception")
+
+    async def capture_preset_clip(self, preset_id: int, rtsp_url: str, duration: int = 20):
+        """
+        Capture a rolling clip for a preset. Called by the timeline executor
+        during each segment while the camera is at this preset. Overwrites the
+        previous clip for this preset.
+        """
+        try:
+            CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+            clip_path = CLIPS_DIR / f"preset_{preset_id}_rolling.mp4"
+
+            # Remove old clip first
+            old_path = self.preset_clips.get(preset_id)
+            if old_path and Path(old_path).exists() and str(old_path) != str(clip_path):
+                Path(old_path).unlink(missing_ok=True)
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-rtsp_transport", "tcp",
+                "-i", rtsp_url,
+                "-t", str(duration),
+                "-c:v", "copy",
+                "-an",
+                "-movflags", "+faststart",
+                str(clip_path),
+            ]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, stderr = await proc.communicate()
+
+            if proc.returncode == 0 and clip_path.exists():
+                self.preset_clips[preset_id] = str(clip_path)
+                logger.info("Preset %d rolling clip updated: %s", preset_id, clip_path)
+            else:
+                error = stderr[-200:].decode(errors="replace") if stderr else ""
+                logger.warning("Preset %d rolling clip failed: %s", preset_id, error)
+
+        except Exception:
+            logger.exception("Error capturing preset clip for preset %d", preset_id)
+
+    async def create_clip_from_preset(self, moment_id: int, preset_id: int) -> Optional[int]:
+        """
+        Create a DB Clip record from the rolling preset clip.
+        Copies the file so the rolling clip can be overwritten next loop.
+        Returns clip ID or None.
+        """
+        src = self.preset_clips.get(preset_id)
+        if not src or not Path(src).exists():
+            logger.warning("No rolling clip for preset %d", preset_id)
+            return None
+
+        try:
+            import shutil
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            clip_path = CLIPS_DIR / f"clip_{moment_id}_{ts}.mp4"
+            shutil.copy2(src, clip_path)
+
+            clip_duration = await self._get_duration(clip_path)
+
+            db = SessionLocal()
+            try:
+                clip = Clip(
+                    moment_id=moment_id,
+                    file_path=str(clip_path),
+                    duration_seconds=clip_duration,
+                    width=1920,
+                    height=1080,
+                )
+                db.add(clip)
+                moment = db.query(Moment).filter(Moment.id == moment_id).first()
+                if moment:
+                    moment.status = "captured"
+                db.commit()
+                db.refresh(clip)
+                logger.info("Clip from preset %d: id=%d duration=%.1fs", preset_id, clip.id, clip_duration or 0)
+                return clip.id
+            finally:
+                db.close()
+        except Exception:
+            logger.exception("Error creating clip from preset %d for moment %d", preset_id, moment_id)
+            return None
 
     async def _mark_moment_failed(self, moment_id: int, error: str) -> None:
         """Mark a moment as failed."""
