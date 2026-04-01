@@ -74,6 +74,8 @@ const ShortForgeSettings: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [testingPreset, setTestingPreset] = useState<number | null>(null);
   const [narrationPresets, setNarrationPresets] = useState<Record<string, { label: string; voice: string; prompt: string }>>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -496,6 +498,36 @@ const ShortForgeSettings: React.FC = () => {
               className="w-full accent-primary-600"
             />
           </div>
+          <button
+            onClick={async () => {
+              if (previewAudio) { previewAudio.pause(); setPreviewAudio(null); }
+              setPreviewLoading(true);
+              try {
+                const res = await api.get(
+                  `/shortforge/voice-preview?voice=${form.narration_voice || 'shimmer'}&speed=${form.narration_speed || 0.95}`,
+                  { responseType: 'blob' }
+                );
+                const url = URL.createObjectURL(res.data);
+                const audio = new Audio(url);
+                setPreviewAudio(audio);
+                audio.play();
+                audio.onended = () => { URL.revokeObjectURL(url); setPreviewAudio(null); };
+              } catch (err) {
+                console.error('Preview failed:', err);
+                alert('Preview failed — check OpenAI API key');
+              } finally {
+                setPreviewLoading(false);
+              }
+            }}
+            disabled={previewLoading}
+            className={`w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              previewLoading ? 'bg-dark-600 text-gray-400' :
+              previewAudio ? 'bg-yellow-600 text-white' :
+              'bg-dark-700 text-gray-300 hover:bg-primary-600 hover:text-white'
+            }`}
+          >
+            {previewLoading ? 'Generating preview...' : previewAudio ? 'Playing...' : 'Preview Voice'}
+          </button>
         </div>
       </div>
 

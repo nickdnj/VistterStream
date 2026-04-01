@@ -398,6 +398,42 @@ async def get_config(
     )
 
 
+@router.get("/voice-preview")
+async def voice_preview(
+    voice: str = "shimmer",
+    speed: float = 0.95,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Generate a short TTS preview for the selected voice and speed."""
+    from fastapi.responses import FileResponse
+    from pathlib import Path as P
+
+    config = db.query(ShortForgeConfig).first()
+    if not config or not config.openai_api_key_enc:
+        raise HTTPException(status_code=400, detail="No OpenAI API key configured")
+
+    from utils.crypto import decrypt as _decrypt
+    api_key = _decrypt(config.openai_api_key_enc)
+
+    preview_text = "Good morning from Wharfside Marina. The water is calm, the sky is clear, and the boats are rocking gently at the dock."
+    preview_dir = P("/data/shortforge/audio") if P("/data").exists() else P("data/shortforge/audio")
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    preview_path = preview_dir / f"preview_{voice}_{speed:.2f}.mp3"
+
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=api_key)
+    response = await client.audio.speech.create(
+        model="tts-1",
+        voice=voice,
+        input=preview_text,
+        speed=speed,
+    )
+    response.stream_to_file(str(preview_path))
+
+    return FileResponse(preview_path, media_type="audio/mpeg")
+
+
 @router.get("/narration-presets")
 async def get_narration_presets(
     current_user=Depends(get_current_user),
