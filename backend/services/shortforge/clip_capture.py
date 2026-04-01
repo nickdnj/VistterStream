@@ -55,9 +55,11 @@ IMAGE_ENHANCE_PRESETS = {
 
 AI_ENHANCE_PROMPT = (
     "Enhance this waterfront marina photo. Make the colors more vivid and natural, "
-    "improve clarity and sharpness, enhance the sky and water. Keep it photorealistic — "
-    "this should look like a professional photograph, not AI-generated. "
-    "Preserve the exact composition and scene."
+    "improve clarity and sharpness, enhance the sky and water. "
+    "Remove any people, pedestrians, or human figures from the scene — "
+    "fill those areas naturally with the surrounding environment. "
+    "Keep it photorealistic — this should look like a professional photograph, "
+    "not AI-generated. Preserve the exact composition, buildings, boats, and docks."
 )
 
 
