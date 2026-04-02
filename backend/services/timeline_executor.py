@@ -5,6 +5,7 @@ Based on docs/StreamingPipeline-TechnicalSpec.md Timeline Orchestrator
 
 import asyncio
 import logging
+import time
 import traceback
 import tempfile
 import os
@@ -50,6 +51,9 @@ class TimelineExecutor:
         self.timeline_destination_ids: Dict[int, List[int]] = {}  # timeline_id -> [destination IDs]
         # Track last segment completion time for stall detection
         self._last_segment_time: Dict[int, datetime] = {}  # timeline_id -> last segment completion time
+        # Track FFmpeg start times and rapid failure counts for backoff
+        self._ffmpeg_start_times: Dict[int, float] = {}  # timeline_id -> monotonic time of last start
+        self._ffmpeg_rapid_failures: Dict[int, int] = {}  # timeline_id -> consecutive rapid failure count
         
     async def start_timeline(
         self,
@@ -121,7 +125,9 @@ class TimelineExecutor:
             del self.timeline_destination_ids[timeline_id]
         if timeline_id in self._last_segment_time:
             del self._last_segment_time[timeline_id]
-            
+        self._ffmpeg_start_times.pop(timeline_id, None)
+        self._ffmpeg_rapid_failures.pop(timeline_id, None)
+
         # Notify watchdog manager that stream is stopping
         try:
             from services.watchdog_manager import get_watchdog_manager
@@ -152,12 +158,24 @@ class TimelineExecutor:
         This updates the timeline state so status endpoints reflect reality.
         """
         logger.error(f"💀 FFmpeg died for timeline {stream_id}: {error_msg}")
-        
+
+        # Track rapid failures for backoff logic
+        start_time = self._ffmpeg_start_times.get(stream_id)
+        if start_time is not None:
+            elapsed = time.monotonic() - start_time
+            if elapsed < 15:
+                count = self._ffmpeg_rapid_failures.get(stream_id, 0) + 1
+                self._ffmpeg_rapid_failures[stream_id] = count
+                logger.warning(f"⚡ FFmpeg died {elapsed:.1f}s after start (rapid failure #{count} for timeline {stream_id})")
+            else:
+                # Died after running for a while — not a rapid failure, reset counter
+                self._ffmpeg_rapid_failures[stream_id] = 0
+
         # Update playback position to indicate error
         if stream_id in self.playback_positions:
             self.playback_positions[stream_id]["status"] = "error"
             self.playback_positions[stream_id]["error"] = error_msg
-        
+
         # Note: We don't cancel the timeline task here because the watchdog
         # should handle recovery. If watchdog is disabled, the timeline
         # will eventually error out when it tries to use the dead FFmpeg.
@@ -805,10 +823,32 @@ class TimelineExecutor:
                 
                 # Only restart FFmpeg if needed
                 if needs_restart:
+                    # Backoff on rapid failures (FFmpeg dying within seconds of start)
+                    # Prevents tight restart loops when internet is down or broadcast is stale
+                    rapid_failures = self._ffmpeg_rapid_failures.get(timeline_id, 0)
+                    if rapid_failures > 0:
+                        # Exponential backoff: 10s, 20s, 40s, 60s, 60s, ...
+                        backoff = min(10 * (2 ** (rapid_failures - 1)), 60)
+                        logger.warning(
+                            f"⏳ FFmpeg rapid failure backoff: waiting {backoff}s before retry "
+                            f"(failure #{rapid_failures} for timeline {timeline_id})"
+                        )
+                        # Use shutdown event so we can still be cancelled during backoff
+                        try:
+                            await asyncio.wait_for(
+                                self._shutdown_event.wait(),
+                                timeout=backoff
+                            )
+                            # If we get here, shutdown was requested during backoff
+                            return
+                        except asyncio.TimeoutError:
+                            # Backoff completed, proceed with restart
+                            pass
+
                     # SEAMLESS HANDOFF: Start new stream BEFORE stopping old
                     # This eliminates viewer buffering during camera switches
                     overlay_info = f" with {len(timed_overlays)} timed overlay(s)" if timed_overlays else ""
-                    
+
                     if stream_running:
                         # Use a temporary stream ID for the new stream
                         temp_stream_id = timeline_id + 1000000
@@ -877,7 +917,8 @@ class TimelineExecutor:
                                 timeline_id,
                                 self._on_ffmpeg_died
                             )
-                            
+                            self._ffmpeg_start_times[timeline_id] = time.monotonic()
+
                             logger.info(f"✅ Seamless handoff complete - now streaming from {camera.name}")
                             
                         except asyncio.TimeoutError:
@@ -927,7 +968,8 @@ class TimelineExecutor:
                                 timeout=60.0
                             )
                             logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
-                            
+                            self._ffmpeg_start_times[timeline_id] = time.monotonic()
+
                             # Register callback to detect when FFmpeg dies
                             ffmpeg_manager.register_stream_died_callback(
                                 timeline_id,
@@ -1027,7 +1069,12 @@ class TimelineExecutor:
                 if remaining > 0:
                     await asyncio.sleep(remaining)
                 logger.info(f"✅ Segment at t={seg_start:.2f}s ({camera.name}) completed successfully")
-                
+
+                # Segment completed — FFmpeg survived, reset rapid failure backoff
+                if self._ffmpeg_rapid_failures.get(timeline_id, 0) > 0:
+                    logger.info(f"✅ FFmpeg stable — resetting rapid failure counter for timeline {timeline_id}")
+                    self._ffmpeg_rapid_failures[timeline_id] = 0
+
                 # Update heartbeat for stall detection
                 self._last_segment_time[timeline_id] = datetime.now(timezone.utc)
                 
@@ -1096,7 +1143,8 @@ class TimelineExecutor:
             timeout=60.0
         )
         logger.info(f"✅ FFmpeg stream {timeline_id} started successfully")
-        
+        self._ffmpeg_start_times[timeline_id] = time.monotonic()
+
         # Register callback
         ffmpeg_manager.register_stream_died_callback(
             timeline_id,
