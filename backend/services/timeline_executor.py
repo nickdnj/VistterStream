@@ -979,18 +979,18 @@ class TimelineExecutor:
                 # Clip capture is synchronous (awaited) so it completes before we move on.
                 # ShortForge: clip capture + snapshot (with hard timeout so it can't stall the timeline)
                 sf_time = 0
-                if preset_id and camera.snapshot_url:
+                _sf_enabled = False
+                try:
+                    from models.shortforge import ShortForgeConfig as _SFC
+                    _sf_cfg = db.query(_SFC).first()
+                    _sf_enabled = bool(_sf_cfg and _sf_cfg.enabled)
+                except Exception:
+                    pass
+                if preset_id and camera.snapshot_url and _sf_enabled:
                     try:
                         from services.shortforge.clip_capture import get_clip_capture
                         sf_capture = get_clip_capture()
-                        _enhance = "vivid"
-                        try:
-                            from models.shortforge import ShortForgeConfig as _SFC
-                            _sf_cfg = db.query(_SFC).first()
-                            if _sf_cfg and _sf_cfg.image_enhance:
-                                _enhance = _sf_cfg.image_enhance
-                        except Exception:
-                            pass
+                        _enhance = _sf_cfg.image_enhance or "vivid"
                         if _enhance == "ai_enhance":
                             # AI enhance is slow (~30s API call) — grab snapshot now, process in background
                             await asyncio.wait_for(
