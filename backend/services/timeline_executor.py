@@ -262,7 +262,13 @@ class TimelineExecutor:
                             get_watchdog_manager().notify_intentional_restart(timeline_id, duration_seconds=30)
                             try:
                                 ffmpeg_manager.unregister_stream_died_callback(timeline_id)
-                                await ffmpeg_manager.stop_stream(timeline_id)
+                                await asyncio.wait_for(
+                                    ffmpeg_manager.stop_stream(timeline_id),
+                                    timeout=20.0
+                                )
+                            except asyncio.TimeoutError:
+                                logger.error(f"stop_stream timed out during overlay refresh — force killing FFmpeg")
+                                await self._force_kill_ffmpeg(ffmpeg_manager, timeline_id)
                             except Exception as e:
                                 logger.warning(f"Error stopping FFmpeg for overlay refresh: {e}")
                             # Reset camera tracking so first segment restarts FFmpeg
@@ -639,6 +645,27 @@ class TimelineExecutor:
         
         # Store temp files for cleanup (will be cleaned up when timeline stops)
         return timed_overlays, temp_files
+
+    async def _force_kill_ffmpeg(self, ffmpeg_manager, stream_id: int):
+        """Force-kill FFmpeg process when stop_stream is deadlocked.
+        Bypasses the lock and kills the process directly via OS signal."""
+        try:
+            from services.ffmpeg_manager import StreamStatus
+            if stream_id in ffmpeg_manager.processes:
+                sp = ffmpeg_manager.processes[stream_id]
+                proc = sp.process
+                if proc and proc.returncode is None:
+                    logger.warning(f"Force-killing FFmpeg PID {proc.pid}")
+                    try:
+                        proc.kill()
+                        await asyncio.wait_for(proc.wait(), timeout=10.0)
+                        logger.info(f"FFmpeg PID {proc.pid} force-killed successfully")
+                    except (ProcessLookupError, asyncio.TimeoutError) as e:
+                        logger.error(f"Force-kill failed for PID {proc.pid}: {e}")
+                sp.process = None
+                sp.status = StreamStatus.STOPPED
+        except Exception as e:
+            logger.error(f"_force_kill_ffmpeg error: {e}")
 
     async def _refresh_overlay_images(
         self,

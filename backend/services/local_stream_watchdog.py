@@ -376,25 +376,41 @@ class LocalStreamWatchdog:
         try:
             # Import here to avoid circular imports
             from services.timeline_executor import get_timeline_executor
-            
+            from services.ffmpeg_manager import StreamStatus
+
             executor = get_timeline_executor()
-            
+
             # Check if the timeline has an FFmpeg manager
             if self.stream_id not in executor.ffmpeg_managers:
                 self.logger.error(f"Stream {self.stream_id} has no FFmpeg manager - cannot recover")
                 return
-            
+
             ffmpeg_manager = executor.ffmpeg_managers[self.stream_id]
-            
+
             # Stop the stream if it's running
             if self.stream_id in ffmpeg_manager.processes:
                 self.logger.info(f"Stopping FFmpeg process for stream {self.stream_id}")
-                await ffmpeg_manager.stop_stream(self.stream_id, graceful=False)
+                try:
+                    await asyncio.wait_for(
+                        ffmpeg_manager.stop_stream(self.stream_id, graceful=False),
+                        timeout=20.0
+                    )
+                except asyncio.TimeoutError:
+                    self.logger.error(f"stop_stream timed out during recovery — force killing FFmpeg")
+                    sp = ffmpeg_manager.processes.get(self.stream_id)
+                    if sp and sp.process and sp.process.returncode is None:
+                        try:
+                            sp.process.kill()
+                            await asyncio.wait_for(sp.process.wait(), timeout=10.0)
+                        except (ProcessLookupError, asyncio.TimeoutError):
+                            pass
+                        sp.process = None
+                        sp.status = StreamStatus.STOPPED
                 await asyncio.sleep(3)
                 self.logger.info(f"FFmpeg process stopped, timeline executor will restart it")
             else:
                 self.logger.warning(f"Stream {self.stream_id} not in ffmpeg_manager.processes")
-                
+
         except Exception as e:
             self.logger.error(f"Failed to recover stream: {e}", exc_info=True)
     

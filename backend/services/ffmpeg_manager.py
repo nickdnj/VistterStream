@@ -268,14 +268,16 @@ class FFmpegProcessManager:
             # Disable auto-restart before stopping
             stream_process.should_auto_restart = False
 
-            # Cancel monitoring task
+            # Cancel monitoring task (timeout guards against Python 3.11 asyncio.Lock cancel bug)
             if stream_id in self._monitoring_tasks:
                 self._monitoring_tasks[stream_id].cancel()
                 try:
-                    await self._monitoring_tasks[stream_id]
-                except asyncio.CancelledError:
+                    await asyncio.wait({self._monitoring_tasks[stream_id]}, timeout=5.0)
+                except Exception:
                     pass
-                del self._monitoring_tasks[stream_id]
+                if not self._monitoring_tasks[stream_id].done():
+                    logger.warning(f"Monitoring task for stream {stream_id} did not cancel within 5s — proceeding anyway")
+                self._monitoring_tasks.pop(stream_id, None)
 
             # Stop the process
             if stream_process.process:
@@ -819,8 +821,11 @@ class FFmpegProcessManager:
 
             # Force kill
             process.kill()  # SIGKILL
-            await process.wait()
-            logger.debug(f"Process {process.pid} killed")
+            try:
+                await asyncio.wait_for(process.wait(), timeout=10.0)
+                logger.debug(f"Process {process.pid} killed")
+            except asyncio.TimeoutError:
+                logger.error(f"Process {process.pid} did not die after SIGKILL within 10s — giving up")
 
         except ProcessLookupError:
             # Process already dead
