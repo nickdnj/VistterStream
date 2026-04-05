@@ -436,5 +436,4 @@ if __name__ == "__main__":
         reload=False,  # Disabled reload to avoid import issues
         log_level="info",
         timeout_keep_alive=5,  # Close idle keep-alive connections after 5s (Slowloris mitigation)
-        limit_max_requests=10000,  # Restart worker after 10k requests (leak prevention)
     )
