@@ -437,8 +437,11 @@ class FFmpegProcessManager:
         for overlay in overlays_to_add:
             if 'mjpeg_url' in overlay:
                 # MJPEG stream input — continuous video, no restart needed for refresh
-                cmd.extend(['-f', 'mjpeg', '-fflags', 'nobuffer',
-                            '-flags', 'low_delay', '-i', overlay['mjpeg_url']])
+                # thread_queue_size must be large: MJPEG pushes frames slowly (every 30-600s)
+                # while the camera produces 15fps. Default queue of 8 fills instantly and blocks.
+                cmd.extend(['-f', 'mjpeg', '-thread_queue_size', '512',
+                            '-fflags', 'nobuffer', '-flags', 'low_delay',
+                            '-i', overlay['mjpeg_url']])
             else:
                 # Static image input — loop to keep filter graph alive
                 cmd.extend(['-loop', '1', '-i', overlay['path']])
