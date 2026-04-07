@@ -22,7 +22,10 @@ from PIL import Image as PILImage
 logger = logging.getLogger(__name__)
 
 MJPEG_BOUNDARY = "frame"
-KEEPALIVE_INTERVAL = 10  # seconds — re-push current frame to prevent FFmpeg timeout
+# FFmpeg blocks when MJPEG inputs are slower than the camera (15fps).
+# Push frames at ~2fps to keep the pipeline moving. Content only changes
+# on the asset's refresh_interval, but we repeat the same JPEG in between.
+FRAME_PUSH_INTERVAL = 0.5  # seconds (2fps)
 
 
 @dataclass
@@ -116,27 +119,19 @@ class MjpegOverlayService:
         if not state:
             return
 
-        # Immediately yield current frame (solves FFmpeg startup delay)
-        if state.current_frame:
-            yield self._format_mjpeg_frame(state.current_frame)
-
+        # Push frames at a steady rate (~2fps) so FFmpeg's pipeline never stalls.
+        # Content only changes when the source refreshes, but FFmpeg needs a
+        # continuous stream of frames to keep compositing with the camera feed.
         while asset_id in self._streams:
-            # Wait for a new frame or keepalive timeout
-            try:
-                state.frame_event.clear()
-                await asyncio.wait_for(state.frame_event.wait(), timeout=KEEPALIVE_INTERVAL)
-            except asyncio.TimeoutError:
-                pass
-
-            # Re-check stream is still active
             state = self._streams.get(asset_id)
             if not state:
                 break
 
             frame = state.current_frame
             if frame:
-                # Yield frame (even if same content — keepalive for FFmpeg)
                 yield self._format_mjpeg_frame(frame)
+
+            await asyncio.sleep(FRAME_PUSH_INTERVAL)
 
     async def _poll_loop(self, state: MjpegStreamState) -> None:
         """Background task: periodically fetch fresh images from the asset source."""
