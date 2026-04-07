@@ -433,10 +433,15 @@ class FFmpegProcessManager:
         use_timed = timed_overlays and len(timed_overlays) > 0
         overlays_to_add = timed_overlays if use_timed else (overlay_images or [])
         
-        # Add overlay image inputs
+        # Add overlay inputs (MJPEG streams for dynamic assets, looped stills for static)
         for overlay in overlays_to_add:
-            # Loop still images so the filter graph never ends early
-            cmd.extend(['-loop', '1', '-i', overlay['path']])
+            if 'mjpeg_url' in overlay:
+                # MJPEG stream input — continuous video, no restart needed for refresh
+                cmd.extend(['-f', 'mjpeg', '-fflags', 'nobuffer',
+                            '-flags', 'low_delay', '-i', overlay['mjpeg_url']])
+            else:
+                # Static image input — loop to keep filter graph alive
+                cmd.extend(['-loop', '1', '-i', overlay['path']])
 
         # Add a persistent silent audio source to guarantee audio presence for RTMP destinations
         # Index calculation: [0] camera, [1..N] overlays (if any), next is silent audio input

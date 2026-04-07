@@ -136,6 +136,14 @@ async def lifespan(app: FastAPI):
             await get_scheduler_service().stop()
         except Exception:
             pass
+    # Stop MJPEG overlay streams
+    try:
+        logger.info("Stopping MJPEG overlay streams...")
+        from services.mjpeg_overlay_service import get_mjpeg_overlay_service
+        await get_mjpeg_overlay_service().stop_all()
+        logger.info("MJPEG overlay streams stopped")
+    except Exception:
+        pass
     # Stop watchdog manager
     try:
         logger.info("Stopping watchdog manager...")

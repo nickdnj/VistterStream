@@ -6,6 +6,7 @@ import ipaddress
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse, Response
+from starlette.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timezone
@@ -367,3 +368,38 @@ async def proxy_asset_image(asset_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error("Failed to fetch asset: %s", e)
         raise HTTPException(status_code=502, detail="Failed to fetch asset")
+
+
+@public_router.get("/{asset_id}/stream.mjpeg")
+async def stream_asset_mjpeg(asset_id: int, db: Session = Depends(get_db)):
+    """Stream an overlay asset as MJPEG video.
+
+    Polls the asset's api_url on its refresh interval and serves frames
+    as multipart/x-mixed-replace MJPEG. Used by FFmpeg as a continuous
+    video input so overlays update without restarting the pipeline.
+    """
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.is_active == True).first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.type not in ("api_image", "google_drawing"):
+        raise HTTPException(status_code=400, detail="MJPEG streaming only supports api_image and google_drawing assets")
+
+    from services.mjpeg_overlay_service import get_mjpeg_overlay_service
+    mjpeg_service = get_mjpeg_overlay_service()
+
+    # Lazy-start the stream if not already running
+    if not mjpeg_service.is_streaming(asset_id):
+        api_url = asset.api_url or ""
+        refresh_interval = asset.api_refresh_interval or 30
+        await mjpeg_service.start_stream(
+            asset_id=asset_id,
+            api_url=api_url,
+            refresh_interval=refresh_interval,
+            asset_type=asset.type,
+            file_path=asset.file_path,
+        )
+
+    return StreamingResponse(
+        mjpeg_service.frame_generator(asset_id),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )
