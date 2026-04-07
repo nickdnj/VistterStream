@@ -246,10 +246,25 @@ class TimelineExecutor:
                 loop_count += 1
                 logger.info(f"Timeline {timeline.name} - Loop {loop_count}")
 
-                # NOTE: Overlay refresh no longer requires FFmpeg restart.
-                # Dynamic overlays (api_image, google_drawing) now use MJPEG streams
-                # that FFmpeg reads as continuous video inputs. The MJPEG service
-                # polls source URLs on each asset's api_refresh_interval schedule.
+                # Refresh API overlay images at each loop boundary (after first loop)
+                # Uses seamless handoff: start new FFmpeg with fresh overlays before
+                # stopping the old one, so viewers see no gap.
+                if loop_count > 1 and timed_overlays:
+                    new_overlays, new_temp_files, refreshed = await self._refresh_overlay_images(
+                        timed_overlays, overlay_temp_files, db
+                    )
+                    if refreshed:
+                        timed_overlays = new_overlays
+                        overlay_temp_files = new_temp_files
+                        # Force seamless handoff on next segment by resetting camera tracking
+                        # The existing seamless handoff code (start new, stop old) handles
+                        # the transition invisibly for viewers.
+                        if timeline_id in ffmpeg_manager.processes:
+                            logger.info(f"🔄 Overlays refreshed - seamless handoff on next segment")
+                            from services.watchdog_manager import get_watchdog_manager
+                            get_watchdog_manager().notify_intentional_restart(timeline_id, duration_seconds=30)
+                            last_camera_id = None
+                            last_preset_id = None
 
                 # Compute segment boundaries as union of all cue boundaries across enabled tracks
                 segments = self._compute_segments(timeline)
@@ -399,15 +414,6 @@ class TimelineExecutor:
                 logger.warning(f"Could not update execution status: {db_error}")
                 db.rollback()
         finally:
-            # Stop MJPEG overlay streams
-            try:
-                from services.mjpeg_overlay_service import get_mjpeg_overlay_service
-                mjpeg_service = get_mjpeg_overlay_service()
-                for overlay in timed_overlays:
-                    if overlay.get('mjpeg_url') and overlay.get('asset_id'):
-                        await mjpeg_service.stop_stream(overlay['asset_id'])
-            except Exception as e:
-                logger.warning(f"Error stopping MJPEG streams: {e}")
             # Clean up overlay temp files
             if overlay_temp_files:
                 for temp_file in overlay_temp_files:
@@ -569,106 +575,46 @@ class TimelineExecutor:
                 src_w = int(res_parts[0]) if len(res_parts) == 2 else 1920
                 src_h = int(res_parts[1]) if len(res_parts) == 2 else 1080
 
-                # Dynamic assets (api_image, google_drawing) use MJPEG streams;
-                # static assets use downloaded file paths.
-                use_mjpeg = asset.type in ('api_image', 'google_drawing')
+                # Download/get image path
+                image_path = await self._download_asset_image(asset)
+                if not image_path:
+                    logger.warning(f"Failed to get image for asset '{asset.name}', skipping")
+                    continue
 
-                if use_mjpeg:
-                    # Start MJPEG stream — FFmpeg reads live frames, no restart needed
-                    from services.mjpeg_overlay_service import get_mjpeg_overlay_service
-                    mjpeg_service = get_mjpeg_overlay_service()
-                    refresh_interval = asset.api_refresh_interval or 30
-                    await mjpeg_service.start_stream(
-                        asset_id=asset_id,
-                        api_url=asset.api_url or "",
-                        refresh_interval=refresh_interval,
-                        asset_type=asset.type,
-                        file_path=asset.file_path,
-                    )
-                    # Wait for first frame (5s timeout)
-                    for _ in range(50):
-                        if mjpeg_service.get_current_frame(asset_id) is not None:
-                            break
-                        await asyncio.sleep(0.1)
-                    else:
-                        logger.warning(f"MJPEG stream for asset '{asset.name}' did not produce first frame in 5s")
+                # Track temp files for cleanup later
+                if image_path.startswith('/tmp/') or image_path.startswith(tempfile.gettempdir()):
+                    temp_files.append(image_path)
 
-                    mjpeg_url = f"http://127.0.0.1:8000/api/assets/{asset_id}/stream.mjpeg"
+                timed_overlay = {
+                    'path': image_path,
+                    'norm_x': pos_x,
+                    'norm_y': pos_y,
+                    'source_resolution': (src_w, src_h),
+                    'opacity': cue_opacity,
+                    'start_time': float(cue.start_time),
+                    'end_time': float(cue.start_time + cue.duration),
+                    'asset_id': asset_id,
+                    'asset_name': asset.name
+                }
 
-                    timed_overlay = {
-                        'mjpeg_url': mjpeg_url,
-                        'norm_x': pos_x,
-                        'norm_y': pos_y,
-                        'source_resolution': (src_w, src_h),
-                        'opacity': cue_opacity,
-                        'start_time': float(cue.start_time),
-                        'end_time': float(cue.start_time + cue.duration),
-                        'asset_id': asset_id,
-                        'asset_name': asset.name
-                    }
-
-                    # Auto-size from MJPEG frame bytes
-                    if not cue_width and not cue_height:
-                        frame_bytes = mjpeg_service.get_current_frame(asset_id)
-                        if frame_bytes:
-                            try:
-                                from PIL import Image as PILImage
-                                import io
-                                img = PILImage.open(io.BytesIO(frame_bytes))
-                                img_w, img_h = img.size
-                                img.close()
-                                ratio = img_w / img_h if img_h else 1
-                                cue_width = min(img_w, src_w)
-                                cue_height = round(cue_width / ratio)
-                                if cue_height > src_h:
-                                    cue_height = src_h
-                                    cue_width = round(cue_height * ratio)
-                                logger.info(
-                                    f"  📐 Auto-sized '{asset.name}': native={img_w}x{img_h} → {cue_width}x{cue_height}"
-                                )
-                            except Exception as e:
-                                logger.warning(f"Failed to auto-size overlay '{asset.name}': {e}")
-                else:
-                    # Static image — download to temp file (existing behavior)
-                    image_path = await self._download_asset_image(asset)
-                    if not image_path:
-                        logger.warning(f"Failed to get image for asset '{asset.name}', skipping")
-                        continue
-
-                    # Track temp files for cleanup later
-                    if image_path.startswith('/tmp/') or image_path.startswith(tempfile.gettempdir()):
-                        temp_files.append(image_path)
-
-                    timed_overlay = {
-                        'path': image_path,
-                        'norm_x': pos_x,
-                        'norm_y': pos_y,
-                        'source_resolution': (src_w, src_h),
-                        'opacity': cue_opacity,
-                        'start_time': float(cue.start_time),
-                        'end_time': float(cue.start_time + cue.duration),
-                        'asset_id': asset_id,
-                        'asset_name': asset.name
-                    }
-
-                    # Auto-size from image file
-                    if not cue_width and not cue_height:
-                        try:
-                            from PIL import Image as PILImage
-                            img = PILImage.open(image_path)
-                            img_w, img_h = img.size
-                            img.close()
-                            ratio = img_w / img_h if img_h else 1
-                            cue_width = min(img_w, src_w)
-                            cue_height = round(cue_width / ratio)
-                            if cue_height > src_h:
-                                cue_height = src_h
-                                cue_width = round(cue_height * ratio)
-                            logger.info(
-                                f"  📐 Auto-sized '{asset.name}': native={img_w}x{img_h} → {cue_width}x{cue_height}"
-                            )
-                        except Exception as e:
-                            logger.warning(f"Failed to auto-size overlay '{asset.name}': {e}")
+                # Auto-size overlays that have no explicit dimensions.
+                if not cue_width and not cue_height:
+                    try:
+                        from PIL import Image as PILImage
+                        img = PILImage.open(image_path)
+                        img_w, img_h = img.size
+                        img.close()
+                        ratio = img_w / img_h if img_h else 1
+                        cue_width = min(img_w, src_w)
+                        cue_height = round(cue_width / ratio)
+                        if cue_height > src_h:
+                            cue_height = src_h
+                            cue_width = round(cue_height * ratio)
+                        logger.info(
+                            f"  📐 Auto-sized '{asset.name}': native={img_w}x{img_h} → {cue_width}x{cue_height}"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-size overlay '{asset.name}': {e}")
 
                 if cue_width:
                     timed_overlay['width'] = cue_width
