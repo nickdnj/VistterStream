@@ -6,6 +6,7 @@ interface User {
   username: string;
   is_active: boolean;
   created_at: string;
+  recovery_email?: string | null;
 }
 
 interface AuthContextType {

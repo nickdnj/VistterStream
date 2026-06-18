@@ -309,13 +309,34 @@ class User(UserBase):
     id: int
     is_active: bool
     created_at: datetime
-    
+    recovery_email: Optional[str] = None
+
     class Config:
         from_attributes = True
 
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class RecoveryEmailRequest(BaseModel):
+    recovery_email: Optional[str] = Field(None, max_length=255)
+
+class ForgotPasswordRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+
+class ResetPasswordRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    code: str = Field(..., min_length=4, max_length=32)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_complexity(cls, v):
+        if not any(c.isalpha() for c in v):
+            raise ValueError('Password must contain at least one letter')
+        if not any(c.isdigit() for c in v):
+            raise ValueError('Password must contain at least one digit')
+        return v
 
 class PasswordChangeRequest(BaseModel):
     current_password: str = Field(..., min_length=1)

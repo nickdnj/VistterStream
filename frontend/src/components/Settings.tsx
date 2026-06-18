@@ -35,7 +35,27 @@ const Settings: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  
+
+  // Recovery email state
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // SMTP (mail server) state
+  const [smtp, setSmtp] = useState({
+    smtp_host: '',
+    smtp_port: 587 as number | '',
+    smtp_username: '',
+    smtp_password: '',
+    smtp_from_address: '',
+    smtp_use_tls: true,
+    smtp_password_set: false,
+  });
+  const [smtpSaving, setSmtpSaving] = useState(false);
+  const [smtpMessage, setSmtpMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [testEmailTo, setTestEmailTo] = useState('');
+  const [testingEmail, setTestingEmail] = useState(false);
+
   // System info state
   const [systemInfo, setSystemInfo] = useState<{
     version: string;
@@ -80,6 +100,13 @@ const Settings: React.FC = () => {
     loadGeneralSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Seed recovery email from the authenticated user
+  useEffect(() => {
+    if (user?.recovery_email !== undefined && user?.recovery_email !== null) {
+      setRecoveryEmail(user.recovery_email);
+    }
+  }, [user]);
 
   // Load system info when system tab is active
   useEffect(() => {
@@ -152,6 +179,15 @@ const Settings: React.FC = () => {
         city: data.city || '',
         latitude: data.latitude || null,
         longitude: data.longitude || null,
+      });
+      setSmtp({
+        smtp_host: data.smtp_host || '',
+        smtp_port: data.smtp_port ?? 587,
+        smtp_username: data.smtp_username || '',
+        smtp_password: '',
+        smtp_from_address: data.smtp_from_address || '',
+        smtp_use_tls: data.smtp_use_tls ?? true,
+        smtp_password_set: !!data.smtp_password_set,
       });
       
       // Auto-detect location if not already set
@@ -294,6 +330,74 @@ const Settings: React.FC = () => {
       setPasswordMessage({ type: 'error', text: detail || 'Failed to update password. Please try again.' });
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleSaveRecoveryEmail = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setRecoveryMessage(null);
+    setRecoveryLoading(true);
+    try {
+      await authService.setRecoveryEmail(recoveryEmail.trim() || null);
+      setRecoveryMessage({ type: 'success', text: 'Recovery email saved.' });
+    } catch (error) {
+      console.error('Failed to save recovery email:', error);
+      const detail = extractErrorDetail(error);
+      setRecoveryMessage({ type: 'error', text: detail || 'Failed to save recovery email.' });
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
+  const handleSaveSmtp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSmtpMessage(null);
+    setSmtpSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        smtp_host: smtp.smtp_host.trim(),
+        smtp_port: smtp.smtp_port === '' ? null : Number(smtp.smtp_port),
+        smtp_username: smtp.smtp_username.trim(),
+        smtp_from_address: smtp.smtp_from_address.trim(),
+        smtp_use_tls: smtp.smtp_use_tls,
+      };
+      // Only send the password when the user typed a new one.
+      if (smtp.smtp_password) {
+        payload.smtp_password = smtp.smtp_password;
+      }
+      const response = await api.post('/settings', payload);
+      setSmtp((prev) => ({
+        ...prev,
+        smtp_password: '',
+        smtp_password_set: !!response.data?.smtp_password_set,
+      }));
+      setSmtpMessage({ type: 'success', text: 'Mail server settings saved.' });
+    } catch (error) {
+      console.error('Failed to save SMTP settings:', error);
+      const detail = extractErrorDetail(error);
+      setSmtpMessage({ type: 'error', text: detail || 'Failed to save mail server settings.' });
+    } finally {
+      setSmtpSaving(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setSmtpMessage(null);
+    const to = testEmailTo.trim() || recoveryEmail.trim();
+    if (!to) {
+      setSmtpMessage({ type: 'error', text: 'Enter an address to send the test to.' });
+      return;
+    }
+    setTestingEmail(true);
+    try {
+      await api.post('/settings/test-email', { to_address: to });
+      setSmtpMessage({ type: 'success', text: `Test email sent to ${to}.` });
+    } catch (error) {
+      console.error('Test email failed:', error);
+      const detail = extractErrorDetail(error);
+      setSmtpMessage({ type: 'error', text: detail || 'Failed to send test email.' });
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -499,7 +603,8 @@ const Settings: React.FC = () => {
         )}
 
         {activeTab === 'account' && (
-          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700 max-w-3xl">
+          <div className="space-y-6 max-w-3xl">
+          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
             <h2 className="text-xl font-semibold text-white mb-2">Account Security</h2>
             <p className="text-gray-400 mb-6">Update the administrator password for this appliance.</p>
 
@@ -573,6 +678,169 @@ const Settings: React.FC = () => {
                 <span className="text-xs text-gray-500">Password must be at least 6 characters.</span>
               </div>
             </form>
+          </div>
+
+          {/* Password Recovery */}
+          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
+            <h2 className="text-xl font-semibold text-white mb-2">Password Recovery</h2>
+            <p className="text-gray-400 mb-6">
+              If you forget your password, a one-time reset code is sent to this email (and written
+              to the appliance logs as a fallback). Configure the mail server below for email delivery.
+            </p>
+
+            {recoveryMessage && (
+              <div
+                className={`rounded-md p-4 mb-6 border ${recoveryMessage.type === 'success' ? 'bg-green-900/20 border-green-500/40 text-green-300' : 'bg-red-900/20 border-red-500/40 text-red-300'}`}
+              >
+                {recoveryMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveRecoveryEmail} className="space-y-4 max-w-xl">
+              <div>
+                <label htmlFor="recovery-email" className="block text-sm font-medium text-gray-300 mb-2">Recovery Email</label>
+                <input
+                  id="recovery-email"
+                  type="email"
+                  value={recoveryEmail}
+                  onChange={(event) => setRecoveryEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={recoveryLoading}
+                  className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {recoveryLoading ? 'Saving...' : 'Save Recovery Email'}
+                </button>
+                <span className="text-xs text-gray-500">Leave blank to disable email recovery.</span>
+              </div>
+            </form>
+          </div>
+
+          {/* Mail Server (SMTP) */}
+          <div className="bg-dark-800 rounded-lg p-8 border border-dark-700">
+            <h2 className="text-xl font-semibold text-white mb-2">Mail Server (SMTP)</h2>
+            <p className="text-gray-400 mb-6">
+              Outgoing email server used to deliver password-reset codes. The password is stored
+              encrypted and never displayed.
+            </p>
+
+            {smtpMessage && (
+              <div
+                className={`rounded-md p-4 mb-6 border ${smtpMessage.type === 'success' ? 'bg-green-900/20 border-green-500/40 text-green-300' : 'bg-red-900/20 border-red-500/40 text-red-300'}`}
+              >
+                {smtpMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveSmtp} className="space-y-4 max-w-xl">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2">
+                  <label htmlFor="smtp-host" className="block text-sm font-medium text-gray-300 mb-2">SMTP Host</label>
+                  <input
+                    id="smtp-host"
+                    type="text"
+                    value={smtp.smtp_host}
+                    onChange={(e) => setSmtp((p) => ({ ...p, smtp_host: e.target.value }))}
+                    placeholder="smtp.gmail.com"
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="smtp-port" className="block text-sm font-medium text-gray-300 mb-2">Port</label>
+                  <input
+                    id="smtp-port"
+                    type="number"
+                    value={smtp.smtp_port}
+                    onChange={(e) => setSmtp((p) => ({ ...p, smtp_port: e.target.value === '' ? '' : Number(e.target.value) }))}
+                    placeholder="587"
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="smtp-from" className="block text-sm font-medium text-gray-300 mb-2">From Address</label>
+                <input
+                  id="smtp-from"
+                  type="email"
+                  value={smtp.smtp_from_address}
+                  onChange={(e) => setSmtp((p) => ({ ...p, smtp_from_address: e.target.value }))}
+                  placeholder="vistterstream@example.com"
+                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="smtp-username" className="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                  <input
+                    id="smtp-username"
+                    type="text"
+                    autoComplete="off"
+                    value={smtp.smtp_username}
+                    onChange={(e) => setSmtp((p) => ({ ...p, smtp_username: e.target.value }))}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="smtp-password" className="block text-sm font-medium text-gray-300 mb-2">
+                    Password {smtp.smtp_password_set && <span className="text-xs text-green-400">(saved)</span>}
+                  </label>
+                  <input
+                    id="smtp-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={smtp.smtp_password}
+                    onChange={(e) => setSmtp((p) => ({ ...p, smtp_password: e.target.value }))}
+                    placeholder={smtp.smtp_password_set ? '•••••••• (unchanged)' : 'App password or SMTP password'}
+                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={smtp.smtp_use_tls}
+                  onChange={(e) => setSmtp((p) => ({ ...p, smtp_use_tls: e.target.checked }))}
+                  className="rounded border-dark-600 bg-dark-700 text-primary-600 focus:ring-primary-500"
+                />
+                Use STARTTLS (recommended for port 587; uncheck for implicit TLS on 465)
+              </label>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={smtpSaving}
+                  className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {smtpSaving ? 'Saving...' : 'Save Mail Settings'}
+                </button>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="email"
+                    value={testEmailTo}
+                    onChange={(e) => setTestEmailTo(e.target.value)}
+                    placeholder={recoveryEmail || 'test@example.com'}
+                    className="px-3 py-2 bg-dark-700 border border-dark-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleTestEmail}
+                    disabled={testingEmail}
+                    className="px-4 py-2.5 bg-dark-600 hover:bg-dark-500 text-white rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {testingEmail ? 'Sending...' : 'Send Test'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
           </div>
         )}
 
