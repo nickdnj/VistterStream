@@ -57,6 +57,11 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
+    # Password recovery: email the one-time reset code is sent to, plus the
+    # hashed code and its expiry. The code is never stored in plaintext.
+    recovery_email = Column(String, nullable=True)
+    reset_code_hash = Column(String, nullable=True)
+    reset_code_expires = Column(DateTime, nullable=True)
 
 class Settings(Base):
     __tablename__ = "settings"
@@ -71,7 +76,16 @@ class Settings(Base):
     city = Column(String)  # City name
     latitude = Column(Float)  # Geographic latitude
     longitude = Column(Float)  # Geographic longitude
-    
+
+    # SMTP configuration for outgoing email (password reset, notifications).
+    # smtp_password_encrypted is a Fernet token (see utils/crypto.py).
+    smtp_host = Column(String, nullable=True)
+    smtp_port = Column(Integer, nullable=True)
+    smtp_username = Column(String, nullable=True)
+    smtp_password_encrypted = Column(String, nullable=True)
+    smtp_from_address = Column(String, nullable=True)
+    smtp_use_tls = Column(Boolean, default=True)
+
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

@@ -154,6 +154,7 @@ def ensure_default_admin():
     """
     username = os.getenv("DEFAULT_ADMIN_USERNAME", "admin")
     password = os.getenv("DEFAULT_ADMIN_PASSWORD")
+    recovery_email = os.getenv("DEFAULT_RECOVERY_EMAIL")
 
     db = SessionLocal()
     try:
@@ -166,6 +167,12 @@ def ensure_default_admin():
                 existing_user.is_active = True
                 db.commit()
                 logger.info("Reset password for admin user '%s'", username)
+            # Seed recovery email if provided and not already set (don't clobber
+            # a value the admin set via the UI).
+            if recovery_email and not existing_user.recovery_email:
+                existing_user.recovery_email = recovery_email
+                db.commit()
+                logger.info("Set recovery email for admin user '%s'", username)
             # If no env var and user exists, leave it alone
         else:
             # No admin exists — create one
@@ -175,7 +182,11 @@ def ensure_default_admin():
                 logger.warning("*** INITIAL ADMIN PASSWORD: %s ***", password)
                 logger.warning("Change this immediately via Settings > Change Password")
                 logger.warning("=" * 60)
-            admin_user = User(username=username, password_hash=get_password_hash(password))
+            admin_user = User(
+                username=username,
+                password_hash=get_password_hash(password),
+                recovery_email=recovery_email or None,
+            )
             db.add(admin_user)
             db.commit()
             logger.info("Created admin user '%s'", username)
@@ -373,6 +384,35 @@ def ensure_shortforge_thresholds_fix() -> None:
         logger.warning("Could not fix ShortForge thresholds: %s", e)
 
 
+def ensure_password_reset_columns() -> None:
+    """Add password-recovery columns to users and SMTP columns to settings."""
+    user_columns = [
+        ("recovery_email", "TEXT"),
+        ("reset_code_hash", "TEXT"),
+        ("reset_code_expires", "DATETIME"),
+    ]
+    settings_columns = [
+        ("smtp_host", "TEXT"),
+        ("smtp_port", "INTEGER"),
+        ("smtp_username", "TEXT"),
+        ("smtp_password_encrypted", "TEXT"),
+        ("smtp_from_address", "TEXT"),
+        ("smtp_use_tls", "BOOLEAN DEFAULT 1"),
+    ]
+    try:
+        db = SessionLocal()
+        for table, columns in (("users", user_columns), ("settings", settings_columns)):
+            existing = {r[1] for r in db.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+            for column_name, column_type in columns:
+                if column_name not in existing:
+                    db.execute(text(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_type}"))
+                    logger.info("Added %s column to %s", column_name, table)
+        db.commit()
+        db.close()
+    except Exception as e:
+        logger.warning("Could not ensure password reset columns: %s", e)
+
+
 def run_alembic_migrations() -> None:
     """Run Alembic migrations to bring the database schema up to date.
 
@@ -426,6 +466,7 @@ if __name__ == "__main__":
     ensure_shortforge_capture_windows_column()
     ensure_moment_preset_id_column()
     ensure_narration_config_columns()
+    ensure_password_reset_columns()
     ensure_default_admin()
 
     # Start the server

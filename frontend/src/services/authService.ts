@@ -10,6 +10,7 @@ export interface User {
   username: string;
   is_active: boolean;
   created_at: string;
+  recovery_email?: string | null;
 }
 
 export const authService = {
@@ -48,6 +49,26 @@ export const authService = {
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await api.post('/auth/change-password', {
       current_password: currentPassword,
+      new_password: newPassword,
+    });
+  },
+
+  async setRecoveryEmail(recoveryEmail: string | null): Promise<User> {
+    const response = await api.post('/auth/recovery-email', {
+      recovery_email: recoveryEmail,
+    });
+    return response.data;
+  },
+
+  async forgotPassword(username: string): Promise<{ message: string }> {
+    const response = await api.post('/auth/forgot-password', { username });
+    return response.data;
+  },
+
+  async resetPassword(username: string, code: string, newPassword: string): Promise<void> {
+    await api.post('/auth/reset-password', {
+      username,
+      code,
       new_password: newPassword,
     });
   },

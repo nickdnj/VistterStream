@@ -14,9 +14,19 @@ from slowapi.util import get_remote_address
 import bcrypt
 import logging
 import os
+import secrets
 
-from models.database import get_db, User
-from models.schemas import UserCreate, User as UserSchema, Token, PasswordChangeRequest
+from models.database import get_db, User, Settings
+from models.schemas import (
+    UserCreate,
+    User as UserSchema,
+    Token,
+    PasswordChangeRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+    RecoveryEmailRequest,
+)
+from services import email_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -42,6 +52,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """Hash a password"""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+# Password reset code settings
+RESET_CODE_TTL_MINUTES = 15
+# Unambiguous alphabet — no 0/O, 1/I/L to avoid transcription errors
+_RESET_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+def generate_reset_code(length: int = 8) -> str:
+    """Generate a short, unambiguous one-time reset code (uppercase)."""
+    return "".join(secrets.choice(_RESET_CODE_ALPHABET) for _ in range(length))
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create a JWT access token"""
@@ -167,6 +186,125 @@ async def change_password(
     current_user.password_hash = get_password_hash(payload.new_password)
     db.add(current_user)
     db.commit()
+    return {"success": True}
+
+
+@router.post("/recovery-email", response_model=UserSchema)
+async def set_recovery_email(
+    payload: RecoveryEmailRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Set or clear the current user's password-recovery email."""
+    email = (payload.recovery_email or "").strip() or None
+    if email and ("@" not in email or "." not in email.split("@")[-1]):
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    current_user.recovery_email = email
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    logger.info("Updated recovery email for user '%s'", current_user.username)
+    return UserSchema.from_orm(current_user)
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/15minutes")
+async def forgot_password(
+    request: Request,
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Begin password recovery: email a one-time code to the recovery address.
+
+    The code is also written to the application logs so the admin can recover
+    via the container logs if email delivery is unavailable. Always returns a
+    generic response so the endpoint does not reveal whether an account or
+    recovery email exists.
+    """
+    generic = {
+        "message": "If an account with a recovery email exists, a reset code has been sent."
+    }
+    user = get_user_by_username(db, payload.username)
+    if not user or not user.is_active or not user.recovery_email:
+        logger.info(
+            "Forgot-password requested for '%s' — no deliverable recovery email",
+            payload.username,
+        )
+        return generic
+
+    code = generate_reset_code()
+    user.reset_code_hash = get_password_hash(code)
+    user.reset_code_expires = datetime.now(timezone.utc) + timedelta(minutes=RESET_CODE_TTL_MINUTES)
+    db.add(user)
+    db.commit()
+
+    # Fallback channel: always log the code so the admin can recover from the
+    # container logs (docker logs vistterstream-backend) without email.
+    logger.warning("=" * 60)
+    logger.warning(
+        "*** PASSWORD RESET CODE for '%s': %s (valid %d min) ***",
+        user.username, code, RESET_CODE_TTL_MINUTES,
+    )
+    logger.warning("=" * 60)
+
+    settings = db.query(Settings).first()
+    body = (
+        f"A password reset was requested for the VistterStream account "
+        f"'{user.username}'.\n\n"
+        f"Your one-time reset code is:\n\n    {code}\n\n"
+        f"This code expires in {RESET_CODE_TTL_MINUTES} minutes. Enter it on the "
+        f"reset screen along with your new password.\n\n"
+        f"If you did not request this, you can ignore this email — your password "
+        f"has not been changed."
+    )
+    try:
+        email_service.send_email(
+            settings, user.recovery_email, "VistterStream password reset code", body
+        )
+    except email_service.EmailNotConfigured:
+        logger.warning(
+            "Forgot-password: SMTP not configured; reset code available in logs only"
+        )
+    except email_service.EmailSendError as exc:
+        logger.error("Forgot-password: failed to send reset email: %s", exc)
+
+    return generic
+
+
+@router.post("/reset-password")
+@limiter.limit("5/15minutes")
+async def reset_password(
+    request: Request,
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+):
+    """Complete password recovery using the one-time code."""
+    invalid = HTTPException(status_code=400, detail="Invalid or expired reset code")
+    user = get_user_by_username(db, payload.username)
+    if not user or not user.reset_code_hash or not user.reset_code_expires:
+        raise invalid
+
+    # SQLite returns naive datetimes — treat stored expiry as UTC.
+    expires = user.reset_code_expires
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires:
+        raise invalid
+
+    try:
+        if not verify_password(payload.code.strip().upper(), user.reset_code_hash):
+            raise invalid
+    except HTTPException:
+        raise
+    except Exception:
+        raise invalid
+
+    user.password_hash = get_password_hash(payload.new_password)
+    user.reset_code_hash = None
+    user.reset_code_expires = None
+    db.add(user)
+    db.commit()
+    logger.info("Password reset completed for user '%s'", user.username)
     return {"success": True}
 
 

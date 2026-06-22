@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 
 from models.database import get_db, Settings, Asset
 from routers.auth import get_current_user
+from services import email_service
+from utils.crypto import encrypt
 
 router = APIRouter(prefix="/api/settings", tags=["settings"], dependencies=[Depends(get_current_user)])
 
@@ -23,9 +25,16 @@ class SettingsResponse(BaseModel):
     city: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    # SMTP configuration (password is never returned — only whether one is set)
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_username: Optional[str] = None
+    smtp_from_address: Optional[str] = None
+    smtp_use_tls: Optional[bool] = True
+    smtp_password_set: bool = False
     created_at: datetime
     updated_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -37,6 +46,23 @@ class SettingsUpdate(BaseModel):
     city: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_username: Optional[str] = None
+    # Write-only: plaintext password. None = leave unchanged, "" = clear.
+    smtp_password: Optional[str] = None
+    smtp_from_address: Optional[str] = None
+    smtp_use_tls: Optional[bool] = None
+
+
+class TestEmailRequest(BaseModel):
+    to_address: str
+
+
+def _with_password_flag(settings: Settings) -> Settings:
+    """Attach a transient smtp_password_set flag for serialization."""
+    settings.smtp_password_set = bool(settings.smtp_password_encrypted)
+    return settings
 
 
 @router.get("", response_model=SettingsResponse)
@@ -53,8 +79,8 @@ def get_settings(db: Session = Depends(get_db)):
         db.add(settings)
         db.commit()
         db.refresh(settings)
-    
-    return settings
+
+    return _with_password_flag(settings)
 
 
 @router.post("", response_model=SettingsResponse)
@@ -80,7 +106,25 @@ def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_d
         settings.latitude = settings_update.latitude
     if settings_update.longitude is not None:
         settings.longitude = settings_update.longitude
-    
+
+    # SMTP fields
+    if settings_update.smtp_host is not None:
+        settings.smtp_host = settings_update.smtp_host.strip() or None
+    if settings_update.smtp_port is not None:
+        settings.smtp_port = settings_update.smtp_port
+    if settings_update.smtp_username is not None:
+        settings.smtp_username = settings_update.smtp_username.strip() or None
+    if settings_update.smtp_from_address is not None:
+        settings.smtp_from_address = settings_update.smtp_from_address.strip() or None
+    if settings_update.smtp_use_tls is not None:
+        settings.smtp_use_tls = settings_update.smtp_use_tls
+    if settings_update.smtp_password is not None:
+        # "" clears the stored password; any other value is encrypted at rest.
+        if settings_update.smtp_password == "":
+            settings.smtp_password_encrypted = None
+        else:
+            settings.smtp_password_encrypted = encrypt(settings_update.smtp_password)
+
     settings.updated_at = datetime.now(timezone.utc)
     
     db.commit()
@@ -108,6 +152,25 @@ def update_settings(settings_update: SettingsUpdate, db: Session = Depends(get_d
         if assets:
             db.commit()
             print(f"✅ Synced location to {len(assets)} asset(s)")
-    
-    return settings
+
+    return _with_password_flag(settings)
+
+
+@router.post("/test-email")
+def send_test_email(payload: TestEmailRequest, db: Session = Depends(get_db)):
+    """Send a test email using the saved SMTP settings."""
+    settings = db.query(Settings).first()
+    try:
+        email_service.send_email(
+            settings,
+            payload.to_address,
+            "VistterStream SMTP test",
+            "This is a test email from your VistterStream appliance. "
+            "If you received this, password-reset emails will work.",
+        )
+    except email_service.EmailNotConfigured as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except email_service.EmailSendError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to send: {exc}")
+    return {"success": True, "message": f"Test email sent to {payload.to_address}"}
 
