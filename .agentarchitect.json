@@ -1,0 +1,26 @@
+{
+  "provisionedFrom": "/Users/nickd/Workspaces/AgentArchitect",
+  "kind": "project",
+  "team": "software-project",
+  "projectType": "software",
+  "projectName": "VistterStream",
+  "adopted": true,
+  "agents": [
+    "product-requirements",
+    "software-architecture",
+    "ux-design",
+    "dev-planning",
+    "qa-strategy",
+    "marketing",
+    "sales",
+    "legal",
+    "software-developer"
+  ],
+  "skills": [
+    "software-project"
+  ],
+  "mcp": [],
+  "provisionedAt": "2026-07-08",
+  "aaCommit": "4b2460f439d9f9d7025eef81fc20ebd4932810d2",
+  "syncedAt": "2026-07-08"
+}
