@@ -6,21 +6,22 @@
   "projectName": "VistterStream",
   "adopted": true,
   "agents": [
-    "product-requirements",
-    "software-architecture",
-    "ux-design",
     "dev-planning",
-    "qa-strategy",
-    "marketing",
-    "sales",
     "legal",
-    "software-developer"
+    "marketing",
+    "product-requirements",
+    "qa-strategy",
+    "sales",
+    "software-architecture",
+    "software-developer",
+    "ux-design",
+    "wiki-ingest"
   ],
   "skills": [
     "software-project"
   ],
   "mcp": [],
   "provisionedAt": "2026-07-08",
-  "aaCommit": "4b2460f439d9f9d7025eef81fc20ebd4932810d2",
-  "syncedAt": "2026-07-08"
+  "aaCommit": "0969395ce937edc59bf5aafb8f4d7275ba1162ef",
+  "syncedAt": "2026-10-06"
 }
