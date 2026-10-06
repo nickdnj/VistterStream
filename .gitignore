@@ -38,3 +38,13 @@ docker-compose.override.yml
 .claude/agents/*.md
 .claude/skills/*/SKILL.md
 .claude/settings.local.json
+
+# Local runtime and tooling state (added 2026-10-06). None of this belongs in
+# a public repository.
+.venv/
+backend/.venv/
+.gstack/
+uploads/
+fonts/
+backend/fonts/
+backend/uploads/
