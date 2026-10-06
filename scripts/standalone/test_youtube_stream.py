@@ -3,16 +3,26 @@
 Test script to create and start a YouTube live stream
 """
 
+import os
+import sys
 import requests
 import json
 
 API_BASE = "http://localhost:8000/api"
 
+
+def admin_password():
+    """Admin password comes from the environment, never from this file."""
+    value = os.environ.get("VISTTER_ADMIN_PASSWORD")
+    if not value:
+        sys.exit("Set VISTTER_ADMIN_PASSWORD to the admin password before running this script.")
+    return value
+
 def login():
     """Login and get token"""
     response = requests.post(
         f"{API_BASE}/auth/login",
-        data={"username": "admin", "password": "admin123"}
+        data={"username": "admin", "password": admin_password()}
     )
     if response.status_code == 200:
         token = response.json()["access_token"]
