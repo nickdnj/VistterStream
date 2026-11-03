@@ -4,11 +4,20 @@ Fix camera configurations with correct IPs and test them
 Based on Local Test Cameras.md
 """
 
+import os
 import requests
 import json
 import sys
 
 API_BASE = "http://localhost:8000"
+
+
+def admin_password():
+    """Admin password comes from the environment, never from this file."""
+    value = os.environ.get("VISTTER_ADMIN_PASSWORD")
+    if not value:
+        sys.exit("Set VISTTER_ADMIN_PASSWORD to the admin password before running this script.")
+    return value
 
 def login():
     """Login and get token"""
@@ -17,7 +26,7 @@ def login():
         f"{API_BASE}/api/auth/login",
         data={
             "username": "admin",
-            "password": "admin123"
+            "password": admin_password()
         }
     )
     if response.status_code == 200:
@@ -204,7 +213,7 @@ def main():
     print("="*70)
     print()
     print("🌐 Open your browser: http://localhost:3000")
-    print("🔑 Login: admin / admin123")
+    print("🔑 Login: admin (password from VISTTER_ADMIN_PASSWORD)")
     print("📷 Check Camera Management page")
     print()
     print("="*70)

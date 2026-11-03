@@ -94,8 +94,15 @@ if [ ! -f .env ]; then
   JWT_SECRET=$(openssl rand -hex 32)
   ENCRYPTION_KEY=$(openssl rand -base64 32)
 
-  read -rp "Admin password [cathie19]: " ADMIN_PASS
-  ADMIN_PASS="${ADMIN_PASS:-cathie19}"
+  # No built-in default password. Blank input generates a strong random one,
+  # shown once at the end of setup and stored only in .env.
+  read -rsp "Admin password (leave blank to generate one): " ADMIN_PASS
+  echo ""
+  ADMIN_PASS_GENERATED=0
+  if [ -z "$ADMIN_PASS" ]; then
+    ADMIN_PASS=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-20)
+    ADMIN_PASS_GENERATED=1
+  fi
 
   read -rp "Cloudflare tunnel token (from dashboard): " TUNNEL_TOKEN
 
@@ -108,7 +115,13 @@ TUNNEL_TOKEN=${TUNNEL_TOKEN}
 DATABASE_URL=sqlite:////data/vistterstream.db
 UPLOADS_DIR=/data/uploads
 EOF
-  echo "  .env created with generated secrets"
+  chmod 600 .env
+  echo "  .env created with generated secrets (readable only by you)"
+  if [ "$ADMIN_PASS_GENERATED" = "1" ]; then
+    echo ""
+    echo "  Generated admin password: ${ADMIN_PASS}"
+    echo "  Save it in your password manager now. It is also in .env as DEFAULT_ADMIN_PASSWORD."
+  fi
 else
   echo "  .env already exists, skipping"
 fi

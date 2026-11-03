@@ -3,11 +3,20 @@
 Test script to add cameras and validate connectivity
 """
 
+import os
 import requests
 import json
 import sys
 
 API_BASE = "http://localhost:8000"
+
+
+def admin_password():
+    """Admin password comes from the environment, never from this file."""
+    value = os.environ.get("VISTTER_ADMIN_PASSWORD")
+    if not value:
+        sys.exit("Set VISTTER_ADMIN_PASSWORD to the admin password before running this script.")
+    return value
 
 def create_user():
     """Create default admin user"""
@@ -16,7 +25,7 @@ def create_user():
         f"{API_BASE}/api/auth/register",
         json={
             "username": "admin",
-            "password": "admin123"
+            "password": admin_password()
         }
     )
     if response.status_code == 200:
@@ -33,7 +42,7 @@ def login():
         f"{API_BASE}/api/auth/login",
         data={
             "username": "admin",
-            "password": "admin123"
+            "password": admin_password()
         }
     )
     if response.status_code == 200:
@@ -175,7 +184,7 @@ def main():
     print("   🌐 http://localhost:3000")
     print("\n🔑 Login credentials:")
     print("   Username: admin")
-    print("   Password: admin123")
+    print("   Password: the value of VISTTER_ADMIN_PASSWORD")
     print("\n📷 You should see both cameras in the dashboard!")
     print("="*60)
 
